@@ -1,0 +1,126 @@
+{
+  "$schema": "../schemas/tmlanguage.schema.json",
+  "name": "SysML v2.0",
+  "scopeName": "source.sysml",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#annotations"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.sysml",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.sysml",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.sysml",
+          "match": "\\b(if|else|for|while|return|import|private|public|protected|abstract)\\b"
+        },
+        {
+          "name": "keyword.declaration.sysml",
+          "match": "\\b(package|namespace|part|port|action|state|requirement|use case|concern|constraint|calc|analysis|verification|view|viewpoint|rendering|metadata|comment|doc|language|library|standard|alias|individual|snapshot|timeslice|LifeClass|occurrence|item|connection|interface|allocation|flow|attribute|reference|enum|datatype|class|struct|assoc|connector|binding|succession|transition|accept|send|exhibit|expose|perform|satisfy|subject|stakeholder|frame|actor|message|redefines|subsets|specializes|conjugates|references|chains|inverts|defined by)\\b"
+        },
+        {
+          "name": "keyword.other.sysml",
+          "match": "\\b(in|out|inout|readonly|derived|end|composite|featured|abstract|variation|variant|all|some|any|none|ordered|nonunique|parallel|decide|merge|first|join|fork|feature|step|then|multiplicity|about)\\b"
+        },
+        {
+          "name": "constant.language.sysml",
+          "match": "\\b(true|false|null)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.sysml",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sysml",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.sysml",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sysml",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.sysml",
+          "match": "\\b([0-9]+\\.?[0-9]*([eE][+-]?[0-9]+)?)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.sysml",
+          "match": "(==|!=|<=|>=|<|>|&&|\\|\\||!|=|\\+|-|\\*|/|%|\\.|::|:>|:>>|::>)"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.sysml",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "annotations": {
+      "patterns": [
+        {
+          "name": "meta.annotation.sysml",
+          "match": "@[a-zA-Z_][a-zA-Z0-9_]*"
+        },
+        {
+          "name": "meta.preprocessor.sysml",
+          "match": "#[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+      ]
+    }
+  }
+}
