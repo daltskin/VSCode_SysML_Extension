@@ -1,0 +1,43 @@
+{
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.suggest.autoImports": true,
+  "typescript.format.enable": true,
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "files.exclude": {
+    "out": false,
+    "node_modules": true,
+    "*.vsix": true,
+    "tsconfig.tsbuildinfo": true
+  },
+  "search.exclude": {
+    "out": true,
+    "node_modules": true,
+    "*.vsix": true
+  },
+  "eslint.workingDirectories": ["./"],
+  "typescript.preferences.includePackageJsonAutoImports": "on",
+  "editor.rulers": [100],
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "npm.enableScriptExplorer": true,
+  "debug.allowBreakpointsEverywhere": true,
+  "extensions.ignoreRecommendations": false,
+  "workbench.editor.enablePreview": false,
+  "editor.minimap.enabled": false,
+  "explorer.confirmDelete": false,
+  "git.autofetch": true,
+  "terminal.integrated.defaultProfile.linux": "zsh",
+  "copilot.enable": {
+    "typescript": true,
+    "javascript": true,
+    "json": true,
+    "markdown": true
+  },
+  "makefile.configureOnOpen": false
+}

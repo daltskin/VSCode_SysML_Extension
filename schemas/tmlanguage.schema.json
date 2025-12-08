@@ -1,0 +1,155 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schema.sysml.org/tmlanguage.json",
+  "title": "TextMate Language Grammar Schema",
+  "description": "JSON schema for TextMate language grammar files (.tmLanguage.json)",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human readable name of the language"
+    },
+    "scopeName": {
+      "type": "string",
+      "pattern": "^(text|source)(\\.[\\w0-9-]+)+$",
+      "description": "Unique scope name following dot notation (e.g., source.sysml)"
+    },
+    "fileTypes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of file extensions this grammar applies to"
+    },
+    "uuid": {
+      "type": "string",
+      "description": "Unique identifier for the grammar"
+    },
+    "firstLineMatch": {
+      "type": "string",
+      "description": "Regex to match first line for grammar detection"
+    },
+    "foldingStartMarker": {
+      "type": "string",
+      "description": "Regex for folding start markers"
+    },
+    "foldingStopMarker": {
+      "type": "string",
+      "description": "Regex for folding end markers"
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pattern"
+      },
+      "description": "Top-level patterns for the grammar"
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/pattern"
+      },
+      "description": "Named patterns that can be referenced by include rules"
+    }
+  },
+  "required": [
+    "scopeName",
+    "patterns"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "pattern": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/scopeName"
+        },
+        "contentName": {
+          "$ref": "#/$defs/scopeName"
+        },
+        "comment": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Set to 1 to disable this pattern"
+        },
+        "include": {
+          "type": "string",
+          "description": "Reference to another pattern or grammar"
+        },
+        "match": {
+          "type": "string",
+          "description": "Regular expression to match text"
+        },
+        "begin": {
+          "type": "string",
+          "description": "Regular expression to start a multi-line match"
+        },
+        "end": {
+          "type": "string",
+          "description": "Regular expression to end a multi-line match"
+        },
+        "while": {
+          "type": "string",
+          "description": "Regular expression to continue a multi-line match"
+        },
+        "captures": {
+          "$ref": "#/$defs/captures"
+        },
+        "beginCaptures": {
+          "$ref": "#/$defs/captures"
+        },
+        "endCaptures": {
+          "$ref": "#/$defs/captures"
+        },
+        "whileCaptures": {
+          "$ref": "#/$defs/captures"
+        },
+        "patterns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pattern"
+          }
+        },
+        "applyEndPatternLast": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "captures": {
+      "type": "object",
+      "patternProperties": {
+        "^[0-9]+$": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/scopeName"
+            },
+            "patterns": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/pattern"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "scopeName": {
+      "type": "string",
+      "description": "TextMate scope name for syntax highlighting"
+    }
+  }
+}

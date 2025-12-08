@@ -1,0 +1,298 @@
+{
+  "name": "sysml-v2-support",
+  "displayName": "SysML v2.0 Language Support",
+  "description": "Complete SysML v2.0 support with syntax highlighting, formatting, validation, navigation, and interactive visualization",
+  "version": "0.1.0",
+  "publisher": "JamieD",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daltskin/VSCode_SysML_Extension.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Linters",
+    "Visualization"
+  ],
+  "keywords": [
+    "sysml",
+    "sysml2",
+    "systems modeling",
+    "mbse"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "sysml",
+        "aliases": [
+          "SysML",
+          "sysml"
+        ],
+        "extensions": [
+          ".sysml",
+          ".kerml"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sysml",
+        "scopeName": "source.sysml",
+        "path": "./syntaxes/sysml.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "sysml.formatDocument",
+        "title": "Format SysML Document",
+        "category": "SysML"
+      },
+      {
+        "command": "sysml.validateModel",
+        "title": "Validate SysML Model",
+        "category": "SysML"
+      },
+      {
+        "command": "sysml.showModelExplorer",
+        "title": "Show Model Explorer",
+        "category": "SysML",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "sysml.showVisualizer",
+        "title": "Show Model Visualizer",
+        "category": "SysML",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "sysml.exportVisualization",
+        "title": "Export Visualization (PNG/SVG)",
+        "category": "SysML",
+        "icon": "$(save)"
+      },
+      {
+        "command": "sysml.visualizeFolder",
+        "title": "Visualise with SysML",
+        "category": "SysML",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "sysml.visualizeFolderWithView",
+        "title": "Visualise with SysML (Choose View)",
+        "category": "SysML",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "sysml.changeVisualizerView",
+        "title": "Change Visualizer View",
+        "category": "SysML",
+        "icon": "$(layout-panel)"
+      },
+      {
+        "command": "sysml.refreshModelTree",
+        "title": "Refresh Model Tree",
+        "category": "SysML",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sysml.jumpToDefinition",
+        "title": "Jump to Definition",
+        "category": "SysML"
+      },
+      {
+        "command": "sysml.debugParser",
+        "title": "Debug Parser",
+        "category": "SysML",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "sysml.refreshVisualization",
+        "title": "Refresh Visualization",
+        "category": "SysML",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "sysml.showVisualizer",
+          "when": "resourceLangId == sysml",
+          "group": "navigation@2",
+          "icon": "$(preview)"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "sysml.refreshModelTree",
+          "when": "view == sysmlModelExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "sysml.exportVisualization",
+          "when": "view == sysmlModelExplorer",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "sysml.formatDocument",
+          "when": "resourceLangId == sysml"
+        },
+        {
+          "command": "sysml.validateModel",
+          "when": "resourceLangId == sysml"
+        },
+        {
+          "command": "sysml.changeVisualizerView"
+        },
+        {
+          "command": "sysml.debugParser",
+          "when": "resourceLangId == sysml"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "sysml.visualizeFolder",
+          "when": "explorerResourceIsFolder",
+          "group": "sysml@1"
+        },
+        {
+          "command": "sysml.visualizeFolder",
+          "when": "resourceExtname == .sysml",
+          "group": "sysml@1"
+        },
+        {
+          "command": "sysml.visualizeFolderWithView",
+          "when": "explorerResourceIsFolder",
+          "group": "sysml@2"
+        },
+        {
+          "command": "sysml.visualizeFolderWithView",
+          "when": "resourceExtname == .sysml",
+          "group": "sysml@2"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "sysmlModelExplorer",
+          "name": "SysML Model Explorer",
+          "when": "sysml.modelLoaded"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "sysmlModelExplorer",
+        "contents": "No SysML model loaded.\n[Open SysML File](command:workbench.action.files.openFile)"
+      }
+    ],
+    "configuration": {
+      "title": "SysML v2.0",
+      "properties": {
+        "sysml.validation.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable SysML model validation"
+        },
+        "sysml.format.indentSize": {
+          "type": "number",
+          "default": 4,
+          "description": "Number of spaces for indentation"
+        },
+        "sysml.visualization.defaultView": {
+          "type": "string",
+          "enum": [
+            "sysml",
+            "tree",
+            "elk",
+            "bdd",
+            "package",
+            "ibd",
+            "graph",
+            "hierarchy",
+            "sequence",
+            "activity",
+            "state",
+            "usecase"
+          ],
+          "default": "sysml",
+          "description": "Default view to load when opening the SysML Model Visualizer"
+        },
+        "sysml.experimentalBehavioralViews": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Enable the experimental Activity, Sequence, State, and Use Case diagram views in the SysML visualizer. These views are in-flight and may change without notice."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run antlr:generate && npm run compile && npm run build:webview-assets",
+    "antlr:generate": "npm run antlr:lexer && npm run antlr:copy-tokens && npm run antlr:parser",
+    "antlr:lexer": "cd grammar && java -jar ../node_modules/antlr4ts-cli/target/antlr4-typescript-4.9.0-SNAPSHOT-complete.jar -visitor -no-listener -o ../src/parser/generated/grammar SysMLv2Lexer.g4",
+    "antlr:copy-tokens": "cp src/parser/generated/grammar/SysMLv2Lexer.tokens grammar/",
+    "antlr:parser": "cd grammar && java -jar ../node_modules/antlr4ts-cli/target/antlr4-typescript-4.9.0-SNAPSHOT-complete.jar -visitor -no-listener -o ../src/parser/generated/grammar SysMLv2.g4",
+    "antlr:clean": "rimraf src/parser/generated",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "test:unit": "npm run compile && mocha --require ts-node/register 'src/test/**/*.test.ts'",
+    "test:views": "node ./scripts/test-all-views.js",
+    "test:parser": "node ./scripts/test-parser-standalone.js",
+    "test:visual": "node ./scripts/generate-visual-test-guide.js",
+    "test:debug": "node ./scripts/debug-view-data.js",
+    "test:all": "node ./scripts/run-all-tests.js",
+    "debug": "npm run compile && node ./out/debug/runDebug.js",
+    "debug:elk": "node ./scripts/debug-elk-rendering.js",
+    "build:webview-assets": "node ./scripts/copy-webview-assets.js",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "coverage": "nyc --reporter=text --reporter=html mocha --require ts-node/register 'src/test/**/*.test.ts'",
+    "package": "vsce package --allow-missing-repository",
+    "package:install": "npm run package && code --install-extension sysml-v2-support-$(node -p \"require('./package.json').version\").vsix",
+    "clean": "rimraf out",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version",
+    "release:patch": "npm run version:patch && git add package.json && git commit -m \"chore: bump version to $(node -p \\\"require('./package.json').version\\\")\" && git tag v$(node -p \"require('./package.json').version\")",
+    "release:minor": "npm run version:minor && git add package.json && git commit -m \"chore: bump version to $(node -p \\\"require('./package.json').version\\\")\" && git tag v$(node -p \"require('./package.json').version\")",
+    "release:major": "npm run version:major && git add package.json && git commit -m \"chore: bump version to $(node -p \\\"require('./package.json').version\\\")\" && git tag v$(node -p \"require('./package.json').version\")"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.10.1",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.0",
+    "cytoscape": "^3.33.1",
+    "cytoscape-elk": "^2.3.0",
+    "cytoscape-svg": "^0.4.0",
+    "d3": "^7.9.0",
+    "eslint": "^9.15.0",
+    "glob": "^11.0.0",
+    "mocha": "^11.0.0",
+    "nyc": "^17.1.0",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "antlr4ts": "^0.5.0-alpha.4",
+    "antlr4ts-cli": "^0.5.0-alpha.4",
+    "elkjs": "^0.11.0"
+  }
+}
