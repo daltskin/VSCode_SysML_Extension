@@ -25,7 +25,20 @@
     "systems modeling",
     "mbse"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:sysml",
+    "onCommand:sysml.showVisualizer",
+    "onCommand:sysml.formatDocument",
+    "onCommand:sysml.validateModel",
+    "onCommand:sysml.visualizeFolder",
+    "onCommand:sysml.visualizeFolderWithView",
+    "onCommand:sysml.changeVisualizerView",
+    "onCommand:sysml.exportVisualization",
+    "onCommand:sysml.refreshModelTree",
+    "onCommand:sysml.refreshVisualization",
+    "onCommand:sysml.debugParser",
+    "onCommand:sysml.jumpToDefinition"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
