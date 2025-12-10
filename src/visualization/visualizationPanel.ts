@@ -1027,7 +1027,7 @@ export class VisualizationPanel {
                     <button class="view-dropdown-item" data-view="activity">▶ Activity</button>
                     <button class="view-dropdown-item" data-view="state">⌘ State</button>
                     <button class="view-dropdown-item" data-view="sequence">⇄ Sequence</button>
-                    <button class="view-dropdown-item" data-view="usecase">◎ Use Case</button>
+                    <button class="view-dropdown-item" data-view="usecase">◎ Case</button>
                     <div style="border-top: 1px solid var(--vscode-panel-border); margin: 3px 0;"></div>
                     <button class="view-dropdown-item" data-view="tree">▲ Tree</button>
                     <button class="view-dropdown-item" data-view="package">▤ Package</button>
