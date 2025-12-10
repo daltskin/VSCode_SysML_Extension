@@ -101,6 +101,9 @@ jobs:
       id: version
       run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+    - name: Update package.json version
+      run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       env:
@@ -109,25 +112,22 @@ jobs:
         tag_name: ${{ github.ref }}
         name: Release ${{ steps.version.outputs.version }}
         body: |
-          ## Changes in ${{ steps.version.outputs.version }}
-
-          - Enhanced SysML v2.0 language support
-          - Improved sequence diagram visualization
-          - Bug fixes and performance improvements
+          ## SysML v2.0 Extension v${{ steps.version.outputs.version }}
 
           ### Installation
           Download the `.vsix` file and install using:
           ```bash
           code --install-extension sysml-v2-support-${{ steps.version.outputs.version }}.vsix
           ```
+
+          Or install directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support).
         files: |
           *.vsix
         draft: false
         prerelease: ${{ contains(steps.version.outputs.version, '-') }}
 
-    # Uncomment to publish to VS Code Marketplace (requires VSCODE_MARKETPLACE_TOKEN secret)
-    # - name: Publish to VS Code Marketplace
-    #   if: env.VSCODE_MARKETPLACE_TOKEN
-    #   env:
-    #     VSCODE_MARKETPLACE_TOKEN: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
-    #   run: vsce publish --pat $VSCODE_MARKETPLACE_TOKEN
+    - name: Publish to VS Code Marketplace
+      if: ${{ vars.VSCODE_MARKETPLACE_TOKEN != '' || secrets.VSCODE_MARKETPLACE_TOKEN != '' }}
+      env:
+        VSCODE_MARKETPLACE_TOKEN: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+      run: vsce publish --pat $VSCODE_MARKETPLACE_TOKEN
