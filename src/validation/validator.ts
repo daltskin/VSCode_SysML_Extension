@@ -6,7 +6,7 @@ export class SysMLValidator {
     private diagnosticCollection: vscode.DiagnosticCollection;
     private semanticDiagnostics: DiagnosticFormatter;
 
-    // eslint-disable-next-line no-unused-vars
+     
     constructor(private _parser: SysMLParser) {
         this.diagnosticCollection = vscode.languages.createDiagnosticCollection('sysml');
         this.semanticDiagnostics = new DiagnosticFormatter('sysml-semantic');
@@ -46,7 +46,7 @@ export class SysMLValidator {
         return diagnostics;
     }
 
-    // eslint-disable-next-line no-unused-vars
+     
     private validateElements(elements: SysMLElement[], diagnostics: vscode.Diagnostic[], _document: vscode.TextDocument): void {
         const nameSet = new Set<string>();
 

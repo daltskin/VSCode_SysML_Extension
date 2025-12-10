@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SysMLParser } from '../parser/sysmlParser';
 
 export class SysMLDefinitionProvider implements vscode.DefinitionProvider {
-    // eslint-disable-next-line no-unused-vars
+     
     constructor(private _parser: SysMLParser) {}
 
     async provideDefinition(

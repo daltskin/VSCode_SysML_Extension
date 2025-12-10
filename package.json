@@ -2,7 +2,7 @@
   "name": "sysml-v2-support",
   "displayName": "SysML v2.0 Language Support",
   "description": "Complete SysML v2.0 support with syntax highlighting, formatting, validation, navigation, and interactive visualization",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "JamieD",
   "license": "MIT",
   "icon": "icon.png",

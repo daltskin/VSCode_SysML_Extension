@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
     libraryService = LibraryService.getInstance(context.extensionPath);
 
     // Defer library initialization to not block extension activation
-    setImmediate(() => {
+    globalThis.setImmediate(() => {
         libraryService.initialize().then(() => {
             const stats = libraryService.getStats();
             outputChannel.appendLine(`SysML Library indexed: ${stats.totalSymbols} symbols from ${stats.totalFiles} files`);
@@ -372,7 +372,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (event.document.languageId === 'sysml') {
                 // Debounce document changes to avoid overwhelming the parser
                 if (documentChangeDebounceTimer) {
-                    clearTimeout(documentChangeDebounceTimer);
+                    globalThis.clearTimeout(documentChangeDebounceTimer);
                 }
 
                 documentChangeDebounceTimer = setTimeout(() => {

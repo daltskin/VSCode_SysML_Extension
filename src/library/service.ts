@@ -36,15 +36,11 @@ export class LibraryService {
             return;
         }
 
-        try {
-            this.library = await this.cacheManager.getCompiledLibrary(
-                this.libraryPath,
-                forceRecompile
-            );
-            this.initialized = true;
-        } catch (error) {
-            throw error;
-        }
+        this.library = await this.cacheManager.getCompiledLibrary(
+            this.libraryPath,
+            forceRecompile
+        );
+        this.initialized = true;
     }
 
     /**

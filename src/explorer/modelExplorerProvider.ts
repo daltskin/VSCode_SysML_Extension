@@ -10,7 +10,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
     private debounceTimer: ReturnType<typeof setTimeout> | undefined;
     private isLoading: boolean = false;
 
-    // eslint-disable-next-line no-unused-vars
+
     constructor(private _parser: SysMLParser) {}
 
     refresh(): void {
@@ -25,7 +25,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
 
         // Debounce rapid calls (e.g., during typing)
         if (this.debounceTimer) {
-            clearTimeout(this.debounceTimer);
+            globalThis.clearTimeout(this.debounceTimer);
         }
 
         this.debounceTimer = setTimeout(async () => {

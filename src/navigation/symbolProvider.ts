@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SysMLParser } from '../parser/sysmlParser';
 
 export class SysMLDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
-    // eslint-disable-next-line no-unused-vars
+     
     constructor(private _parser: SysMLParser) {}
 
     async provideDocumentSymbols(

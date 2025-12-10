@@ -13,9 +13,9 @@ export class VisualizationPanel {
     private constructor(
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
-        // eslint-disable-next-line no-unused-vars
+
         private _parser: SysMLParser,
-        // eslint-disable-next-line no-unused-vars
+
         private _document: vscode.TextDocument
     ) {
         this._panel = panel;
@@ -386,7 +386,7 @@ export class VisualizationPanel {
         // Debounce to prevent double updates from both text document changes and file system watcher
         if (this._document.uri.toString() === uri.toString()) {
             if (this._fileChangeDebounceTimer) {
-                clearTimeout(this._fileChangeDebounceTimer);
+                globalThis.clearTimeout(this._fileChangeDebounceTimer);
             }
             this._fileChangeDebounceTimer = setTimeout(() => {
                 this.updateVisualization();

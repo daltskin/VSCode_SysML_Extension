@@ -688,9 +688,9 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
     private libraryIndexer: LibraryIndexer;
 
     constructor(
-        private _document: vscode.TextDocument, // eslint-disable-line no-unused-vars
-        private elements: Map<string, SysMLElement>, // eslint-disable-line no-unused-vars
-        private relationships: Relationship[] // eslint-disable-line no-unused-vars
+        private _document: vscode.TextDocument,
+        private elements: Map<string, SysMLElement>,
+        private relationships: Relationship[]
     ) {
         super();
         this.libraryIndexer = LibraryIndexer.getInstance();
@@ -953,7 +953,7 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
                     element.attributes.set('doc', docContent);
                 }
             }
-        } catch (_e) {
+        } catch {
             // Silently ignore doc extraction errors
         }
     }
@@ -2555,8 +2555,8 @@ class SysMLErrorListener implements ANTLRErrorListener<any> {
     private suppressedCount = 0;
 
     constructor(
-        private _document: vscode.TextDocument, // eslint-disable-line no-unused-vars
-        private elements: Map<string, SysMLElement> // eslint-disable-line no-unused-vars
+        private _document: vscode.TextDocument,
+        private elements: Map<string, SysMLElement>
     ) {}
 
     /**
@@ -2573,7 +2573,7 @@ class SysMLErrorListener implements ANTLRErrorListener<any> {
         return this.errorCount;
     }
 
-    // eslint-disable-next-line no-unused-vars
+
     syntaxError(recognizer: any, offendingSymbol: any, line: number, charPositionInLine: number, msg: string, _e: any): void {
         this.errorCount++;
 
