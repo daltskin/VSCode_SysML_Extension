@@ -4799,7 +4799,7 @@ export class VisualizationPanel {
                     hideLoading(); // Hide loading indicator
                 }, 200);
             }
-            
+
             // Update lastView after successful render start
             lastView = view;
             } catch (error) {

@@ -313,11 +313,11 @@ export class SysMLParser {
     private relationships: Relationship[] = [];
     private antlrParser: ANTLRSysMLParser | false | null = null; // Lazy loaded to avoid circular imports
     private semanticResolver: SemanticResolver | null = null; // Semantic resolver for type checking
-    
+
     // Parse cache to avoid reparsing unchanged documents
     private parseCache: Map<string, { hash: number; elements: SysMLElement[]; relationships: Relationship[] }> = new Map();
     private resolutionCache: Map<string, { hash: number; result: ResolutionResult }> = new Map();
-    
+
     /**
      * Simple string hash function for content comparison
      */
@@ -373,7 +373,7 @@ export class SysMLParser {
             const uri = document.uri.toString();
             const content = document.getText();
             const contentHash = this.hashContent(content);
-            
+
             // Check cache first - avoid expensive ANTLR parsing if content unchanged
             const cached = this.parseCache.get(uri);
             if (cached && cached.hash === contentHash) {
@@ -406,7 +406,7 @@ export class SysMLParser {
             // Update internal state
             this.updateElementCache(elements);
             this.relationships = antlr.getRelationships();
-            
+
             // Cache the result
             this.parseCache.set(uri, {
                 hash: contentHash,
@@ -530,7 +530,7 @@ export class SysMLParser {
             const uri = document.uri.toString();
             const content = document.getText();
             const contentHash = this.hashContent(content);
-            
+
             // Check resolution cache first
             const cached = this.resolutionCache.get(uri);
             if (cached && cached.hash === contentHash) {
@@ -543,7 +543,7 @@ export class SysMLParser {
             // Then resolve types and validate against library
             const resolver = this.getSemanticResolver();
             const result = await resolver.resolve(elements, document.uri);
-            
+
             // Cache the resolution result
             this.resolutionCache.set(uri, {
                 hash: contentHash,

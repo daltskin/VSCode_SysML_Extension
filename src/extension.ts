@@ -23,7 +23,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize library service lazily (don't block activation)
     libraryService = LibraryService.getInstance(context.extensionPath);
-    
+
     // Defer library initialization to not block extension activation
     setImmediate(() => {
         libraryService.initialize().then(() => {
@@ -374,7 +374,7 @@ export function activate(context: vscode.ExtensionContext) {
                 if (documentChangeDebounceTimer) {
                     clearTimeout(documentChangeDebounceTimer);
                 }
-                
+
                 documentChangeDebounceTimer = setTimeout(() => {
                     modelExplorerProvider.loadDocument(event.document);
                     if (vscode.workspace.getConfiguration('sysml').get('validation.enabled')) {
