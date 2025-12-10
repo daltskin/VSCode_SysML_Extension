@@ -127,7 +127,7 @@ jobs:
         prerelease: ${{ contains(steps.version.outputs.version, '-') }}
 
     - name: Publish to VS Code Marketplace
-      if: ${{ vars.VSCODE_MARKETPLACE_TOKEN != '' || secrets.VSCODE_MARKETPLACE_TOKEN != '' }}
       env:
         VSCODE_MARKETPLACE_TOKEN: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+      if: env.VSCODE_MARKETPLACE_TOKEN != ''
       run: vsce publish --pat $VSCODE_MARKETPLACE_TOKEN
