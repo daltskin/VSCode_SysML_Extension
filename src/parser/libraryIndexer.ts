@@ -47,22 +47,15 @@ export class LibraryIndexer {
             return;
         }
 
-        console.log('Indexing SysML v2 Standard Library...');
-        const startTime = Date.now();
-
         try {
             if (!fs.existsSync(this.libraryPath)) {
-                console.warn(`Standard library not found at: ${this.libraryPath}`);
                 return;
             }
 
             await this.indexDirectory(this.libraryPath);
-
-            const duration = Date.now() - startTime;
-            console.log(`Indexed ${this.elements.size} library elements in ${duration}ms`);
             this.indexed = true;
-        } catch (error) {
-            console.error('Failed to index standard library:', error);
+        } catch {
+            // Silently ignore indexing errors
         }
     }
 

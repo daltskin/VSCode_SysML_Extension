@@ -7,6 +7,8 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
 
     private currentDocument: vscode.TextDocument | undefined;
     private rootElements: SysMLElement[] = [];
+    private debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    private isLoading: boolean = false;
 
     // eslint-disable-next-line no-unused-vars
     constructor(private _parser: SysMLParser) {}
@@ -21,16 +23,24 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
     async loadDocument(document: vscode.TextDocument): Promise<void> {
         this.currentDocument = document;
 
-        // Phase 3: Use semantic resolution for enhanced element data
-        const resolutionResult = await this._parser.parseWithSemanticResolution(document);
-        this.rootElements = this._parser.convertEnrichedToSysMLElements(resolutionResult.elements);
+        // Debounce rapid calls (e.g., during typing)
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+        }
 
-        console.log(`ModelExplorer: Loaded ${this.rootElements.length} root elements`);
-        console.log(`Semantic resolution: ${resolutionResult.stats.resolvedElements}/${resolutionResult.stats.totalElements} resolved`);
-        this.rootElements.forEach((el, i) => {
-            console.log(`  Element ${i}: ${el.type} '${el.name}' - children: ${el.children.length}, attrs: ${el.attributes.size}, rels: ${el.relationships.length}`);
-        });
-        this._onDidChangeTreeData.fire();
+        this.debounceTimer = setTimeout(async () => {
+            if (this.isLoading) return;
+            this.isLoading = true;
+
+            try {
+                // Phase 3: Use semantic resolution for enhanced element data
+                const resolutionResult = await this._parser.parseWithSemanticResolution(document);
+                this.rootElements = this._parser.convertEnrichedToSysMLElements(resolutionResult.elements);
+                this._onDidChangeTreeData.fire();
+            } finally {
+                this.isLoading = false;
+            }
+        }, 300); // 300ms debounce
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -49,16 +59,13 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
 
             // Only SysML elements can have children (use property-based check instead of instanceof)
             const anyElement = element as any;
-            console.log(`Getting children for element type: ${anyElement.itemType}, has element: ${!!anyElement.element}`);
 
             if (anyElement.itemType === 'sysml-element' && anyElement.element) {
                 const sysmlElement = anyElement.element as SysMLElement;
-                console.log(`SysML element '${sysmlElement.name}' (${sysmlElement.type}): children=${sysmlElement.children.length}, attrs=${sysmlElement.attributes.size}, rels=${sysmlElement.relationships.length}`);
 
                 // Check if this is a part/item with a type reference that needs lazy resolution
                 const partType = sysmlElement.attributes.get('partType') as string;
                 if ((sysmlElement.type === 'part' || sysmlElement.type === 'item') && partType && sysmlElement.children.length === 0) {
-                    console.log(`Lazy resolving type reference: ${sysmlElement.name} : ${partType}`);
                     const resolvedChildren = this.resolveTypeReference(sysmlElement, partType);
                     children.push(...resolvedChildren);
                 } else {
@@ -69,7 +76,6 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
                 // Add attributes as property nodes (but filter out partType to reduce clutter)
                 const attributesToShow = Array.from(sysmlElement.attributes.entries()).filter(([key]) => key !== 'partType');
                 if (attributesToShow.length > 0) {
-                    console.log('Adding attributes:', attributesToShow.map(([key]) => key));
                     children.push(...attributesToShow.map(([key, value]) =>
                         new PropertyTreeItem(key, value, sysmlElement, this.currentDocument as vscode.TextDocument)
                     ));
@@ -77,13 +83,10 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
 
                 // Add relationships as relationship nodes
                 if (sysmlElement.relationships.length > 0) {
-                    console.log('Adding relationships:', sysmlElement.relationships.map(r => r.type));
                     children.push(...sysmlElement.relationships.map((rel: Relationship) =>
                         new RelationshipTreeItem(rel, sysmlElement, this.currentDocument as vscode.TextDocument)
                     ));
                 }
-
-                console.log(`Total children added: ${children.length}`);
             }
 
             return Promise.resolve(children);
@@ -94,17 +97,12 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
      * Lazily resolve type reference for a part/item
      */
     private resolveTypeReference(element: SysMLElement, partType: string): vscode.TreeItem[] {
-        console.log(`Resolving type reference: ${element.name} : ${partType}`);
-
         // Find the type definition in the parsed elements
         const typeDefinition = this.findTypeDefinition(partType, this.rootElements);
 
         if (!typeDefinition) {
-            console.log(`Type definition not found: ${partType}`);
             return [];
         }
-
-        console.log(`Found type definition ${partType} with ${typeDefinition.children.length} children, ${typeDefinition.attributes.size} attributes`);
 
         const children: vscode.TreeItem[] = [];
 
@@ -122,7 +120,6 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
             new RelationshipTreeItem(rel, typeDefinition, this.currentDocument as vscode.TextDocument)
         ));
 
-        console.log(`Resolved ${children.length} children for ${element.name} : ${partType}`);
         return children;
     }
 

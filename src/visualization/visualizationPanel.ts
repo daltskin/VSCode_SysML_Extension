@@ -8,6 +8,7 @@ export class VisualizationPanel {
     private _currentView: string = 'elk'; // Store current view state - default to General View
     private _isNavigating: boolean = false; // Flag to prevent view reset during navigation
     private _lastUpdateTime: number = 0; // Prevent rapid successive updates
+    private _fileChangeDebounceTimer: ReturnType<typeof setTimeout> | undefined; // Debounce file change notifications
 
     private constructor(
         panel: vscode.WebviewPanel,
@@ -382,8 +383,14 @@ export class VisualizationPanel {
 
     public notifyFileChanged(uri: vscode.Uri) {
         // Notify the webview about file changes for auto-refresh functionality
+        // Debounce to prevent double updates from both text document changes and file system watcher
         if (this._document.uri.toString() === uri.toString()) {
-            this.updateVisualization();
+            if (this._fileChangeDebounceTimer) {
+                clearTimeout(this._fileChangeDebounceTimer);
+            }
+            this._fileChangeDebounceTimer = setTimeout(() => {
+                this.updateVisualization();
+            }, 300); // 300ms debounce to coalesce multiple change events
         }
     }
 
@@ -4549,7 +4556,7 @@ export class VisualizationPanel {
         // Make functions globally accessible for HTML onclick handlers
         window.changeView = changeView;
 
-        function renderVisualization(view) {
+        function renderVisualization(view, preserveZoomOverride = null) {
             if (!currentData) {
                 return;
             }
@@ -4559,8 +4566,12 @@ export class VisualizationPanel {
                 return;
             }
 
-            // Reset manual zoom flag when rendering a new view so auto-fit works
-            window.userHasManuallyZoomed = false;
+            // Only reset manual zoom flag when the view type actually changes
+            // This preserves zoom state when the same view is re-rendered due to data changes
+            const viewChanged = view !== lastView;
+            if (viewChanged) {
+                window.userHasManuallyZoomed = false;
+            }
 
             // Use filtered data if available, otherwise use original data
             let baseData = filteredData || currentData;
@@ -4658,6 +4669,10 @@ export class VisualizationPanel {
                     g.attr('transform', event.transform);
                     // Update minimap viewport when zooming/panning
                     updateMinimap();
+                    // Mark as manual interaction if triggered by user (not programmatic)
+                    if (event.sourceEvent) {
+                        window.userHasManuallyZoomed = true;
+                    }
                 });
 
             // Enable mouse-centered zooming by setting the zoom center
@@ -4784,6 +4799,9 @@ export class VisualizationPanel {
                     hideLoading(); // Hide loading indicator
                 }, 200);
             }
+            
+            // Update lastView after successful render start
+            lastView = view;
             } catch (error) {
                 console.error('Error during rendering:', error);
                 isRendering = false; // Reset flag on error

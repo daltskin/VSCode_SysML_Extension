@@ -39,14 +39,12 @@ export class LibraryCompiler {
      * Compile the entire library from a directory
      */
     public async compileLibrary(libraryPath: string): Promise<CompiledLibrary> {
-        console.log('[LibraryCompiler] Starting compilation of', libraryPath);
         const startTime = Date.now();
 
         this.reset();
         await this.compileDirectory(libraryPath, libraryPath);
 
-        const duration = Date.now() - startTime;
-        console.log(`[LibraryCompiler] Compiled ${this.stats.totalSymbols} symbols from ${this.stats.totalFiles} files in ${duration}ms`);
+        const _duration = Date.now() - startTime;
 
         return {
             version: this.generateVersion(libraryPath),
@@ -83,8 +81,6 @@ export class LibraryCompiler {
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
             const relativePath = path.relative(rootPath, filePath);
-
-            console.log(`[LibraryCompiler] Compiling ${relativePath}`);
 
             // Create mock VS Code document
             const mockDoc = this.createMockDocument(content, filePath);

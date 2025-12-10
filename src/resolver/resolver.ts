@@ -42,10 +42,7 @@ export class SemanticResolver {
                     ? element.attributes.has('doc')
                     : element.attributes.doc !== undefined;
                 if (hasDoc) {
-                    const docValue = element.attributes instanceof Map
-                        ? element.attributes.get('doc')
-                        : element.attributes.doc;
-                    console.log(`[RESOLVER INPUT] ${element.name} (${element.type}) has doc: ${docValue?.toString().substring(0, 50)}...`);
+                    // Doc attribute found - no logging needed
                 }
             }
             const enriched = await this.enrichElement(element, uri);
@@ -140,9 +137,7 @@ export class SemanticResolver {
         }
 
         // Debug: verify doc attribute was copied
-        if (attributes.has('doc')) {
-            console.log(`[RESOLVER ENRICH] ${element.name}: doc attribute preserved in enriched element`);
-        }
+        // (logging disabled for performance)
 
         return {
             name: element.name,

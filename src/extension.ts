@@ -12,6 +12,7 @@ let modelExplorerProvider: ModelExplorerProvider;
 let parser: SysMLParser;
 let outputChannel: vscode.OutputChannel;
 let libraryService: LibraryService;
+let documentChangeDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     // Create dedicated output channel for logging
@@ -20,15 +21,17 @@ export function activate(context: vscode.ExtensionContext) {
 
     outputChannel.appendLine('SysML v2.0 extension is now active');
 
-    // Initialize new library service
+    // Initialize library service lazily (don't block activation)
     libraryService = LibraryService.getInstance(context.extensionPath);
-    libraryService.initialize().then(() => {
-        const stats = libraryService.getStats();
-        outputChannel.appendLine(`SysML Library indexed: ${stats.totalSymbols} symbols from ${stats.totalFiles} files`);
-        outputChannel.appendLine(`Symbol breakdown: ${JSON.stringify(stats.byKind, null, 2)}`);
-    }).catch((error) => {
-        outputChannel.appendLine(`Warning: Failed to initialize library: ${error.message}`);
-        outputChannel.appendLine('Extension will continue with limited functionality');
+    
+    // Defer library initialization to not block extension activation
+    setImmediate(() => {
+        libraryService.initialize().then(() => {
+            const stats = libraryService.getStats();
+            outputChannel.appendLine(`SysML Library indexed: ${stats.totalSymbols} symbols from ${stats.totalFiles} files`);
+        }).catch((error) => {
+            outputChannel.appendLine(`Warning: Failed to initialize library: ${error.message}`);
+        });
     });
 
     parser = new SysMLParser();
@@ -367,12 +370,19 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument(event => {
             if (event.document.languageId === 'sysml') {
-                modelExplorerProvider.loadDocument(event.document);
-                if (vscode.workspace.getConfiguration('sysml').get('validation.enabled')) {
-                    validator.validate(event.document);
+                // Debounce document changes to avoid overwhelming the parser
+                if (documentChangeDebounceTimer) {
+                    clearTimeout(documentChangeDebounceTimer);
                 }
+                
+                documentChangeDebounceTimer = setTimeout(() => {
+                    modelExplorerProvider.loadDocument(event.document);
+                    if (vscode.workspace.getConfiguration('sysml').get('validation.enabled')) {
+                        validator.validate(event.document);
+                    }
+                }, 500); // 500ms debounce for typing
 
-                // Notify visualization panel of file changes for auto-refresh
+                // Notify visualization panel of file changes for auto-refresh (immediate, it handles its own debounce)
                 if (VisualizationPanel.currentPanel) {
                     VisualizationPanel.currentPanel.notifyFileChanged(event.document.uri);
                 }

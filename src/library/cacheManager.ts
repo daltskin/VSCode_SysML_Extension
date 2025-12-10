@@ -22,20 +22,17 @@ export class LibraryCacheManager {
     public async getCompiledLibrary(libraryPath: string, forceRecompile: boolean = false): Promise<CompiledLibrary> {
         // Check if cache exists and is valid
         if (!forceRecompile && this.isCacheValid()) {
-            console.log('[LibraryCache] Loading from cache...');
             try {
                 const cached = this.loadFromCache();
                 if (cached) {
-                    console.log(`[LibraryCache] Loaded ${cached.stats.totalSymbols} symbols from cache`);
                     return cached;
                 }
-            } catch (error) {
-                console.warn('[LibraryCache] Failed to load cache, recompiling:', error);
+            } catch {
+                // Cache load failed, will recompile
             }
         }
 
         // Compile fresh
-        console.log('[LibraryCache] Compiling library...');
         const compiler = new LibraryCompiler();
         const compiled = await compiler.compileLibrary(libraryPath);
 
@@ -91,10 +88,8 @@ export class LibraryCacheManager {
             const serialized = LibraryCompiler.serialize(library);
             const content = JSON.stringify(serialized, null, 2);
             fs.writeFileSync(this.cacheFile, content, 'utf-8');
-
-            console.log(`[LibraryCache] Saved ${library.stats.totalSymbols} symbols to cache`);
-        } catch (error) {
-            console.error('[LibraryCache] Failed to save cache:', error);
+        } catch {
+            // Silently ignore cache save failures
         }
     }
 
@@ -104,7 +99,6 @@ export class LibraryCacheManager {
     public invalidateCache(): void {
         if (fs.existsSync(this.cacheFile)) {
             fs.unlinkSync(this.cacheFile);
-            console.log('[LibraryCache] Cache invalidated');
         }
     }
 

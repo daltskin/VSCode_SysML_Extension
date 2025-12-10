@@ -39,7 +39,6 @@ export class ANTLRSysMLParser {
                     if (match) {
                         const value = match[2].trim();
                         element.attributes.set('value', value);
-                        console.log(`[PARSER POST] Extracted redefinition ${element.name} = ${value}`);
                     }
                 }
             }
@@ -254,40 +253,25 @@ export class ANTLRSysMLParser {
      * Checks if an action element has activity flow characteristics.
      */
     private hasActivityFlow(element: SysMLElement): boolean {
-        console.log(`Checking activity flow for action '${element.name}' with ${element.children.length} children`);
-
         // Check for sequential steps, control flow, or decision logic
         const hasSequentialSteps = element.children.some(child => {
-            const match = child.name.match(/^\d+\./) || child.attributes.has('step') || child.attributes.has('sequence');
-            if (match) console.log(`Found sequential step: ${child.name}`);
-            return match;
+            return child.name.match(/^\d+\./) || child.attributes.has('step') || child.attributes.has('sequence');
         });
 
         const hasControlFlow = element.children.some(child => {
-            const isFlow = child.type === 'if' || child.type === 'while' || child.type === 'for' ||
+            return child.type === 'if' || child.type === 'while' || child.type === 'for' ||
                 child.name.toLowerCase().includes('then') || child.name.toLowerCase().includes('next') ||
                 child.name.toLowerCase().includes('first') || child.name.toLowerCase().includes('done');
-            if (isFlow) console.log(`Found control flow: ${child.name} (type: ${child.type})`);
-            return isFlow;
         });
 
-        const hasNestedActions = element.children.some(child => {
-            const isAction = child.type === 'action';
-            if (isAction) console.log(`Found nested action: ${child.name}`);
-            return isAction;
-        });
+        const hasNestedActions = element.children.some(child => child.type === 'action');
 
         // Check for SysML v2 activity keywords in element body
         const hasActivityKeywords = element.children.some(child => {
-            const hasKeywords = child.name.match(/\b(first|then|done|while|if|else|perform|action)\b/i);
-            if (hasKeywords) console.log(`Found activity keywords in: ${child.name}`);
-            return hasKeywords;
+            return child.name.match(/\b(first|then|done|while|if|else|perform|action)\b/i);
         });
 
-        const isActivity = hasSequentialSteps || hasControlFlow || hasNestedActions || hasActivityKeywords || element.children.length > 2;
-        console.log(`Action '${element.name}' is activity: ${isActivity} (steps: ${hasSequentialSteps}, flow: ${hasControlFlow}, nested: ${hasNestedActions}, keywords: ${hasActivityKeywords}, children: ${element.children.length})`);
-
-        return isActivity;
+        return hasSequentialSteps || hasControlFlow || hasNestedActions || hasActivityKeywords || element.children.length > 2;
     }
 
     /**
@@ -300,15 +284,9 @@ export class ANTLRSysMLParser {
         decisions: DecisionNode[],
         states: ActivityState[]
     ): void {
-        console.log(`Extracting activity elements from action '${action.name}' with ${action.children.length} children`);
-
         const processElements = (elems: SysMLElement[], depth: number = 0) => {
-            const indent = '  '.repeat(depth);
-            console.log(`${indent}Processing ${elems.length} elements at depth ${depth}`);
-
             for (let i = 0; i < elems.length; i++) {
                 const element = elems[i];
-                console.log(`${indent}Element ${i}: '${element.name}' (type: ${element.type})`);
 
                 // Identify private actions within action definitions
                 if (element.type === 'action' || element.name.match(/^\d+\./) || element.attributes.has('step')) {
@@ -329,11 +307,8 @@ export class ANTLRSysMLParser {
                             branches: [], // Will be populated by flow processing
                             range: element.range
                         });
-                        console.log(`${indent}Added decision action: ${element.name}`);
                     } else {
                         // Regular action
-                        const isPrivate = element.attributes.get('visibility') === 'private' ||
-                                         element.attributes.has('private');
                         const isComposite = element.children.some(child => child.type === 'action');
 
                         actions.push({
@@ -348,16 +323,12 @@ export class ANTLRSysMLParser {
                             outputs: this.extractParameters(element, 'out'),
                             subActions: isComposite ? this.extractSubActions(element) : undefined
                         });
-                        console.log(`${indent}Added ${isPrivate ? 'private ' : ''}${isComposite ? 'composite ' : ''}action: ${element.name}`);
                     }
                 }
 
                 // Identify explicit control flows (first...then patterns)
                 const flowPatterns = this.extractFlowPatterns(element);
                 flows.push(...flowPatterns);
-                if (flowPatterns.length > 0) {
-                    console.log(`${indent}Added ${flowPatterns.length} flow patterns from element ${element.name}`);
-                }
 
                 // Legacy decision handling for backward compatibility
                 if (element.type === 'if' ||
@@ -374,7 +345,6 @@ export class ANTLRSysMLParser {
                         ],
                         range: element.range
                     });
-                    console.log(`${indent}Added legacy decision: ${element.name}`);
                 }
 
                 // Identify states - loops, waits, or state-like elements
@@ -390,7 +360,6 @@ export class ANTLRSysMLParser {
                                    element.name,
                         range: element.range
                     });
-                    console.log(`${indent}Added state: ${element.name}`);
                 }
 
                 // Identify control flows - then/first/done keywords
@@ -406,7 +375,6 @@ export class ANTLRSysMLParser {
                             condition: element.attributes.get('guard')?.toString(),
                             range: element.range
                         });
-                        console.log(`${indent}Added flow: ${fromAction.name} -> ${element.attributes.get('target') || 'next'}`);
                     }
                 }
 
@@ -982,15 +950,11 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
                     .trim();
 
                 if (docContent) {
-                    console.log(`[DOC EXTRACT] Found doc for '${element.name}': ${docContent.substring(0, 50)}...`);
                     element.attributes.set('doc', docContent);
-                    // Double-check it was set
-                    const verifyDoc = element.attributes.get('doc');
-                    console.log(`[DOC EXTRACT] Verified doc set on '${element.name}': ${verifyDoc ? 'YES' : 'NO'}, attrs size: ${element.attributes.size}`);
                 }
             }
-        } catch (e) {
-            console.log(`[DOC EXTRACT] Error extracting doc for '${element.name}':`, e);
+        } catch (_e) {
+            // Silently ignore doc extraction errors
         }
     }
 
@@ -1167,11 +1131,8 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
      * These are SysML v2 succession statements that may not be parsed as separate action nodes.
      */
     private extractThenActionPatterns(ctx: any, parentElement: SysMLElement): void {
-        console.log(`[ANTLR extractThenAction] Called for '${parentElement.name}', existing children: ${parentElement.children.length}`);
-
         // Get the original text with whitespace from the input stream
         if (!ctx || !ctx.start || !ctx.stop) {
-            console.log(`[ANTLR extractThenAction] No ctx/start/stop for '${parentElement.name}'`);
             return;
         }
 
@@ -1190,11 +1151,8 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
         }
 
         if (!text) {
-            console.log(`[ANTLR extractThenAction] No text for '${parentElement.name}'`);
             return;
         }
-
-        console.log(`[ANTLR extractThenAction] Text for '${parentElement.name}':`, text.substring(0, 200));
 
         // Look for "then action X" patterns - handle both with and without whitespace
         // Pattern: thenaction<name> (no spaces due to ANTLR getText) or then action <name>
@@ -1203,15 +1161,12 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
 
         // Track existing children to avoid duplicates
         const existingChildren = new Set(parentElement.children.map(c => c.name));
-        let addedCount = 0;
 
         while ((match = thenActionRegex.exec(text)) !== null) {
             const actionName = match[1];
-            console.log(`[ANTLR extractThenAction] Found pattern match: '${actionName}'`);
 
             // Skip if already added as a child
             if (existingChildren.has(actionName)) {
-                console.log(`[ANTLR extractThenAction] Skipping duplicate: '${actionName}'`);
                 continue;
             }
 
@@ -1230,11 +1185,7 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
 
             parentElement.children.push(childAction);
             existingChildren.add(actionName);
-            addedCount++;
-            console.log(`[ANTLR] Extracted then action '${actionName}' from '${parentElement.name}'`);
         }
-
-        console.log(`[ANTLR extractThenAction] Done for '${parentElement.name}', added ${addedCount} children, total children now: ${parentElement.children.length}`);
     }
 
     visitActionDefinition(ctx: any): void {
@@ -1799,14 +1750,12 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
     }
 
     visitDocElement(ctx: any): void {
-        console.log('[ANTLR] visitDocElement called');
         // Instead of creating a separate 'doc' element, propagate doc content to parent
         this.extractDocContentToParent(ctx);
         this.visitChildren(ctx);
     }
 
     visitDocumentation(ctx: any): void {
-        console.log('[ANTLR] visitDocumentation called');
         // Instead of creating a separate 'doc' element, propagate doc content to parent
         this.extractDocContentToParent(ctx);
         this.visitChildren(ctx);
@@ -1819,13 +1768,11 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
     private extractDocContentToParent(ctx: any): void {
         try {
             if (!ctx || !ctx.start || !ctx.stop) {
-                console.log('[DOC EXTRACT] No ctx/start/stop');
                 return;
             }
 
             // Get the parent element from the stack
             if (this.parentStack.length === 0) {
-                console.log('[DOC EXTRACT] No parent element on stack');
                 return;
             }
             const parentElement = this.parentStack[this.parentStack.length - 1];
@@ -1834,19 +1781,14 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
             const startLine = ctx.start.line - 1;
             const endLine = ctx.stop.line - 1;
 
-            console.log(`[DOC EXTRACT] Processing doc element for parent '${parentElement.name}', lines ${startLine}-${endLine}`);
-
             // Read the text from the document including a few extra lines
             // to capture multi-line comments that might follow
             const textRange = new vscode.Range(startLine, 0, Math.min(endLine + 10, this._document.lineCount - 1), 1000);
             const text = this._document.getText(textRange);
 
-            console.log(`[DOC EXTRACT] Source text (first 200 chars): ${text.substring(0, 200)}`);
-
             // Look for /* ... */ block comment pattern
             const blockCommentMatch = text.match(/\/\*[\s\S]*?\*\//);
             if (blockCommentMatch) {
-                console.log(`[DOC EXTRACT] Found block comment: ${blockCommentMatch[0].substring(0, 100)}`);
                 let docContent = blockCommentMatch[0];
                 // Remove /* and */ markers
                 docContent = docContent.replace(/^\/\*/, '').replace(/\*\/$/, '');
@@ -1858,11 +1800,8 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
                     .trim();
 
                 if (docContent) {
-                    console.log(`[DOC EXTRACT] Setting doc on parent '${parentElement.name}': ${docContent.substring(0, 100)}`);
                     parentElement.attributes.set('doc', docContent);
                 }
-            } else {
-                console.log('[DOC EXTRACT] No block comment found in text');
             }
 
             // Also check for stringValue in the grammar (quoted string)
@@ -1870,7 +1809,6 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
                 const stringCtx = ctx.stringValue();
                 if (stringCtx) {
                     const stringText = stringCtx.getText?.() || '';
-                    console.log(`[DOC EXTRACT] Found stringValue: ${stringText}`);
                     // Remove quotes
                     const unquoted = stringText.replace(/^["']|["']$/g, '');
                     if (unquoted) {
@@ -1878,8 +1816,8 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
                     }
                 }
             }
-        } catch (e) {
-            console.log(`[DOC EXTRACT] Error: ${e}`);
+        } catch {
+            // Silently ignore doc extraction errors
         }
     }
 
@@ -2625,9 +2563,7 @@ class SysMLErrorListener implements ANTLRErrorListener<any> {
      * Log a summary of parse errors if any were suppressed.
      */
     logSummary(): void {
-        if (this.suppressedCount > 0) {
-            console.log(`[ANTLR Parser] ${this.suppressedCount} additional parse error(s) suppressed. Total: ${this.errorCount}`);
-        }
+        // Summary logging disabled for performance
     }
 
     /**
@@ -2641,10 +2577,8 @@ class SysMLErrorListener implements ANTLRErrorListener<any> {
     syntaxError(recognizer: any, offendingSymbol: any, line: number, charPositionInLine: number, msg: string, _e: any): void {
         this.errorCount++;
 
-        // Only log the first few errors to avoid flooding the console
-        if (this.errorCount <= SysMLErrorListener.MAX_LOGGED_ERRORS) {
-            console.log(`[ANTLR Parse Error] Line ${line}:${charPositionInLine} - ${msg}`);
-        } else {
+        // Track suppressed errors (logging disabled for performance)
+        if (this.errorCount > SysMLErrorListener.MAX_LOGGED_ERRORS) {
             this.suppressedCount++;
         }
 

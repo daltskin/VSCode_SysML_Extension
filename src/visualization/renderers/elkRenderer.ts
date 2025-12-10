@@ -61,7 +61,6 @@ registerRenderer({
 });
 
 export function buildElkViewModel(dataset: VisualizationDataset): ElkRendererViewModel | undefined {
-    console.log('buildElkViewModel called, dataset.elements:', dataset.elements.length);
     if (!Array.isArray(dataset.elements) || dataset.elements.length === 0) {
         return undefined;
     }
@@ -89,8 +88,6 @@ export function buildElkViewModel(dataset: VisualizationDataset): ElkRendererVie
         .filter(Boolean)
         .map(element => ({ element, depth: 0, parentId: undefined }));
 
-    console.log('buildElkViewModel processing queue with', queue.length, 'elements');
-
     while (queue.length > 0) {
         const current = queue.shift();
         if (!current || !current.element) {
@@ -98,10 +95,8 @@ export function buildElkViewModel(dataset: VisualizationDataset): ElkRendererVie
         }
 
         const { element, depth, parentId } = current;
-        console.log('Processing element:', element.name, 'children:', element.children?.length || 0);
         const nodeId = ensureElementId(element);
         const childSummaries = extractChildSummaries(element, ensureElementId);
-        console.log('Extracted child summaries for', element.name, ':', childSummaries.length);
         const node: ElkRendererNodeModel = {
             id: nodeId,
             name: element.name || 'Unnamed Element',
@@ -170,8 +165,7 @@ function summarizeElement(
     element: DiagramElementViewModel,
     ensureElementId: (element: DiagramElementViewModel) => string
 ): ElkRendererElementSummary {
-    console.log('summarizeElement called for:', element.name, 'with children:', element.children);
-    const summary = {
+    return {
         id: ensureElementId(element),
         name: element.name || 'Unnamed Element',
         type: element.type || 'element',
@@ -179,8 +173,6 @@ function summarizeElement(
         properties: cloneAttributeRecord(element.properties),
         children: extractChildSummaries(element, ensureElementId)
     };
-    console.log('summarizeElement result:', summary.name, 'children count:', summary.children?.length);
-    return summary;
 }
 
 function cloneAttributeRecord(source?: Map<string, AttributeValue> | Record<string, AttributeValue>): Record<string, AttributeValue> {

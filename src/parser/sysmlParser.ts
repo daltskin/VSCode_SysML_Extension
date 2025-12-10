@@ -313,6 +313,23 @@ export class SysMLParser {
     private relationships: Relationship[] = [];
     private antlrParser: ANTLRSysMLParser | false | null = null; // Lazy loaded to avoid circular imports
     private semanticResolver: SemanticResolver | null = null; // Semantic resolver for type checking
+    
+    // Parse cache to avoid reparsing unchanged documents
+    private parseCache: Map<string, { hash: number; elements: SysMLElement[]; relationships: Relationship[] }> = new Map();
+    private resolutionCache: Map<string, { hash: number; result: ResolutionResult }> = new Map();
+    
+    /**
+     * Simple string hash function for content comparison
+     */
+    private hashContent(content: string): number {
+        let hash = 0;
+        for (let i = 0; i < content.length; i++) {
+            const char = content.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash;
+    }
 
     /**
      * Gets the ANTLR parser instance, creating it on first use.
@@ -347,11 +364,26 @@ export class SysMLParser {
      * Parses a SysML document and extracts all elements in a hierarchical structure.
      * Primary method for language features (navigation, validation, model explorer).
      * Phase 2: Pure ANTLR parsing - no regex fallback. Errors surface as diagnostics.
+     * Uses content-based caching to avoid expensive reparsing of unchanged documents.
      * @param document The VS Code text document to parse
      * @returns Array of root-level SysML elements
      */
     parse(document: vscode.TextDocument): SysMLElement[] {
         try {
+            const uri = document.uri.toString();
+            const content = document.getText();
+            const contentHash = this.hashContent(content);
+            
+            // Check cache first - avoid expensive ANTLR parsing if content unchanged
+            const cached = this.parseCache.get(uri);
+            if (cached && cached.hash === contentHash) {
+                // Restore cached state
+                this.elements.clear();
+                this.updateElementCache(cached.elements);
+                this.relationships = cached.relationships;
+                return cached.elements;
+            }
+
             this.elements.clear();
             this.relationships = [];
 
@@ -374,6 +406,13 @@ export class SysMLParser {
             // Update internal state
             this.updateElementCache(elements);
             this.relationships = antlr.getRelationships();
+            
+            // Cache the result
+            this.parseCache.set(uri, {
+                hash: contentHash,
+                elements: elements,
+                relationships: [...this.relationships]
+            });
 
             // Log parse errors for diagnostics if any
             const errorElements = elements.filter(el => el.type === 'error');
@@ -482,31 +521,34 @@ export class SysMLParser {
     /**
      * Phase 3: Parse and resolve document with semantic validation
      * Returns enriched elements with type information from standard library
+     * Uses caching to avoid expensive re-resolution of unchanged documents.
      * @param document The VS Code text document to parse
      * @returns Resolution result with enriched elements and diagnostics
      */
     async parseWithSemanticResolution(document: vscode.TextDocument): Promise<ResolutionResult> {
         try {
-            // First parse with ANTLR
-            const elements = this.parse(document);
+            const uri = document.uri.toString();
+            const content = document.getText();
+            const contentHash = this.hashContent(content);
+            
+            // Check resolution cache first
+            const cached = this.resolutionCache.get(uri);
+            if (cached && cached.hash === contentHash) {
+                return cached.result;
+            }
 
-            // Debug: Check if parsed elements have doc before sending to resolver
-            const findDocInParsed = (els: SysMLElement[], depth: number = 0): void => {
-                for (const el of els) {
-                    if (el.attributes && el.attributes.has('doc')) {
-                        // console.log(`[PARSED DOC] ${' '.repeat(depth)}${el.name} (${el.type}) has doc: ${el.attributes.get('doc')?.toString().substring(0, 50)}...`);
-                    }
-                    if (el.children && el.children.length > 0) {
-                        findDocInParsed(el.children, depth + 2);
-                    }
-                }
-            };
-            // console.log('[PARSED DOC] Checking parsed elements for doc attributes...');
-            findDocInParsed(elements);
+            // First parse with ANTLR (this also uses caching)
+            const elements = this.parse(document);
 
             // Then resolve types and validate against library
             const resolver = this.getSemanticResolver();
             const result = await resolver.resolve(elements, document.uri);
+            
+            // Cache the resolution result
+            this.resolutionCache.set(uri, {
+                hash: contentHash,
+                result: result
+            });
 
             // Log resolution statistics
             const message = `Semantic resolution: ${result.stats.totalElements} elements, ` +
@@ -2294,7 +2336,8 @@ export class SysMLParser {
 
         const fullRange = new vscode.Range(0, 0, document.lineCount - 1, 0);
 
-        console.log(`Built comprehensive structural diagram:`, {
+        // Structural diagram stats (logging disabled for performance)
+        const _stats = {
             packages: packages.length,
             parts: parts.length,
             connections: connections.length,
@@ -2308,7 +2351,7 @@ export class SysMLParser {
             useCases: useCases.length,
             enumerations: enumerations.length,
             relationships: relationships.length
-        });
+        };
 
         return {
             name: 'structural',

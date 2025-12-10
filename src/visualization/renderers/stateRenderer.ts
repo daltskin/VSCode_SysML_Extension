@@ -54,7 +54,6 @@ function collectStateAndTransitionElements(elements: DiagramElementViewModel[]):
         }
     }
 
-    console.log('[StateRenderer] Found', states.length, 'states and', transitions.length, 'transitions');
     return { states, transitions };
 }
 
@@ -78,7 +77,6 @@ function buildTransitionRelationships(transitionElements: DiagramElementViewMode
         }
     });
 
-    console.log('[StateRenderer] Created', relationships.length, 'transition relationships');
     return relationships;
 }
 

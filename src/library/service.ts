@@ -36,21 +36,13 @@ export class LibraryService {
             return;
         }
 
-        console.log('[LibraryService] Initializing...');
-        const startTime = Date.now();
-
         try {
             this.library = await this.cacheManager.getCompiledLibrary(
                 this.libraryPath,
                 forceRecompile
             );
             this.initialized = true;
-
-            const duration = Date.now() - startTime;
-            console.log(`[LibraryService] Initialized with ${this.library.stats.totalSymbols} symbols in ${duration}ms`);
-            console.log('[LibraryService] Symbol breakdown:', this.library.stats.byKind);
         } catch (error) {
-            console.error('[LibraryService] Failed to initialize:', error);
             throw error;
         }
     }
@@ -191,7 +183,6 @@ export class LibraryService {
      * Invalidate cache and force recompilation
      */
     public async recompile(): Promise<void> {
-        console.log('[LibraryService] Recompiling library...');
         this.cacheManager.invalidateCache();
         this.initialized = false;
         await this.initialize(true);
