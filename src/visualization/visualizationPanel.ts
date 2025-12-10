@@ -438,23 +438,22 @@ export class VisualizationPanel {
             -moz-osx-font-smoothing: grayscale;
         }
         #controls {
-            margin-bottom: 12px;
-            padding: 12px 16px;
-            background: linear-gradient(to bottom, var(--vscode-editor-background), var(--vscode-sideBar-background, var(--vscode-editor-background)));
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            background: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-radius: 4px;
         }
         #status-bar {
-            margin-bottom: 12px;
-            padding: 10px 16px;
+            margin-bottom: 8px;
+            padding: 6px 12px;
             background-color: var(--vscode-statusBar-background);
             color: var(--vscode-statusBar-foreground);
             border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            font-size: 12px;
+            border-radius: 4px;
+            font-size: 11px;
             font-weight: 400;
-            line-height: 1.4;
+            line-height: 1.3;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -464,65 +463,47 @@ export class VisualizationPanel {
             flex-grow: 1;
         }
         button {
-            margin-right: 8px;
-            padding: 8px 16px;
+            margin-right: 4px;
+            padding: 5px 10px;
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
-            border: 1px solid var(--vscode-button-border, transparent);
-            border-radius: 6px;
+            border: 1px solid transparent;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 500;
-            line-height: 1.3;
-            letter-spacing: 0.01em;
-            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+            line-height: 1.2;
+            letter-spacing: 0.02em;
+            transition: all 0.15s ease;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             position: relative;
             overflow: hidden;
-        }
-        button::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.1);
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }
-        button:hover::before {
-            width: 300px;
-            height: 300px;
+            white-space: nowrap;
         }
         button:hover {
             background-color: var(--vscode-button-hoverBackground);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
         }
         button:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+            opacity: 0.9;
         }
         .view-btn {
-            background: linear-gradient(135deg, var(--vscode-button-secondaryBackground, var(--vscode-editor-background)), var(--vscode-sideBar-background, var(--vscode-editor-background)));
-            color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
-            border: 1.5px solid var(--vscode-panel-border);
-            font-weight: 600;
+            background: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
+            color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+            border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+            font-weight: 500;
+            padding: 5px 10px;
         }
         .view-btn:hover {
             background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
-            border-color: var(--vscode-focusBorder, var(--vscode-panel-border));
+            border-color: var(--vscode-focusBorder);
         }
         .view-btn-active {
-            background: linear-gradient(135deg, var(--vscode-button-background), var(--vscode-button-hoverBackground)) !important;
+            background: var(--vscode-button-background) !important;
             color: var(--vscode-button-foreground) !important;
-            border-color: var(--vscode-focusBorder) !important;
-            box-shadow: 0 0 0 2px var(--vscode-focusBorder), 0 4px 12px rgba(0,0,0,0.2) !important;
-            font-weight: 600;
+            border-color: var(--vscode-button-background) !important;
         }
         .view-dropdown {
             position: relative;
@@ -531,21 +512,18 @@ export class VisualizationPanel {
         }
         .view-dropdown-menu {
             position: absolute;
-            top: calc(100% + 6px);
+            top: calc(100% + 4px);
             left: 0;
-            min-width: 220px;
-            background: var(--vscode-menu-background, var(--vscode-sideBar-background));
+            min-width: 180px;
+            background: var(--vscode-menu-background, var(--vscode-dropdown-background));
             border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
-            border-radius: 8px;
-            box-shadow: 0 12px 32px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.15);
-            padding: 6px;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            padding: 4px;
             display: none;
             flex-direction: column;
-            gap: 2px;
+            gap: 1px;
             z-index: 20;
-            animation: dropdown-appear 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
         }
         .view-dropdown-menu.show {
             display: flex;
@@ -553,29 +531,24 @@ export class VisualizationPanel {
         .view-dropdown-item {
             width: 100%;
             justify-content: flex-start;
-            padding: 10px 14px;
+            padding: 6px 10px;
             margin: 0;
             border: none;
-            border-radius: 6px;
+            border-radius: 3px;
             background: none;
-            color: var(--vscode-menu-foreground, var(--vscode-editor-foreground));
-            font-size: 13px;
+            color: var(--vscode-menu-foreground, var(--vscode-foreground));
+            font-size: 11px;
             font-weight: 400;
-            line-height: 1.4;
-            letter-spacing: 0.01em;
-            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            line-height: 1.3;
+            transition: background 0.1s ease;
         }
         .view-dropdown-item:hover {
-            background-color: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
-            color: var(--vscode-menu-selectionForeground, var(--vscode-button-foreground));
-            transform: translateX(2px);
-            box-shadow: inset 3px 0 0 var(--vscode-focusBorder);
+            background-color: var(--vscode-list-hoverBackground);
         }
         .view-dropdown-item.active {
-            background: linear-gradient(90deg, var(--vscode-list-activeSelectionBackground, var(--vscode-button-background)), transparent);
-            color: var(--vscode-list-activeSelectionForeground, var(--vscode-button-foreground));
-            font-weight: 600;
-            box-shadow: inset 3px 0 0 var(--vscode-focusBorder);
+            background: var(--vscode-list-activeSelectionBackground);
+            color: var(--vscode-list-activeSelectionForeground);
+            font-weight: 500;
         }
         .export-dropdown {
             position: relative;
@@ -586,14 +559,12 @@ export class VisualizationPanel {
             position: fixed;
             background-color: var(--vscode-menu-background);
             border: 1px solid var(--vscode-menu-border);
-            border-radius: 6px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.1);
-            min-width: 160px;
-            width: 160px;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            min-width: 130px;
+            width: 130px;
             z-index: 10000;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            animation: dropdown-appear 0.15s ease-out;
+            padding: 4px;
         }
         @keyframes dropdown-appear {
             from {
@@ -614,66 +585,63 @@ export class VisualizationPanel {
         .export-menu-item {
             display: block;
             width: 100%;
-            padding: 10px 16px;
+            padding: 6px 10px;
             margin: 0;
             text-align: left;
             background: none;
             border: none;
-            border-radius: 0;
+            border-radius: 3px;
             color: var(--vscode-menu-foreground);
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 400;
-            line-height: 1.4;
-            letter-spacing: 0.01em;
-            transition: background-color 0.15s ease;
+            line-height: 1.2;
+            transition: background-color 0.1s ease;
         }
         .export-menu-item:hover {
-            background-color: var(--vscode-menu-selectionBackground);
-            transform: none;
-            box-shadow: none;
+            background-color: var(--vscode-list-hoverBackground);
         }
         .export-menu-item:first-child {
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
+            border-top-left-radius: 3px;
+            border-top-right-radius: 3px;
         }
         .export-menu-item:last-child {
-            border-bottom-left-radius: 4px;
-            border-bottom-right-radius: 4px;
+            border-bottom-left-radius: 3px;
+            border-bottom-right-radius: 3px;
         }
         .action-btn {
-            background: var(--vscode-button-secondaryBackground, var(--vscode-editor-background));
-            color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
-            border: 1.5px solid var(--vscode-panel-border);
+            background: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
+            color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+            border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+            padding: 4px 8px;
+            font-size: 11px;
         }
         .action-btn:hover {
             background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
-            border-color: var(--vscode-focusBorder, var(--vscode-panel-border));
+            border-color: var(--vscode-focusBorder);
         }
         .primary-btn {
-            background: var(--vscode-button-secondaryBackground, var(--vscode-editor-background));
-            color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
-            border: 1.5px solid var(--vscode-panel-border);
-            font-weight: 500;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: 1px solid transparent;
+            padding: 4px 8px;
+            font-size: 11px;
         }
         .primary-btn:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
-            border-color: var(--vscode-focusBorder, var(--vscode-panel-border));
+            background-color: var(--vscode-button-hoverBackground);
         }
         #visualization-wrapper {
             position: relative;
             width: 100%;
-            height: calc(100vh - 130px);
+            height: calc(100vh - 100px);
             min-height: 400px;
         }
         #visualization {
             width: 100%;
             height: 100%;
             border: 1px solid var(--vscode-panel-border);
-            border-radius: 8px;
+            border-radius: 4px;
             overflow: hidden;
             position: relative;
-            transition: opacity 0.28s ease, transform 0.28s ease;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
         }
         /* Loading overlay styles */
         #loading-overlay {
@@ -904,35 +872,33 @@ export class VisualizationPanel {
         }
 
         .filter-input {
-            padding: 8px 12px;
+            padding: 5px 8px;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
-            border: 1.5px solid var(--vscode-input-border);
-            border-radius: 6px;
-            font-size: 13px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            font-size: 11px;
             font-weight: 400;
-            line-height: 1.4;
-            width: 180px;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            line-height: 1.2;
+            width: 150px;
+            transition: border-color 0.1s ease;
         }
         .filter-input:hover {
-            border-color: var(--vscode-focusBorder, var(--vscode-input-border));
+            border-color: var(--vscode-focusBorder);
         }
         .filter-input:focus {
             outline: none;
             border-color: var(--vscode-focusBorder);
-            box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.15), 0 2px 8px rgba(0,0,0,0.1);
-            transform: translateY(-1px);
         }
         #sysml-toolbar {
             display: none;
             flex-direction: column;
-            gap: 10px;
-            padding: 10px 12px;
+            gap: 6px;
+            padding: 6px 10px;
             border: 1px solid var(--vscode-panel-border);
             border-radius: 4px;
-            background-color: var(--vscode-sideBar-background, var(--vscode-editor-background));
-            margin-bottom: 12px;
+            background-color: var(--vscode-editor-background);
+            margin-bottom: 8px;
         }
         #sysml-toolbar.visible {
             display: flex;
@@ -940,47 +906,45 @@ export class VisualizationPanel {
         .sysml-layout-toggle {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 12px;
+            gap: 6px;
+            font-size: 11px;
             font-weight: 400;
-            line-height: 1.4;
+            line-height: 1.2;
             color: var(--vscode-descriptionForeground);
             flex-wrap: wrap;
         }
         .sysml-layout-btn {
-            padding: 6px 10px;
-            border-radius: 20px;
-            border: 1px solid var(--vscode-panel-border);
-            background: transparent;
-            color: var(--vscode-editor-foreground);
+            padding: 4px 8px;
+            border-radius: 3px;
+            border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+            background: var(--vscode-input-background);
+            color: var(--vscode-foreground);
             cursor: pointer;
-            font-size: 12px;
+            font-size: 10px;
             font-weight: 500;
-            line-height: 1.3;
-            letter-spacing: 0.01em;
-            transition: all 0.2s ease;
+            line-height: 1.2;
+            transition: all 0.1s ease;
         }
         .sysml-layout-btn.active {
-            background-color: var(--vscode-charts-blue);
-            color: #fff;
-            border-color: var(--vscode-charts-blue);
-            box-shadow: 0 0 8px rgba(0,0,0,0.2);
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-color: var(--vscode-button-background);
         }
         .metadata-toggle {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
+            gap: 4px;
+            padding: 4px 8px;
             background: var(--vscode-input-background);
             border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
+            border-radius: 3px;
             cursor: pointer;
-            font-size: 12px;
-            color: var(--vscode-input-foreground);
+            font-size: 10px;
+            color: var(--vscode-foreground);
             user-select: none;
         }
         .metadata-toggle:hover {
-            background: var(--vscode-button-hoverBackground);
+            background: var(--vscode-list-hoverBackground);
         }
         .metadata-toggle input[type="checkbox"] {
             cursor: pointer;
@@ -993,22 +957,21 @@ export class VisualizationPanel {
         /* Minimap styles */
         #minimap-container {
             position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 180px;
-            height: 120px;
+            bottom: 12px;
+            right: 12px;
+            width: 150px;
+            height: 100px;
             background: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
             overflow: hidden;
             z-index: 1000;
-            opacity: 0.9;
-            transition: opacity 0.2s ease, transform 0.2s ease;
+            opacity: 0.85;
+            transition: opacity 0.15s ease;
         }
         #minimap-container:hover {
             opacity: 1;
-            transform: scale(1.02);
         }
         #minimap-container.hidden {
             display: none;
@@ -1017,10 +980,10 @@ export class VisualizationPanel {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 4px 8px;
+            padding: 3px 6px;
             background: var(--vscode-titleBar-activeBackground);
             border-bottom: 1px solid var(--vscode-panel-border);
-            font-size: 10px;
+            font-size: 9px;
             color: var(--vscode-titleBar-activeForeground);
             cursor: move;
         }
@@ -1029,22 +992,23 @@ export class VisualizationPanel {
             border: none;
             color: var(--vscode-titleBar-activeForeground);
             cursor: pointer;
-            font-size: 12px;
-            padding: 0 4px;
+            font-size: 10px;
+            padding: 0 2px;
             opacity: 0.7;
+            margin: 0;
         }
         #minimap-toggle:hover {
             opacity: 1;
         }
         #minimap-canvas {
             width: 100%;
-            height: calc(100% - 22px);
+            height: calc(100% - 18px);
             cursor: pointer;
         }
         #minimap-viewport {
             position: absolute;
-            border: 2px solid var(--vscode-charts-blue);
-            background: rgba(30, 136, 229, 0.15);
+            border: 1px solid var(--vscode-button-background);
+            background: rgba(30, 136, 229, 0.1);
             pointer-events: none;
             border-radius: 2px;
         }
@@ -1052,90 +1016,65 @@ export class VisualizationPanel {
 </head>
 <body>
     <div id="controls">
-        <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
-            <div style="display: flex; gap: 8px; border-right: 1px solid var(--vscode-panel-border); padding-right: 14px; align-items: center;">
-                <div class="view-dropdown">
-                    <button id="view-dropdown-btn" class="view-btn" title="Switch between visualization views">
-                        <span style="font-size: 9px; margin-right: 2px;">▼</span>
-                        <span>Views</span>
-                    </button>
-                    <div id="view-dropdown-menu" class="view-dropdown-menu">
-                        <button class="view-dropdown-item" data-view="elk">◆ General View</button>
-                        <button class="view-dropdown-item" data-view="ibd">▦ Interconnection View</button>
-                        <button class="view-dropdown-item" data-view="activity">▶ Action Flow View</button>
-                        <button class="view-dropdown-item" data-view="state">⌘ State Transition View</button>
-                        <button class="view-dropdown-item" data-view="sequence">⇄ Sequence View</button>
-                        <button class="view-dropdown-item" data-view="usecase">◎ Case View</button>
-                        <div style="border-top: 1px solid var(--vscode-menu-separatorBackground); margin: 4px 0; padding-top: 4px;">
-                            <div style="color: var(--vscode-descriptionForeground); font-size: 10px; padding: 4px 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">Other Views</div>
-                        </div>
-                        <button class="view-dropdown-item" data-view="tree">▲ Tree View</button>
-                        <button class="view-dropdown-item" data-view="package">▤ Package View</button>
-                        <button class="view-dropdown-item" data-view="graph">● Graph View</button>
-                        <button class="view-dropdown-item" data-view="hierarchy">■ Hierarchy View</button>
-                    </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div class="view-dropdown">
+                <button id="view-dropdown-btn" class="view-btn" title="Switch between visualization views">
+                    <span style="font-size: 8px;">▼</span> View
+                </button>
+                <div id="view-dropdown-menu" class="view-dropdown-menu">
+                    <button class="view-dropdown-item" data-view="elk">◆ General</button>
+                    <button class="view-dropdown-item" data-view="ibd">▦ Interconnection</button>
+                    <button class="view-dropdown-item" data-view="activity">▶ Activity</button>
+                    <button class="view-dropdown-item" data-view="state">⌘ State</button>
+                    <button class="view-dropdown-item" data-view="sequence">⇄ Sequence</button>
+                    <button class="view-dropdown-item" data-view="usecase">◎ Use Case</button>
+                    <div style="border-top: 1px solid var(--vscode-panel-border); margin: 3px 0;"></div>
+                    <button class="view-dropdown-item" data-view="tree">▲ Tree</button>
+                    <button class="view-dropdown-item" data-view="package">▤ Package</button>
+                    <button class="view-dropdown-item" data-view="graph">● Graph</button>
+                    <button class="view-dropdown-item" data-view="hierarchy">■ Hierarchy</button>
                 </div>
             </div>
-            <div style="display: flex; gap: 8px; border-right: 1px solid var(--vscode-panel-border); padding-right: 14px;">
-                <button id="fit-btn" class="action-btn" title="Fit entire diagram to view">
-                    <span>⊞</span> Fit to View
-                </button>
-                <button id="reset-btn" class="action-btn" title="Reset to 100% zoom">
-                    <span>↻</span> Reset Zoom
-                </button>
-                <button id="layout-direction-btn" class="action-btn" title="Toggle layout direction">
-                    <span>→</span> Left-Right
-                </button>
-                <button id="minimap-toolbar-btn" class="action-btn" title="Toggle minimap visibility">
-                    <span>🗺</span> Minimap
-                </button>
-            </div>
-
+            <span style="color: var(--vscode-panel-border);">|</span>
+            <button id="fit-btn" class="action-btn" title="Fit diagram to view">⊞ Fit</button>
+            <button id="reset-btn" class="action-btn" title="Reset zoom">↻ Reset</button>
+            <button id="layout-direction-btn" class="action-btn" title="Toggle layout direction">→ LR</button>
+            <button id="minimap-toolbar-btn" class="action-btn" title="Toggle minimap">🗺</button>
+            <span style="color: var(--vscode-panel-border);">|</span>
             <div class="export-dropdown" style="position: relative; display: inline-block;">
-                <button id="export-btn" class="primary-btn" title="Export diagram">
-                    <span>⇓</span> Export
-                </button>
+                <button id="export-btn" class="primary-btn" title="Export diagram">⇓ Export</button>
                 <div id="export-menu" class="export-menu">
-                    <button class="export-menu-item" data-format="png">□ PNG Image</button>
-                    <button class="export-menu-item" data-format="svg">◇ SVG Vector</button>
-                    <button class="export-menu-item" data-format="pdf">▣ PDF Document</button>
-                    <button class="export-menu-item" data-format="json">{ } JSON Data</button>
+                    <button class="export-menu-item" data-format="png">PNG</button>
+                    <button class="export-menu-item" data-format="svg">SVG</button>
+                    <button class="export-menu-item" data-format="pdf">PDF</button>
+                    <button class="export-menu-item" data-format="json">JSON</button>
                 </div>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--vscode-panel-border); padding-left: 14px;">
-                <input
-                    type="text"
-                    class="filter-input"
-                    id="element-filter"
-                    placeholder="🔍 Filter elements..."
-                    oninput="filterElements(this.value)"
-                    title="Filter elements by name or type"
-                >
-                <button id="clear-filter-btn" class="action-btn" title="Clear filter" style="padding: 8px 12px;">✕</button>
-            </div>
+            <span style="color: var(--vscode-panel-border);">|</span>
+            <input type="text" class="filter-input" id="element-filter" placeholder="Filter..." oninput="filterElements(this.value)" title="Filter elements">
+            <button id="clear-filter-btn" class="action-btn" title="Clear filter" style="padding: 4px 6px;">✕</button>
         </div>
     </div>
-    <div id="status-bar" style="display: flex;">
-        <span id="status-text">Ready • Use filter in the toolbar above to search elements</span>
+    <div id="status-bar">
+        <span id="status-text">Ready</span>
     </div>
 
     <div id="sysml-toolbar" class="sysml-toolbar">
         <div class="sysml-layout-toggle">
             <button class="sysml-layout-btn active" data-sysml-mode="hierarchy">Hierarchy</button>
             <button class="sysml-layout-btn" data-sysml-mode="relationships">Orthogonal</button>
-            <button class="sysml-layout-btn active" id="orientation-toggle" title="Toggle between horizontal and linear (top-down) layouts">Layout: Linear</button>
-            <label class="metadata-toggle" id="metadata-toggle" title="Show element metadata and properties">
+            <button class="sysml-layout-btn active" id="orientation-toggle" title="Toggle layout orientation">Linear</button>
+            <label class="metadata-toggle" id="metadata-toggle" title="Show metadata">
                 <input type="checkbox" id="metadata-checkbox" />
-                <span>Show Details</span>
+                <span>Details</span>
             </label>
         </div>
     </div>
 
-    <div id="diagram-selector-container" style="display: none; padding: 8px 16px; background: var(--vscode-editor-background); border-bottom: 1px solid var(--vscode-panel-border); align-items: center; gap: 12px;">
-        <label id="diagram-selector-label" style="font-size: 13px; font-weight: 500; color: var(--vscode-foreground);">State Machine:</label>
-        <select id="diagram-selector" class="diagram-selector" style="padding: 6px 12px; font-size: 13px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 4px; cursor: pointer; min-width: 200px;">
-        </select>
-        <span id="diagram-count" style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 8px;"></span>
+    <div id="diagram-selector-container" style="display: none; padding: 6px 12px; background: var(--vscode-editor-background); border-bottom: 1px solid var(--vscode-panel-border); align-items: center; gap: 8px;">
+        <label id="diagram-selector-label" style="font-size: 11px; font-weight: 500; color: var(--vscode-foreground);">Diagram:</label>
+        <select id="diagram-selector" class="diagram-selector" style="padding: 4px 8px; font-size: 11px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 3px; cursor: pointer; min-width: 160px;"></select>
+        <span id="diagram-count" style="font-size: 10px; color: var(--vscode-descriptionForeground);"></span>
     </div>
     <div id="visualization-wrapper">
         <div id="visualization"></div>

@@ -640,7 +640,7 @@ suite('SimpleVehicleModel IBD Tests', () => {
     test('Parse SimpleVehicleModel and find vehicle_a and vehicle_b', async function() {
         // Increase timeout for this test - SimpleVehicleModel is large
         this.timeout(30000);
-        
+
         // Read the SimpleVehicleModel file
         const samplesPath = path.join(__dirname, '..', '..', 'samples', 'SysML v2 Spec Annex A SimpleVehicleModel.sysml');
         const content = fs.readFileSync(samplesPath, 'utf8');
