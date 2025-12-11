@@ -262,17 +262,17 @@ suite('Doc Extraction Tests', () => {
         assert.ok(docSection && docSection.lines[0].text.includes('concern documentation'), 'Doc content should be found');
     });
 
-    test('Should extract doc from batmobile-style concern with stakeholder', () => {
-        // Exact copy of the concern from batmobile.sysml
-        const content = `package Batmobile {
-    part def HeroAssociation;
-    concern 'Reduce the number of special parts' {
+    test('Should extract doc from concern with stakeholder', () => {
+        // Test concern element with doc and stakeholder
+        const content = `package SmartHome {
+    part def HomeownersAssociation;
+    concern 'Minimize maintenance complexity' {
         doc
         /*
-         * Reduce the number of special parts to reduce the dependency
-         * to special suppliers and experts.
+         * Reduce maintenance complexity to minimize
+         * the need for specialized technicians.
          */
-        stakeholder heroAss : HeroAssociation;
+        stakeholder homeowners : HomeownersAssociation;
     }
 }`;
 
@@ -298,20 +298,20 @@ suite('Doc Extraction Tests', () => {
         const doc = concern.attributes.get('doc');
         console.log('[TEST] Concern doc content:', doc);
         assert.ok(typeof doc === 'string', 'Doc should be a string');
-        assert.ok(doc.includes('special parts') || doc.includes('special suppliers'), 'Doc should contain expected content');
+        assert.ok(doc.includes('maintenance') || doc.includes('technicians'), 'Doc should contain expected content');
     });
 
     test('Doc should be preserved through full visualization pipeline using SysMLParser', async () => {
         // This test replicates the exact flow used in visualizationPanel.ts
-        const content = `package Batmobile {
-    part def HeroAssociation;
-    concern 'Reduce the number of special parts' {
+        const content = `package SmartHome {
+    part def HomeownersAssociation;
+    concern 'Minimize maintenance complexity' {
         doc
         /*
-         * Reduce the number of special parts to reduce the dependency
-         * to special suppliers and experts.
+         * Reduce maintenance complexity to minimize
+         * the need for specialized technicians.
          */
-        stakeholder heroAss : HeroAssociation;
+        stakeholder homeowners : HomeownersAssociation;
     }
 }`;
 
@@ -356,7 +356,7 @@ suite('Doc Extraction Tests', () => {
         const doc = concern.attributes.get('doc');
         console.log('[TEST PIPELINE] Doc content:', doc);
         assert.ok(typeof doc === 'string', 'Doc should be a string');
-        assert.ok(doc.includes('special parts') || doc.includes('special suppliers'), 'Doc should contain expected content');
+        assert.ok(doc.includes('maintenance') || doc.includes('technicians'), 'Doc should contain expected content');
 
         // Step 3: Convert to JSON (like visualizationPanel.convertElementsToJSON does)
         function convertToJSON(elements: any[]): any[] {

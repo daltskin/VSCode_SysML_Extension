@@ -159,24 +159,28 @@ suite('IBD View Model Builder', () => {
         assert.ok((viewModel?.connectors?.length || 0) >= 1, 'Should have at least 1 connector');
     });
 
-    test.skip('parses interface connections from batmobile.sysml', async () => {
-        // Read the batmobile sample file which has interface connections
-        const fs = await import('fs');
-        const path = await import('path');
-
-        // Try workspace folder first, fall back to __dirname-based path
-        let workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        if (!workspaceRoot) {
-            // Fall back to the test file's directory, going up to project root
-            workspaceRoot = path.resolve(__dirname, '..', '..');
+    test.skip('parses interface connections from inline content', async () => {
+        // Test interface connections with inline SysML content
+        const content = `package SmartHome {
+    port def PowerIP {
+        out item power : Power;
+    }
+    item def Power;
+    interface def PowerInterface {
+        end supplierPort : PowerIP;
+        end consumerPort : ~PowerIP;
+    }
+    part def SmartHome {
+        part battery {
+            port powerPort : PowerIP;
         }
-
-        const filePath = path.join(workspaceRoot, 'samples', 'batmobile.sysml');
-        if (!fs.existsSync(filePath)) {
-            return; // Sample file not found, skip test
+        part controller {
+            port controllerPort : ~PowerIP;
         }
+        interface bat2ctrl : PowerInterface connect battery.powerPort to controller.controllerPort;
+    }
+}`;
 
-        const content = fs.readFileSync(filePath, 'utf-8');
         const document = await vscode.workspace.openTextDocument({
             content,
             language: 'sysml'
@@ -203,10 +207,10 @@ suite('IBD View Model Builder', () => {
         const interfaces = findInterfaces(elements);
 
         // Verify we found the interface with from/to attributes
-        const bat2engInterface = interfaces.find((i: SysMLElement) => i.name === 'bat2eng');
-        assert.ok(bat2engInterface, 'Should find bat2eng interface');
-        assert.ok(bat2engInterface?.attributes?.get?.('from'), 'bat2eng should have from attribute');
-        assert.ok(bat2engInterface?.attributes?.get?.('to'), 'bat2eng should have to attribute');
+        const bat2ctrlInterface = interfaces.find((i: SysMLElement) => i.name === 'bat2ctrl');
+        assert.ok(bat2ctrlInterface, 'Should find bat2ctrl interface');
+        assert.ok(bat2ctrlInterface?.attributes?.get?.('from'), 'bat2ctrl should have from attribute');
+        assert.ok(bat2ctrlInterface?.attributes?.get?.('to'), 'bat2ctrl should have to attribute');
 
         // Build the IBD view model
         const dataset = buildVisualizationDataset({ elements });
@@ -214,8 +218,7 @@ suite('IBD View Model Builder', () => {
 
         assert.ok(viewModel, 'IBD view model should be returned');
 
-        // batmobile.sysml has interface bat2eng : PowerInterface connect battery.powerPort to batmobileEngine.enginePort
-        // This should show up as a connector
+        // The interface should show up as a connector
         assert.ok((viewModel?.connectors?.length || 0) >= 1, 'Should have at least 1 connector from interface connections');
     });
 });

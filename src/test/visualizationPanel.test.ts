@@ -255,16 +255,16 @@ suite('Doc Attribute Preservation Tests', () => {
     });
 
     test('Doc should be preserved through entire visualization flow for concern element', async () => {
-        // Exact copy of the concern from batmobile.sysml
-        const content = `package Batmobile {
-    part def HeroAssociation;
-    concern 'Reduce the number of special parts' {
+        // Test concern element with doc and stakeholder
+        const content = `package SmartHome {
+    part def HomeownersAssociation;
+    concern 'Minimize maintenance complexity' {
         doc
         /*
-         * Reduce the number of special parts to reduce the dependency
-         * to special suppliers and experts.
+         * Reduce maintenance complexity to minimize
+         * the need for specialized technicians.
          */
-        stakeholder heroAss : HeroAssociation;
+        stakeholder homeowners : HomeownersAssociation;
     }
 }`;
 
@@ -304,7 +304,7 @@ suite('Doc Attribute Preservation Tests', () => {
         const doc = concern.attributes.get('doc');
         console.log('[VIZ TEST] Concern doc value:', doc);
         assert.ok(typeof doc === 'string', 'Doc should be a string');
-        assert.ok(doc.includes('Reduce the number'), 'Doc should contain expected content');
+        assert.ok(doc.includes('maintenance') || doc.includes('technicians'), 'Doc should contain expected content');
 
         // Step 3: Simulate convertElementsToJSON (what visualization panel does)
         function convertElementsToJSON(elements: SysMLElement[]): any[] {
@@ -349,22 +349,22 @@ suite('Doc Attribute Preservation Tests', () => {
         assert.ok(jsonConcern, 'JSON Concern should be found');
         assert.ok(jsonConcern.attributes, 'JSON Concern should have attributes object');
         assert.ok(jsonConcern.attributes.doc, 'JSON Concern should have doc in attributes');
-        assert.ok(jsonConcern.attributes.doc.includes('Reduce the number'), 'Doc content should be preserved in JSON');
+        assert.ok(jsonConcern.attributes.doc.includes('maintenance') || jsonConcern.attributes.doc.includes('technicians'), 'Doc content should be preserved in JSON');
 
         console.log('[VIZ TEST] ✅ SUCCESS: Doc attribute preserved through entire visualization flow!');
     });
 
     test('Doc extraction in collectNodeContent simulation', async () => {
         // This test simulates the webview's collectNodeContent function
-        const content = `package Batmobile {
-    part def HeroAssociation;
-    concern 'Reduce the number of special parts' {
+        const content = `package SmartHome {
+    part def HomeownersAssociation;
+    concern 'Minimize maintenance complexity' {
         doc
         /*
-         * Reduce the number of special parts to reduce the dependency
-         * to special suppliers and experts.
+         * Reduce maintenance complexity to minimize
+         * the need for specialized technicians.
          */
-        stakeholder heroAss : HeroAssociation;
+        stakeholder homeowners : HomeownersAssociation;
     }
 }`;
 
@@ -503,32 +503,48 @@ suite('Doc Attribute Preservation Tests', () => {
         const docSection = concernSections.find(s => s.title === 'Doc');
         assert.ok(docSection, 'Concern should have Doc section');
         assert.ok(docSection.lines.length > 0, 'Doc section should have lines');
-        assert.ok(docSection.lines[0].text.includes('Reduce the number'), 'Doc text should contain expected content');
+        assert.ok(docSection.lines[0].text.includes('maintenance') || docSection.lines[0].text.includes('technicians'), 'Doc text should contain expected content');
 
         console.log('[SIMULATE] ✅ Full webview rendering simulation PASSED!');
     });
 
-    test('Doc extraction from actual batmobile.sysml file', async () => {
-        // Test with the ACTUAL batmobile.sysml file
-        const samplesPath = path.join(__dirname, '..', '..', 'samples', 'batmobile.sysml');
-        const content = fs.readFileSync(samplesPath, 'utf8');
+    test('Doc extraction from inline model with concerns', async () => {
+        // Test with inline SysML content containing concerns
+        const content = `package SmartHome {
+    part def HomeownersAssociation;
+    concern 'Minimize maintenance complexity' {
+        doc
+        /*
+         * Reduce maintenance complexity to minimize
+         * the need for specialized technicians.
+         */
+        stakeholder homeowners : HomeownersAssociation;
+    }
+    concern 'Energy efficiency' {
+        doc
+        /*
+         * The system should optimize energy usage
+         * to reduce operating costs.
+         */
+    }
+}`;
 
-        console.log('[BATMOBILE TEST] File size:', content.length);
+        console.log('[CONCERN TEST] Content size:', content.length);
 
         const document = await createTestDocument(content);
         const resolutionResult = await parser.parseWithSemanticResolution(document);
         const sysmlElements = parser.convertEnrichedToSysMLElements(resolutionResult.elements);
 
         // Find all concerns with doc
-        function findConcernsWithDoc(elements: SysMLElement[], results: any[] = [], path: string = '') {
+        function findConcernsWithDoc(elements: SysMLElement[], results: any[] = [], pathStr: string = '') {
             for (const el of elements) {
-                const currentPath = path ? `${path}.${el.name}` : el.name;
+                const currentPath = pathStr ? `${pathStr}.${el.name}` : el.name;
                 if (el.type === 'concern') {
                     const hasDoc = el.attributes?.has('doc');
                     const doc = el.attributes?.get('doc');
-                    console.log(`[BATMOBILE TEST] Found concern: "${el.name}" at ${currentPath}`);
+                    console.log(`[CONCERN TEST] Found concern: "${el.name}" at ${currentPath}`);
                     const docPreview = doc && typeof doc === 'string' ? `${doc.substring(0, 60)  }...` : 'NULL';
-                    console.log(`[BATMOBILE TEST]   hasDoc: ${hasDoc}, doc: ${docPreview}`);
+                    console.log(`[CONCERN TEST]   hasDoc: ${hasDoc}, doc: ${docPreview}`);
                     results.push({ name: el.name, path: currentPath, hasDoc, doc });
                 }
                 if (el.children) {
@@ -539,20 +555,41 @@ suite('Doc Attribute Preservation Tests', () => {
         }
 
         const concerns = findConcernsWithDoc(sysmlElements);
-        console.log(`[BATMOBILE TEST] Total concerns found: ${concerns.length}`);
+        console.log(`[CONCERN TEST] Total concerns found: ${concerns.length}`);
 
         const concernsWithDoc = concerns.filter(c => c.hasDoc);
-        console.log(`[BATMOBILE TEST] Concerns with doc: ${concernsWithDoc.length}`);
+        console.log(`[CONCERN TEST] Concerns with doc: ${concernsWithDoc.length}`);
 
-        assert.ok(concerns.length > 0, 'Should find at least one concern in batmobile.sysml');
+        assert.ok(concerns.length > 0, 'Should find at least one concern');
         assert.ok(concernsWithDoc.length > 0, 'At least one concern should have doc attribute');
 
-        console.log('[BATMOBILE TEST] ✅ SUCCESS!');
+        console.log('[CONCERN TEST] ✅ SUCCESS!');
     });
 
-    test('IBD view should find internal parts from batmobile.sysml', async () => {
-        const samplesPath = path.join(__dirname, '..', '..', 'samples', 'batmobile.sysml');
-        const content = fs.readFileSync(samplesPath, 'utf8');
+    test('IBD view should find internal parts from inline model', async () => {
+        // Test with inline SysML content containing parts and interfaces
+        const content = `package SmartHome {
+    port def PowerIP {
+        out item power : Power;
+    }
+    item def Power;
+    interface def PowerInterface {
+        end supplierPort : PowerIP;
+        end consumerPort : ~PowerIP;
+    }
+    part def SmartHome {
+        part controller;
+        part sensors;
+        part actuators;
+        part battery {
+            port powerPort : PowerIP;
+        }
+        part hub {
+            port hubPort : ~PowerIP;
+        }
+        interface bat2hub : PowerInterface connect battery.powerPort to hub.hubPort;
+    }
+}`;
 
         const document = await createTestDocument(content);
         const resolutionResult = await parser.parseWithSemanticResolution(document);
@@ -612,15 +649,15 @@ suite('Doc Attribute Preservation Tests', () => {
         console.log(`[IBD TEST] Connectors/Interfaces found: ${connectors.length}`);
         connectors.forEach(c => console.log(`[IBD TEST]   Connector: ${c.name} (type: ${c.type})`));
 
-        // Batmobile should have internal parts: seat, body, wheels, battery, batmobileEngine
-        assert.ok(parts.length > 0, 'Should find parts in batmobile.sysml');
+        // SmartHome should have internal parts: controller, sensors, actuators, battery, hub
+        assert.ok(parts.length > 0, 'Should find parts in model');
 
         // Check for specific parts
         const partNames = parts.map(p => p.name);
         console.log(`[IBD TEST] Part names: ${partNames.join(', ')}`);
 
-        // These are internal parts of Batmobile
-        const expectedParts = ['seat', 'body', 'wheels', 'battery', 'batmobileEngine'];
+        // These are internal parts of SmartHome
+        const expectedParts = ['controller', 'sensors', 'actuators', 'battery', 'hub'];
         const foundExpected = expectedParts.filter(name => partNames.includes(name));
         console.log(`[IBD TEST] Found expected parts: ${foundExpected.join(', ')}`);
 
@@ -630,50 +667,74 @@ suite('Doc Attribute Preservation Tests', () => {
     });
 });
 
-suite('SimpleVehicleModel IBD Tests', () => {
+suite('Complex Model IBD Tests', () => {
     let parser: SysMLParser;
 
     setup(() => {
         parser = new SysMLParser();
     });
 
-    test('Parse SimpleVehicleModel and find vehicle_a and vehicle_b', async function() {
-        // Increase timeout for this test - SimpleVehicleModel is large
+    test('Parse complex model and find vehicles', async function() {
+        // Increase timeout for this test
         this.timeout(30000);
 
-        // Read the SimpleVehicleModel file
-        const samplesPath = path.join(__dirname, '..', '..', 'samples', 'SysML v2 Spec Annex A SimpleVehicleModel.sysml');
-        const content = fs.readFileSync(samplesPath, 'utf8');
+        // Use inline content that tests the same structural patterns
+        const content = `package VehicleModel {
+    package Definitions {
+        part def Vehicle;
+        part def Engine;
+        part def Transmission;
+        part def Wheel;
+        port def DrivePort;
+    }
+    package Configurations {
+        package ConfigurationA {
+            part vehicle_a : Definitions::Vehicle {
+                part engine : Definitions::Engine;
+                part wheels : Definitions::Wheel [4];
+            }
+        }
+        package ConfigurationB {
+            part vehicle_b : Definitions::Vehicle {
+                part engine : Definitions::Engine;
+                part transmission : Definitions::Transmission;
+                part wheels : Definitions::Wheel [4];
+                part frontAxle;
+                part rearAxle;
+            }
+        }
+    }
+}`;
         const document = await createTestDocument(content);
 
-        console.log('[SVM TEST] Parsing SimpleVehicleModel...');
-        console.log(`[SVM TEST] Content length: ${content.length}`);
+        console.log('[VEHICLE TEST] Parsing VehicleModel...');
+        console.log(`[VEHICLE TEST] Content length: ${content.length}`);
 
         // Parse with the parser
         const hierarchicalElements = parser.parseForVisualization(document);
         const elements = flattenElements(hierarchicalElements);
 
-        console.log(`[SVM TEST] Total hierarchical elements: ${hierarchicalElements.length}`);
-        console.log(`[SVM TEST] Total flattened elements: ${elements.length}`);
+        console.log(`[VEHICLE TEST] Total hierarchical elements: ${hierarchicalElements.length}`);
+        console.log(`[VEHICLE TEST] Total flattened elements: ${elements.length}`);
 
         // Log top-level structure
         hierarchicalElements.forEach(el => {
-            console.log(`[SVM TEST] Top-level: ${el.name} (${el.type}) - ${el.children?.length || 0} children`);
+            console.log(`[VEHICLE TEST] Top-level: ${el.name} (${el.type}) - ${el.children?.length || 0} children`);
         });
 
         // Find packages
         const packages = elements.filter(el => el.type && el.type.toLowerCase().includes('package'));
-        console.log(`[SVM TEST] Packages found: ${packages.length}`);
+        console.log(`[VEHICLE TEST] Packages found: ${packages.length}`);
         packages.slice(0, 20).forEach(p => {
-            console.log(`[SVM TEST]   Package: ${p.name}`);
+            console.log(`[VEHICLE TEST]   Package: ${p.name}`);
         });
 
-        // Find VehicleConfigurations specifically
-        const vehicleConfig = packages.find(p => p.name === 'VehicleConfigurations');
-        if (vehicleConfig) {
-            console.log(`[SVM TEST] Found VehicleConfigurations with ${vehicleConfig.children?.length || 0} children`);
+        // Find Configurations package specifically
+        const configPackage = packages.find(p => p.name === 'Configurations');
+        if (configPackage) {
+            console.log(`[VEHICLE TEST] Found Configurations with ${configPackage.children?.length || 0} children`);
         } else {
-            console.log('[SVM TEST] VehicleConfigurations NOT FOUND');
+            console.log('[VEHICLE TEST] Configurations NOT FOUND');
         }
 
         // Find all parts
@@ -681,40 +742,40 @@ suite('SimpleVehicleModel IBD Tests', () => {
             const typeLower = (el.type || '').toLowerCase();
             return typeLower.includes('part') && !typeLower.includes('def');
         });
-        console.log(`[SVM TEST] Part usages found: ${partElements.length}`);
+        console.log(`[VEHICLE TEST] Part usages found: ${partElements.length}`);
         partElements.slice(0, 30).forEach(p => {
-            console.log(`[SVM TEST]   Part: ${p.name} [${p.type}] - ${p.children?.length || 0} children`);
+            console.log(`[VEHICLE TEST]   Part: ${p.name} [${p.type}] - ${p.children?.length || 0} children`);
         });
 
         // Find vehicle_a and vehicle_b
         const vehicleA = elements.find(el => el.name === 'vehicle_a');
         const vehicleB = elements.find(el => el.name === 'vehicle_b');
 
-        console.log(`[SVM TEST] vehicle_a found: ${!!vehicleA}`);
-        console.log(`[SVM TEST] vehicle_b found: ${!!vehicleB}`);
+        console.log(`[VEHICLE TEST] vehicle_a found: ${!!vehicleA}`);
+        console.log(`[VEHICLE TEST] vehicle_b found: ${!!vehicleB}`);
 
         if (vehicleA) {
-            console.log(`[SVM TEST] vehicle_a type: ${vehicleA.type}, children: ${vehicleA.children?.length || 0}`);
+            console.log(`[VEHICLE TEST] vehicle_a type: ${vehicleA.type}, children: ${vehicleA.children?.length || 0}`);
         }
         if (vehicleB) {
-            console.log(`[SVM TEST] vehicle_b type: ${vehicleB.type}, children: ${vehicleB.children?.length || 0}`);
+            console.log(`[VEHICLE TEST] vehicle_b type: ${vehicleB.type}, children: ${vehicleB.children?.length || 0}`);
         }
 
         // Find parts with children (potential IBD containers)
         const partsWithChildren = partElements.filter(p => p.children && p.children.length > 0);
-        console.log(`[SVM TEST] Parts with children (IBD containers): ${partsWithChildren.length}`);
+        console.log(`[VEHICLE TEST] Parts with children (IBD containers): ${partsWithChildren.length}`);
         partsWithChildren.slice(0, 10).forEach(p => {
-            console.log(`[SVM TEST]   ${p.name}: ${p.children?.length || 0} children`);
+            console.log(`[VEHICLE TEST]   ${p.name}: ${p.children?.length || 0} children`);
         });
 
         // Assertions
-        assert.ok(packages.length > 0, 'Should find packages in SimpleVehicleModel');
-        assert.ok(vehicleConfig, 'Should find VehicleConfigurations package');
+        assert.ok(packages.length > 0, 'Should find packages in VehicleModel');
+        assert.ok(configPackage, 'Should find Configurations package');
         assert.ok(partElements.length > 0, 'Should find part usages');
         assert.ok(vehicleA || vehicleB, 'Should find vehicle_a or vehicle_b');
         assert.ok(partsWithChildren.length > 0, 'Should find parts with children for IBD view');
 
-        console.log('[SVM TEST] ✅ SUCCESS!');
+        console.log('[VEHICLE TEST] ✅ SUCCESS!');
     });
 });
 

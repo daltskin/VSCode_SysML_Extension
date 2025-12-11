@@ -80,7 +80,7 @@ suite('ANTLR SysML Parser Tests', () => {
     });
 
     test('Should parse states from multiple packages', () => {
-        // Test multi-package state parsing (similar to SimpleVehicleModel structure)
+        // Test multi-package state parsing
         const content = `package Vehicle {
             part def Vehicle {
                 exhibit state vehicleStates parallel {
@@ -158,7 +158,7 @@ suite('ANTLR SysML Parser Tests', () => {
     });
 
     test('Should parse states nested in part def within sub-packages (like driverStates in MissionContext)', () => {
-        // Test deeply nested state parsing - similar to SimpleVehicleModel's MissionContext/Driver/driverStates
+        // Test deeply nested state parsing
         const content = `package MissionContext {
             package ContextDefinitions {
                 part def Driver {
