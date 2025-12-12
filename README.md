@@ -14,6 +14,40 @@ A Visual Studio Code extension for SysML v2.0 with syntax highlighting, formatti
 - **Model Explorer** - Tree view showing packages and elements across your workspace
 - **Interactive Diagrams** - General View, Interconnection View, Action Flow View, State Transition View, Sequence View, Case View and others with search/pan/zoom/export
 
+## Demo
+
+![Visualiser](assets/visualiser.mp4)
+
+## Screenshots
+
+### General View
+
+![General View](assets/general_view.png)
+
+### Interconnection View
+
+![Interconnection View](assets/interconnection_view.png)
+
+### Action Flow View
+
+![Action Flow View](assets/action_flow_view.png)
+
+### State Transition View
+
+![State Transition View](assets/state_view.png)
+
+### Hierarchy View
+
+![Hierarchy View](assets/hierarchy_view.png)
+
+### Graph View
+
+![Graph View](assets/graph_view.png)
+
+### Tree View
+
+![Tree View](assets/tree_view.png)
+
 ## Installation
 
 1. Open VS Code Extensions (Ctrl+Shift+X)
