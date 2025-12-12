@@ -16,7 +16,7 @@ A Visual Studio Code extension for SysML v2.0 with syntax highlighting, formatti
 
 ## Demo
 
-<video src="assets/visualiser.mp4" controls width="100%"></video>
+![Demo](assets/visualiser.webp)
 
 ## Screenshots
 
