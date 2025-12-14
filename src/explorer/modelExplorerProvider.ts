@@ -40,7 +40,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
             } finally {
                 this.isLoading = false;
             }
-        }, 300); // 300ms debounce
+        }, 32); // 32ms debounce - minimal delay for responsive tree updates
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

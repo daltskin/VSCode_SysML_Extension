@@ -9,6 +9,8 @@ export class VisualizationPanel {
     private _isNavigating: boolean = false; // Flag to prevent view reset during navigation
     private _lastUpdateTime: number = 0; // Prevent rapid successive updates
     private _fileChangeDebounceTimer: ReturnType<typeof setTimeout> | undefined; // Debounce file change notifications
+    private _lastContentHash: string = ''; // Cache content hash to skip unchanged updates
+    private _pendingUpdate: ReturnType<typeof setTimeout> | undefined; // Coalesce rapid updates
 
     private constructor(
         panel: vscode.WebviewPanel,
@@ -114,25 +116,41 @@ export class VisualizationPanel {
         this._panel.webview.postMessage({ command: 'export', format: format.toLowerCase() });
     }
 
-    private async updateVisualization() {
-        // Skip update if we're currently navigating to prevent view reset
-        const now = Date.now();
+    // Simple hash function for content comparison
+    private hashContent(content: string): string {
+        let hash = 0;
+        for (let i = 0; i < content.length; i++) {
+            const char = content.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return hash.toString(16);
+    }
 
+    private async updateVisualization(forceUpdate: boolean = false) {
+        // Skip update if we're currently navigating to prevent view reset
         if (this._isNavigating) {
             return;
         }
 
-        // Prevent rapid successive updates
-        if (now - this._lastUpdateTime < 200) {
+        // Check content hash first - skip expensive parsing if content unchanged
+        const content = this._document.getText();
+        const contentHash = this.hashContent(content);
+        
+        if (!forceUpdate && contentHash === this._lastContentHash) {
+            // Content unchanged, skip update entirely
             return;
         }
-        this._lastUpdateTime = now;
+        this._lastContentHash = contentHash;
 
-        // Phase 3: Use semantic resolution for enhanced element data
-        const resolutionResult = await this._parser.parseWithSemanticResolution(this._document);
+        // Execute immediately - no debounce needed since content hash prevents redundant work
+        await this._doUpdateVisualization();
+    }
 
-        // Convert enriched elements to SysML elements for visualization
-        const elements = this._parser.convertEnrichedToSysMLElements(resolutionResult.elements);
+    private _doUpdateVisualization() {
+        // Use fast parse for visualization - skip semantic resolution for speed
+        // Semantic resolution is expensive and not needed for diagram rendering
+        const elements = this._parser.parse(this._document);
 
         const relationships = this._parser.getRelationships();
         const sequenceDiagrams = this._parser.getSequenceDiagrams();
@@ -180,8 +198,7 @@ export class VisualizationPanel {
             relationships: relationships,
             sequenceDiagrams: sequenceDiagrams,
             activityDiagrams: activityDiagrams,
-            currentView: this._currentView, // Send the stored view state
-            semanticStats: resolutionResult.stats // Include semantic resolution stats
+            currentView: this._currentView // Send the stored view state
         });
     }
 
@@ -382,15 +399,9 @@ export class VisualizationPanel {
     }
 
     public notifyFileChanged(uri: vscode.Uri) {
-        // Notify the webview about file changes for auto-refresh functionality
-        // Debounce to prevent double updates from both text document changes and file system watcher
+        // Instant update - content hash check in updateVisualization prevents redundant work
         if (this._document.uri.toString() === uri.toString()) {
-            if (this._fileChangeDebounceTimer) {
-                globalThis.clearTimeout(this._fileChangeDebounceTimer);
-            }
-            this._fileChangeDebounceTimer = setTimeout(() => {
-                this.updateVisualization();
-            }, 300); // 300ms debounce to coalesce multiple change events
+            this.updateVisualization();
         }
     }
 
@@ -2204,10 +2215,12 @@ export class VisualizationPanel {
                     });
 
                     // Add unique actor usages that don't have matching definitions
-                    const seenActorNames = new Set(actors.map(a => a.name));
+                    // Use case-insensitive comparison for deduplication
+                    const seenActorNames = new Set(actors.map(a => a.name.toLowerCase()));
                     actorUsages.forEach(usage => {
                         const actorType = usage.typing || usage.name;
-                        if (!seenActorNames.has(actorType)) {
+                        const actorTypeLower = actorType.toLowerCase();
+                        if (!seenActorNames.has(actorTypeLower)) {
                             // Create a synthetic actor from the usage
                             actors.push({
                                 name: actorType,
@@ -2216,7 +2229,7 @@ export class VisualizationPanel {
                                 attributes: new Map(),
                                 relationships: []
                             });
-                            seenActorNames.add(actorType);
+                            seenActorNames.add(actorTypeLower);
                             actorTypeToName.set(actorType, actorType);
                         }
                     });
@@ -2225,7 +2238,8 @@ export class VisualizationPanel {
                     // This handles cases where actors are defined as usages inside use cases
                     // Only add from 'association' relationships (not 'realize' or 'subject')
                     useCaseRelationships.forEach(rel => {
-                        if (rel.type === 'association' && !seenActorNames.has(rel.source)) {
+                        const relSourceLower = rel.source.toLowerCase();
+                        if (rel.type === 'association' && !seenActorNames.has(relSourceLower)) {
                             actors.push({
                                 name: rel.source,
                                 type: 'actor def',
@@ -2233,7 +2247,7 @@ export class VisualizationPanel {
                                 attributes: new Map(),
                                 relationships: []
                             });
-                            seenActorNames.add(rel.source);
+                            seenActorNames.add(relSourceLower);
                             actorTypeToName.set(rel.source, rel.source);
                         }
                     });
@@ -2255,6 +2269,7 @@ export class VisualizationPanel {
                             if (childType === 'stakeholder') {
                                 // The typing gives us the stakeholder type (which is like an actor)
                                 const stakeholderType = child.typing || child.name;
+                                const stakeholderTypeLower = stakeholderType.toLowerCase();
 
                                 // Create relationship from requirement to stakeholder
                                 requirementRelationships.push({
@@ -2265,7 +2280,7 @@ export class VisualizationPanel {
                                 });
 
                                 // Add stakeholder as an actor if not already present
-                                if (!seenActorNames.has(stakeholderType)) {
+                                if (!seenActorNames.has(stakeholderTypeLower)) {
                                     actors.push({
                                         name: stakeholderType,
                                         type: 'actor def',
@@ -2274,7 +2289,7 @@ export class VisualizationPanel {
                                         relationships: [],
                                         isStakeholder: true
                                     });
-                                    seenActorNames.add(stakeholderType);
+                                    seenActorNames.add(stakeholderTypeLower);
                                     actorTypeToName.set(stakeholderType, stakeholderType);
                                 }
                             }
@@ -2656,10 +2671,36 @@ export class VisualizationPanel {
             console.error('JavaScript Error:', e.error?.message || e.message);
         });
 
+        // Track last rendered data to avoid unnecessary re-renders
+        let lastDataHash = '';
+        function quickHash(obj) {
+            const str = JSON.stringify(obj);
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return hash.toString(16);
+        }
+
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.command) {
                 case 'update':
+                    // Quick hash check - skip render if data unchanged
+                    const newHash = quickHash({
+                        elements: message.elements,
+                        relationships: message.relationships
+                    });
+                    
+                    if (newHash === lastDataHash && currentData) {
+                        // Data unchanged, skip expensive re-render
+                        hideLoading();
+                        return;
+                    }
+                    lastDataHash = newHash;
+
                     // Update loading message - parsing is done, now rendering
                     showLoading('Rendering diagram...');
 
@@ -2726,58 +2767,46 @@ export class VisualizationPanel {
             }
         }
 
-        // Improved resize handler with better debouncing and glitch prevention
+        // Resize handler - only triggers after user stops dragging
         let resizeTimeout;
-        let isResizing = false;
-        let lastWidth = 0;
-        let lastHeight = 0;
+        let lastRenderedWidth = 0;
+        let lastRenderedHeight = 0;
 
         function handleResize() {
-            // Prevent resize loops and excessive calls
-            if (isResizing) return;
-
             const vizElement = document.getElementById('visualization');
             if (!vizElement) return;
 
             const currentWidth = vizElement.clientWidth;
             const currentHeight = vizElement.clientHeight;
 
-            // Only proceed if dimensions actually changed significantly
-            if (Math.abs(currentWidth - lastWidth) < 5 && Math.abs(currentHeight - lastHeight) < 5) {
-                return;
-            }
-
-            lastWidth = currentWidth;
-            lastHeight = currentHeight;
-
+            // Clear any pending resize
             clearTimeout(resizeTimeout);
-            updateDimensionsDisplay(); // Show dimensions immediately
 
-            // If we have a Cytoscape instance, resize it immediately without re-rendering
+            // Update dimensions display immediately during drag
+            updateDimensionsDisplay();
+
+            // If we have a Cytoscape instance and we're in sysml view, just resize it (no debounce needed)
             if (cy && currentView === 'sysml') {
                 cy.resize();
-                // Re-fit the layout if needed
                 if (!window.userHasManuallyZoomed) {
                     cy.fit(cy.elements(), 50);
                 }
+                lastRenderedWidth = currentWidth;
+                lastRenderedHeight = currentHeight;
+                return;
             }
 
+            // For all other views, wait until resize stops before re-rendering
             resizeTimeout = setTimeout(() => {
-                if (currentData && !isResizing && !isRendering) {
-                    isResizing = true;
-                    try {
-                        // For non-Cytoscape views, re-render
-                        if (currentView !== 'sysml') {
-                            renderVisualization(currentView);
-                        }
-                    } finally {
-                        // Reset flag after a delay to ensure rendering is complete
-                        setTimeout(() => {
-                            isResizing = false;
-                        }, 150);
+                if (currentWidth !== lastRenderedWidth || currentHeight !== lastRenderedHeight) {
+                    lastRenderedWidth = currentWidth;
+                    lastRenderedHeight = currentHeight;
+                    
+                    if (currentData && !isRendering) {
+                        renderVisualization(currentView, null, true);
                     }
                 }
-            }, 400); // Increased debounce time for more stability
+            }, 500);
         }
 
         // Add keyboard shortcut to show dimensions (Ctrl+D)
@@ -2812,6 +2841,14 @@ export class VisualizationPanel {
                 }
             }, 100);
         }
+
+        // Also listen to window resize events as a fallback
+        // This catches cases where the VS Code panel is resized
+        window.addEventListener('resize', () => {
+            requestAnimationFrame(() => {
+                handleResize();
+            });
+        });
 
         function clearVisualHighlights() {
             // Remove visual highlights without refreshing the view
@@ -4556,13 +4593,13 @@ export class VisualizationPanel {
         // Make functions globally accessible for HTML onclick handlers
         window.changeView = changeView;
 
-        function renderVisualization(view, preserveZoomOverride = null) {
+        function renderVisualization(view, preserveZoomOverride = null, allowDuringResize = false) {
             if (!currentData) {
                 return;
             }
 
-            if (isRendering || isResizing) {
-                // Safety: if rendering flag has been stuck, skip
+            if (isRendering) {
+                // Already rendering, skip
                 return;
             }
 
@@ -6966,14 +7003,14 @@ export class VisualizationPanel {
                 }
 
                 // Layout settings
-                var nodeWidth = 300;  // Increased for better doc display
-                var nodeBaseHeight = 48;
-                var lineHeight = 14;
-                var sectionGap = 6;
-                var padding = 80;  // Increased for port labels on left
-                var hSpacing = 140; // Increased to accommodate port labels on both sides
-                var vSpacing = 50;
-                var maxTextWidth = nodeWidth - 24; // Padding on both sides
+                var nodeWidth = 150;
+                var nodeBaseHeight = 44;
+                var lineHeight = 13;
+                var sectionGap = 5;
+                var padding = 20;
+                var hSpacing = 30;
+                var vSpacing = 30;
+                var maxTextWidth = nodeWidth - 16;
 
                 // Helper to truncate text to fit width
                 function truncateText(text, maxChars) {
@@ -7157,7 +7194,11 @@ export class VisualizationPanel {
                 // Calculate positions with proper grid layout (no overlapping)
                 var nodePositions = new Map();
                 var portPositions = new Map();
-                var cols = Math.max(2, Math.min(4, Math.ceil(Math.sqrt(topLevelElements.length))));
+                
+                // Calculate columns: minimum 4, scales up with window width
+                var availableWidth = width - padding * 2;
+                var maxColsByWidth = Math.max(4, Math.floor((availableWidth + hSpacing) / (nodeWidth + hSpacing)));
+                var cols = Math.max(4, Math.min(maxColsByWidth, topLevelElements.length));
 
                 // First pass: calculate all node heights
                 var nodeData = topLevelElements.map(function(el, index) {
@@ -10242,7 +10283,7 @@ export class VisualizationPanel {
                     }
                 });
             } else if (usecaseLayoutOrientation === 'vertical') {
-                // Vertical layout: actors on top, use cases below in rows, actions at bottom
+                // Vertical layout: actors on top, use cases below in rows, actions at bottom, requirements below
                 const actorSpacing = Math.min(120, (width - marginLeft * 2) / Math.max(actors.length, 1));
                 const actorStartX = marginLeft + (width - marginLeft * 2 - (actors.length - 1) * actorSpacing) / 2;
 
@@ -10272,12 +10313,17 @@ export class VisualizationPanel {
                     });
                 });
 
+                // Calculate bottom of use cases section
+                const useCaseBottomY = useCaseStartY + useCaseRows * useCaseSpacingY + 40;
+
                 // Position actions below use cases
+                let actionsBottomY = useCaseBottomY;
                 if (actions.length > 0) {
                     const actionSpacingX = actionWidth + 30;
-                    const actionStartY = useCaseStartY + useCaseRows * useCaseSpacingY + 40;
+                    const actionStartY = useCaseBottomY;
                     const actionCols = Math.ceil(Math.sqrt(actions.length * 2));
                     const actionStartX = marginLeft + (width - marginLeft * 2 - (actionCols - 1) * actionSpacingX - actionWidth) / 2;
+                    const actionRows = Math.ceil(actions.length / actionCols);
 
                     actions.forEach((action, index) => {
                         const col = index % actionCols;
@@ -10288,63 +10334,70 @@ export class VisualizationPanel {
                             action: action
                         });
                     });
+
+                    actionsBottomY = actionStartY + actionRows * (actionHeight + 30) + 40;
                 }
 
-                // Position requirements on the right side
+                // Position requirements below actions in a row
                 if (requirements.length > 0) {
-                    const reqSpacing = Math.min(70, (height - marginTop * 2) / Math.max(requirements.length, 1));
-                    const reqStartY = useCaseStartY;
+                    const reqSpacingX = requirementWidth + 30;
+                    const reqCols = Math.min(requirements.length, Math.floor((width - marginLeft * 2) / reqSpacingX));
+                    const reqStartX = marginLeft + (width - marginLeft * 2 - (Math.min(requirements.length, reqCols) - 1) * reqSpacingX - requirementWidth) / 2;
 
                     requirements.forEach((req, index) => {
+                        const col = index % reqCols;
+                        const row = Math.floor(index / reqCols);
                         requirementPositions.set(req.name, {
-                            x: width - marginLeft - requirementWidth - 20,
-                            y: reqStartY + index * reqSpacing,
+                            x: reqStartX + col * reqSpacingX,
+                            y: actionsBottomY + row * (requirementHeight + 20),
                             requirement: req
                         });
                     });
                 }
             } else {
-                // Horizontal layout (default): ALL actors on left side, use cases in center, actions below
+                // Horizontal layout (default): Actors along top, use cases below, actions and requirements at bottom
                 const centerX = width / 2;
-                const centerY = height / 2 - (actions.length > 0 ? 40 : 0); // Shift up if there are actions
 
-                // Position all actors on the left side, grouped together
-                const actorSpacing = Math.min(100, (height - marginTop * 2) / Math.max(actors.length, 1));
-                const actorStartY = centerY - ((actors.length - 1) * actorSpacing) / 2;
+                // Position all actors along the top in a row
+                const actorSpacing = Math.min(120, (width - marginLeft * 2) / Math.max(actors.length, 1));
+                const actorStartX = marginLeft + (width - marginLeft * 2 - (actors.length - 1) * actorSpacing) / 2;
+                const actorRowY = marginTop + 40;
 
                 actors.forEach((actor, index) => {
                     actorPositions.set(actor.name, {
-                        x: 100,
-                        y: actorStartY + index * actorSpacing,
+                        x: actorStartX + index * actorSpacing,
+                        y: actorRowY,
                         actor: actor
                     });
                 });
 
-                // Position use cases in center grid
-                const cols = Math.ceil(Math.sqrt(useCases.length * 1.2));
-                const centerMargin = 150;
+                // Position use cases in grid below actors
+                const useCaseStartY = actorRowY + actorSize + 80; // Leave space below actors
+                const cols = Math.ceil(Math.sqrt(useCases.length * 1.5));
+                const useCaseSpacingX = useCaseWidth + 50;
+                const useCaseSpacingY = useCaseHeight + 50;
+                const useCaseStartX = centerX - (cols * useCaseSpacingX) / 2;
                 const useCaseRows = Math.ceil(useCases.length / cols);
 
                 useCases.forEach((useCase, index) => {
                     const col = index % cols;
                     const row = Math.floor(index / cols);
-                    const startX = centerX - (cols * (useCaseWidth + 40)) / 2 + centerMargin;
-                    const startY = centerY - (useCaseRows * (useCaseHeight + 60)) / 2 + 100;
-
                     useCasePositions.set(useCase.name, {
-                        x: startX + col * (useCaseWidth + 40),
-                        y: startY + row * (useCaseHeight + 60),
+                        x: useCaseStartX + col * useCaseSpacingX,
+                        y: useCaseStartY + row * useCaseSpacingY,
                         useCase: useCase
                     });
                 });
+
+                // Calculate bottom of use cases section
+                const useCaseBottomY = useCaseStartY + useCaseRows * useCaseSpacingY + 40;
 
                 // Position actions below use cases
                 if (actions.length > 0) {
                     const actionCols = Math.ceil(Math.sqrt(actions.length * 2));
                     const actionSpacingX = actionWidth + 30;
                     const actionSpacingY = actionHeight + 25;
-                    const useCaseBottomY = centerY + (useCaseRows * (useCaseHeight + 60)) / 2 + 60;
-                    const actionStartX = centerX - (actionCols * actionSpacingX) / 2 + centerMargin;
+                    const actionStartX = centerX - (actionCols * actionSpacingX) / 2;
 
                     actions.forEach((action, index) => {
                         const col = index % actionCols;
@@ -10357,19 +10410,43 @@ export class VisualizationPanel {
                     });
                 }
 
-                // Position requirements on the right side (opposite to actors)
+                // Position requirements at the bottom, below use cases/actions, in a row
                 if (requirements.length > 0) {
-                    const reqSpacing = Math.min(80, (height - marginTop * 2) / Math.max(requirements.length, 1));
-                    const reqStartY = centerY - ((requirements.length - 1) * reqSpacing) / 2;
+                    // Calculate starting Y: below use cases and actions
+                    const actionRows = actions.length > 0 ? Math.ceil(actions.length / Math.ceil(Math.sqrt(actions.length * 2))) : 0;
+                    const reqStartY = useCaseBottomY + actionRows * (actionHeight + 25) + 60;
+
+                    const reqSpacingX = requirementWidth + 30;
+                    const reqCols = Math.min(requirements.length, Math.floor((width - marginLeft * 2) / reqSpacingX));
+                    const reqStartX = centerX - (Math.min(requirements.length, reqCols) * reqSpacingX) / 2;
+                    const reqRows = Math.ceil(requirements.length / reqCols);
 
                     requirements.forEach((req, index) => {
+                        const col = index % reqCols;
+                        const row = Math.floor(index / reqCols);
                         requirementPositions.set(req.name, {
-                            x: width - marginLeft - requirementWidth - 20,
-                            y: reqStartY + index * reqSpacing - requirementHeight / 2,
+                            x: reqStartX + col * reqSpacingX,
+                            y: reqStartY + row * (requirementHeight + 20),
                             requirement: req
                         });
                     });
                 }
+            }
+
+            // Helper function for case-insensitive position lookup
+            function findActorPosition(name) {
+                // Try exact match first
+                if (actorPositions.has(name)) {
+                    return actorPositions.get(name);
+                }
+                // Try case-insensitive match
+                const nameLower = name.toLowerCase();
+                for (const [key, value] of actorPositions.entries()) {
+                    if (key.toLowerCase() === nameLower) {
+                        return value;
+                    }
+                }
+                return undefined;
             }
 
             // Draw relationships (behind use cases and actors) - wrapped in function for redraw on drag
@@ -10475,16 +10552,16 @@ export class VisualizationPanel {
                 if (rel.type === 'stakeholder') {
                     // Relationship from requirement to stakeholder (actor)
                     const sourcePos = requirementPositions.get(rel.source);
-                    const targetPos = actorPositions.get(rel.target);
+                    const targetPos = findActorPosition(rel.target);
 
                     if (!sourcePos || !targetPos) {
                         return;
                     }
 
-                    startX = sourcePos.x;  // Left edge of requirement
-                    startY = sourcePos.y + requirementHeight / 2;
+                    startX = sourcePos.x + requirementWidth / 2;  // Center of requirement
+                    startY = sourcePos.y;  // Top edge of requirement
                     endX = targetPos.x;
-                    endY = targetPos.y;
+                    endY = targetPos.y + actorSize / 2;  // Bottom of actor
 
                     // Dashed line for stakeholder relationship
                     const relGroup = relationshipGroup.append('g');
@@ -10524,7 +10601,7 @@ export class VisualizationPanel {
                 }
 
                 // Actor to use case relationships
-                const sourcePos = actorPositions.get(rel.source);
+                const sourcePos = findActorPosition(rel.source);
                 const targetPos = useCasePositions.get(rel.target);
 
                 if (!sourcePos || !targetPos) {
@@ -10532,9 +10609,9 @@ export class VisualizationPanel {
                 }
 
                 startX = sourcePos.x;
-                startY = sourcePos.y;
+                startY = sourcePos.y + actorSize / 2;  // Bottom of actor (since actors are at top now)
                 endX = targetPos.x + useCaseWidth / 2;
-                endY = targetPos.y + useCaseHeight / 2;
+                endY = targetPos.y;  // Top of use case
 
                 // Draw relationship line
                 const lineColor = rel.type === 'subject' ? 'var(--vscode-charts-green)' : 'var(--vscode-charts-blue)';

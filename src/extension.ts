@@ -380,11 +380,19 @@ export function activate(context: vscode.ExtensionContext) {
                     if (vscode.workspace.getConfiguration('sysml').get('validation.enabled')) {
                         validator.validate(event.document);
                     }
-                }, 500); // 500ms debounce for typing
+                }, 50); // 50ms debounce - minimal delay for near-instant updates
 
-                // Notify visualization panel of file changes for auto-refresh (immediate, it handles its own debounce)
+                // Note: Visualization panel only updates on file save for smooth editing
+            }
+        })
+    );
+
+    // Update visualization only on file save for smooth editing experience
+    context.subscriptions.push(
+        vscode.workspace.onDidSaveTextDocument(document => {
+            if (document.languageId === 'sysml') {
                 if (VisualizationPanel.currentPanel) {
-                    VisualizationPanel.currentPanel.notifyFileChanged(event.document.uri);
+                    VisualizationPanel.currentPanel.notifyFileChanged(document.uri);
                 }
             }
         })
