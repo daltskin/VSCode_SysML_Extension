@@ -1057,6 +1057,7 @@ export class VisualizationPanel {
             <button id="fit-btn" class="action-btn" title="Fit diagram to view">⊞ Fit</button>
             <button id="reset-btn" class="action-btn" title="Reset zoom">↻ Reset</button>
             <button id="layout-direction-btn" class="action-btn" title="Toggle layout direction">→ LR</button>
+            <button id="category-headers-btn" class="action-btn" title="Toggle category headers">☰ Group</button>
             <button id="minimap-toolbar-btn" class="action-btn" title="Toggle minimap">🗺</button>
             <span style="color: var(--vscode-panel-border);">|</span>
             <div class="export-dropdown" style="position: relative; display: inline-block;">
@@ -1160,6 +1161,7 @@ export class VisualizationPanel {
         let filteredData = null; // Active filter state shared across views
         let isRendering = false;
         let showMetadata = false;
+        let showCategoryHeaders = true; // Show category headers in General View
         const sysmlElementLookup = new Map();
         const VIEW_OPTIONS = {
             tree: { label: '▲ Tree View' },
@@ -4313,6 +4315,13 @@ export class VisualizationPanel {
                 layoutDirBtn.style.display = showLayoutBtn ? 'inline-flex' : 'none';
             }
 
+            // Show/hide category headers button for General View only
+            const categoryHeadersBtn = document.getElementById('category-headers-btn');
+            if (categoryHeadersBtn) {
+                categoryHeadersBtn.style.display = activeView === 'elk' ? 'inline-flex' : 'none';
+                categoryHeadersBtn.textContent = showCategoryHeaders ? '☰ Grouped' : '☷ Flat';
+            }
+
             const dropdownButton = document.getElementById('view-dropdown-btn');
             const dropdownConfig = VIEW_OPTIONS[activeView];
             if (dropdownButton) {
@@ -4554,6 +4563,19 @@ export class VisualizationPanel {
             updateLayoutDirectionButton(currentView);
             // Re-render the current view
             renderVisualization(currentView);
+        }
+
+        function toggleCategoryHeaders() {
+            showCategoryHeaders = !showCategoryHeaders;
+            // Update button text
+            const btn = document.getElementById('category-headers-btn');
+            if (btn) {
+                btn.textContent = showCategoryHeaders ? '☰ Grouped' : '☷ Flat';
+            }
+            // Re-render the General view
+            if (currentView === 'elk') {
+                renderVisualization('elk');
+            }
         }
 
         function updateStateLayoutButton(activeView) {
@@ -7200,16 +7222,15 @@ export class VisualizationPanel {
                 var maxColsByWidth = Math.max(4, Math.floor((availableWidth + hSpacing) / (nodeWidth + hSpacing)));
                 var cols = Math.max(4, Math.min(maxColsByWidth, topLevelElements.length));
 
-                // First pass: calculate all node heights
+                // First pass: calculate all node heights and assign categories
                 var nodeData = topLevelElements.map(function(el, index) {
                     var sections = collectNodeContent(el);
                     var totalLines = 0;
-                    var lineMaxChars = Math.floor((nodeWidth - 20) / 5); // Estimate for height calc (~56 chars for 300px)
+                    var lineMaxChars = Math.floor((nodeWidth - 20) / 5);
                     sections.forEach(function(s) {
-                        totalLines += 1; // section title
+                        totalLines += 1;
                         s.lines.forEach(function(line) {
                             if (line.rawDoc && line.type === 'doc') {
-                                // Estimate wrapped lines for raw doc
                                 var estimatedLines = Math.ceil(line.text.length / (lineMaxChars - 3));
                                 var maxDocLines = s.title === 'Documentation' ? 6 : 4;
                                 totalLines += Math.min(estimatedLines, maxDocLines);
@@ -7219,36 +7240,74 @@ export class VisualizationPanel {
                         });
                     });
                     var nodeHeight = Math.max(60, nodeBaseHeight + totalLines * lineHeight + sections.length * sectionGap);
-                    return { el: el, sections: sections, height: nodeHeight, index: index };
+                    var typeLower = (el.type || '').toLowerCase();
+                    var category = getCategoryForType(typeLower);
+                    return { el: el, sections: sections, height: nodeHeight, index: index, category: category };
                 });
 
-                // Calculate row heights (max height in each row)
-                var rowHeights = [];
-                for (var i = 0; i < nodeData.length; i += cols) {
-                    var rowNodes = nodeData.slice(i, Math.min(i + cols, nodeData.length));
-                    var maxHeight = Math.max.apply(null, rowNodes.map(function(n) { return n.height; }));
-                    rowHeights.push(maxHeight);
-                }
+                // Group nodes by category, maintaining category order from GENERAL_VIEW_CATEGORIES
+                var categoryOrder = GENERAL_VIEW_CATEGORIES.map(function(c) { return c.id; });
+                var groupedNodes = {};
+                categoryOrder.forEach(function(catId) {
+                    groupedNodes[catId] = [];
+                });
+                nodeData.forEach(function(nd) {
+                    if (!groupedNodes[nd.category]) {
+                        groupedNodes[nd.category] = [];
+                    }
+                    groupedNodes[nd.category].push(nd);
+                });
 
-                // Second pass: assign positions based on row heights
-                nodeData.forEach(function(nd, index) {
-                    var col = index % cols;
-                    var row = Math.floor(index / cols);
+                // Flatten groups back into ordered array with category separators
+                var orderedNodeData = [];
+                var categoryStartPositions = new Map();
+                var currentY = padding;
+                var groupSpacing = showCategoryHeaders ? 40 : 0; // Extra space between category groups (only if headers shown)
+                var categoryLabelHeight = showCategoryHeaders ? 25 : 0; // Height for category label (only if headers shown)
 
-                    // Calculate y position by summing previous row heights
-                    var y = padding;
-                    for (var r = 0; r < row; r++) {
-                        y += rowHeights[r] + vSpacing;
+                categoryOrder.forEach(function(catId) {
+                    var group = groupedNodes[catId];
+                    if (!group || group.length === 0) return;
+
+                    // Record start position for this category
+                    categoryStartPositions.set(catId, { y: currentY, count: group.length });
+
+                    // Add space for category label (only if headers shown)
+                    currentY += categoryLabelHeight;
+
+                    // Calculate row heights for this group
+                    var groupRowHeights = [];
+                    for (var i = 0; i < group.length; i += cols) {
+                        var rowNodes = group.slice(i, Math.min(i + cols, group.length));
+                        var maxHeight = Math.max.apply(null, rowNodes.map(function(n) { return n.height; }));
+                        groupRowHeights.push(maxHeight);
                     }
 
-                    nodePositions.set(nd.el.name, {
-                        x: padding + col * (nodeWidth + hSpacing),
-                        y: y,
-                        width: nodeWidth,
-                        height: nd.height,
-                        element: nd.el,
-                        sections: nd.sections
+                    // Assign positions within this group
+                    group.forEach(function(nd, idx) {
+                        var col = idx % cols;
+                        var row = Math.floor(idx / cols);
+
+                        var y = currentY;
+                        for (var r = 0; r < row; r++) {
+                            y += groupRowHeights[r] + vSpacing;
+                        }
+
+                        nodePositions.set(nd.el.name, {
+                            x: padding + col * (nodeWidth + hSpacing),
+                            y: y,
+                            width: nodeWidth,
+                            height: nd.height,
+                            element: nd.el,
+                            sections: nd.sections,
+                            category: nd.category
+                        });
                     });
+
+                    // Update currentY for next group
+                    var totalGroupHeight = 0;
+                    groupRowHeights.forEach(function(h) { totalGroupHeight += h + vSpacing; });
+                    currentY += totalGroupHeight + groupSpacing;
                 });
 
                 // Arrow marker
@@ -7265,6 +7324,37 @@ export class VisualizationPanel {
                     .append('path')
                     .attr('d', 'M0,-4L10,0L0,4')
                     .style('fill', 'var(--vscode-charts-blue)');
+
+                // Draw category headers (only if enabled)
+                if (showCategoryHeaders) {
+                    var headerGroup = g.append('g').attr('class', 'category-headers');
+                    categoryStartPositions.forEach(function(info, catId) {
+                        var category = GENERAL_VIEW_CATEGORIES.find(function(c) { return c.id === catId; });
+                        if (!category) return;
+
+                        var headerG = headerGroup.append('g')
+                            .attr('transform', 'translate(' + padding + ',' + info.y + ')');
+
+                        // Category label with colored underline
+                        headerG.append('text')
+                            .attr('x', 0)
+                            .attr('y', 16)
+                            .style('font-size', '13px')
+                            .style('font-weight', 'bold')
+                            .style('fill', category.color)
+                            .text(category.label + ' (' + info.count + ')');
+
+                        // Underline spanning the width
+                        headerG.append('line')
+                            .attr('x1', 0)
+                            .attr('y1', 22)
+                            .attr('x2', availableWidth)
+                            .attr('y2', 22)
+                            .style('stroke', category.color)
+                            .style('stroke-width', '2px')
+                            .style('opacity', 0.5);
+                    });
+                }
 
                 // Draw nodes
                 var nodeGroup = g.append('g').attr('class', 'general-nodes');
@@ -11291,6 +11381,7 @@ export class VisualizationPanel {
         document.getElementById('fit-btn').addEventListener('click', zoomToFit);
         document.getElementById('reset-btn').addEventListener('click', resetZoom);
         document.getElementById('layout-direction-btn').addEventListener('click', toggleLayoutDirection);
+        document.getElementById('category-headers-btn').addEventListener('click', toggleCategoryHeaders);
         document.getElementById('clear-filter-btn').addEventListener('click', clearSelection);
 
         // Add diagram selector change handler
