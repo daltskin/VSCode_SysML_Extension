@@ -136,7 +136,7 @@ export class VisualizationPanel {
         // Check content hash first - skip expensive parsing if content unchanged
         const content = this._document.getText();
         const contentHash = this.hashContent(content);
-        
+
         if (!forceUpdate && contentHash === this._lastContentHash) {
             // Content unchanged, skip update entirely
             return;
@@ -2693,7 +2693,7 @@ export class VisualizationPanel {
                         elements: message.elements,
                         relationships: message.relationships
                     });
-                    
+
                     if (newHash === lastDataHash && currentData) {
                         // Data unchanged, skip expensive re-render
                         hideLoading();
@@ -2801,7 +2801,7 @@ export class VisualizationPanel {
                 if (currentWidth !== lastRenderedWidth || currentHeight !== lastRenderedHeight) {
                     lastRenderedWidth = currentWidth;
                     lastRenderedHeight = currentHeight;
-                    
+
                     if (currentData && !isRendering) {
                         renderVisualization(currentView, null, true);
                     }
@@ -7194,7 +7194,7 @@ export class VisualizationPanel {
                 // Calculate positions with proper grid layout (no overlapping)
                 var nodePositions = new Map();
                 var portPositions = new Map();
-                
+
                 // Calculate columns: minimum 4, scales up with window width
                 var availableWidth = width - padding * 2;
                 var maxColsByWidth = Math.max(4, Math.floor((availableWidth + hSpacing) / (nodeWidth + hSpacing)));
