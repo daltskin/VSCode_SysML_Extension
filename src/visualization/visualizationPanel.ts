@@ -2837,8 +2837,9 @@ export class VisualizationPanel {
             setTimeout(() => {
                 const visualizationElement = document.getElementById('visualization');
                 if (visualizationElement) {
-                    lastWidth = visualizationElement.clientWidth;
-                    lastHeight = visualizationElement.clientHeight;
+                    // Initialize lastRenderedWidth/Height to prevent spurious re-render on first observe
+                    lastRenderedWidth = visualizationElement.clientWidth;
+                    lastRenderedHeight = visualizationElement.clientHeight;
                     resizeObserver.observe(visualizationElement);
                 }
             }, 100);
