@@ -37,7 +37,10 @@ export class VisualizationPanel {
                         this.logWebviewMessage(message.level, message.args);
                         break;
                     case 'jumpToElement':
-                        this.jumpToElement(message.elementName);
+                        this.jumpToElement(message.elementName, message.skipCentering);
+                        break;
+                    case 'renameElement':
+                        this.renameElement(message.oldName, message.newName);
                         break;
                     case 'export':
                         this.handleExport(message.format, message.data);
@@ -267,7 +270,7 @@ export class VisualizationPanel {
         }
     }
 
-    private async jumpToElement(elementName: string) {
+    private async jumpToElement(elementName: string, skipCentering: boolean = false) {
         this._isNavigating = true; // Set navigation flag
 
         let element = this._parser.findElement(elementName);
@@ -315,10 +318,15 @@ export class VisualizationPanel {
                 }, 3000);
 
                 // Send a message back to the webview to highlight the clicked element
-                this._panel.webview.postMessage({
-                    command: 'highlightElement',
-                    elementName: elementName
-                });
+                // Only send if click didn't originate from the diagram (skipCentering=false)
+                // When skipCentering=true, the diagram already highlighted the element
+                if (!skipCentering) {
+                    this._panel.webview.postMessage({
+                        command: 'highlightElement',
+                        elementName: elementName,
+                        skipCentering: skipCentering
+                    });
+                }
 
                 // Clear navigation flag after a delay
                 setTimeout(() => {
@@ -345,6 +353,81 @@ export class VisualizationPanel {
             }
         }
         return undefined;
+    }
+
+    private async renameElement(oldName: string, newName: string) {
+        // Validate new name
+        if (!newName || newName === oldName) {
+            return;
+        }
+
+        // Check if new name is a valid SysML identifier (alphanumeric, underscore, starting with letter/underscore)
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newName)) {
+            vscode.window.showErrorMessage(`Invalid element name: "${newName}". Names must start with a letter or underscore and contain only alphanumeric characters and underscores.`);
+            // Refresh the view to restore original name
+            this.updateVisualization(true);
+            return;
+        }
+
+        // Find the element to rename
+        let element = this._parser.findElement(oldName);
+
+        if (!element) {
+            // Try recursive search
+            const resolutionResult = await this._parser.parseWithSemanticResolution(this._document);
+            const allElements = this._parser.convertEnrichedToSysMLElements(resolutionResult.elements);
+            element = this.findElementRecursive(oldName, allElements);
+        }
+
+        if (!element || !element.range) {
+            vscode.window.showErrorMessage(`Could not find element "${oldName}" to rename.`);
+            this.updateVisualization(true);
+            return;
+        }
+
+        // Find the name within the element's definition line
+        const text = this._document.getText();
+        const elementStartOffset = this._document.offsetAt(element.range.start);
+        const elementEndOffset = this._document.offsetAt(element.range.end);
+        const elementText = text.substring(elementStartOffset, elementEndOffset);
+
+        // Find the name in the element text - it's usually after the type keyword
+        // Pattern: type keyword followed by the name (e.g., "part def Vehicle", "part car", "attribute mass")
+        const namePattern = new RegExp(`\\b${this.escapeRegex(oldName)}\\b`);
+        const nameMatch = elementText.match(namePattern);
+
+        if (!nameMatch || nameMatch.index === undefined) {
+            vscode.window.showErrorMessage(`Could not locate name "${oldName}" in the element definition.`);
+            this.updateVisualization(true);
+            return;
+        }
+
+        // Calculate the absolute position of the name in the document
+        const nameStartOffset = elementStartOffset + nameMatch.index;
+        const nameEndOffset = nameStartOffset + oldName.length;
+        const nameRange = new vscode.Range(
+            this._document.positionAt(nameStartOffset),
+            this._document.positionAt(nameEndOffset)
+        );
+
+        // Apply the edit
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(this._document.uri, nameRange, newName);
+
+        const success = await vscode.workspace.applyEdit(edit);
+
+        if (success) {
+            // Save the document to trigger re-parse
+            await this._document.save();
+            vscode.window.showInformationMessage(`Renamed "${oldName}" to "${newName}"`);
+        } else {
+            vscode.window.showErrorMessage(`Failed to rename "${oldName}"`);
+            this.updateVisualization(true);
+        }
+    }
+
+    private escapeRegex(string: string): string {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     private async handleExport(format: string, data: string) {
@@ -871,6 +954,11 @@ export class VisualizationPanel {
             stroke: #FFD700 !important;
             stroke-width: 4px !important;
             fill: #FFD700 !important;
+        }
+        .node-group.highlighted-element .node-background {
+            stroke: #FFD700 !important;
+            stroke-width: 3px !important;
+            filter: drop-shadow(0 0 8px #FFD700);
         }
         .element-pulse {
             pointer-events: none;
@@ -2738,7 +2826,7 @@ export class VisualizationPanel {
                     }
                     break;
                 case 'highlightElement':
-                    highlightElementInVisualization(message.elementName);
+                    highlightElementInVisualization(message.elementName, message.skipCentering);
                     break;
                 case 'requestCurrentView':
                     // Send back the current view state
@@ -2853,6 +2941,147 @@ export class VisualizationPanel {
             });
         });
 
+        // Inline editing for element names in General View
+        var activeInlineEdit = null;
+
+        function startInlineEdit(nodeG, elementName, x, y, width) {
+            // Cancel any existing inline edit
+            if (activeInlineEdit) {
+                cancelInlineEdit();
+            }
+
+            // Find the name text element within this node
+            var nameText = nodeG.select('.node-name-text');
+            if (nameText.empty()) {
+                // Try to find any text that matches the element name
+                nodeG.selectAll('text').each(function() {
+                    var textEl = d3.select(this);
+                    if (textEl.text() === elementName || textEl.attr('data-element-name') === elementName) {
+                        nameText = textEl;
+                    }
+                });
+            }
+
+            if (nameText.empty()) return;
+
+            // Get the text element's position within the node
+            var textY = parseFloat(nameText.attr('y')) || 31;
+            var fontSize = nameText.style('font-size') || '11px';
+
+            // Hide the original text
+            nameText.style('visibility', 'hidden');
+
+            // Create input container inside the node itself (not in main g)
+            // Position it to match the text location
+            var inputHeight = 20;
+            var inputY = textY - inputHeight / 2 - 3;
+            var inputPadding = 8;
+
+            // Create foreignObject inside the node group for proper positioning
+            var fo = nodeG.append('foreignObject')
+                .attr('class', 'inline-edit-container')
+                .attr('x', inputPadding)
+                .attr('y', inputY)
+                .attr('width', width - inputPadding * 2)
+                .attr('height', inputHeight + 4);
+
+            var input = fo.append('xhtml:input')
+                .attr('type', 'text')
+                .attr('value', elementName)
+                .attr('class', 'inline-edit-input')
+                .style('width', '100%')
+                .style('height', inputHeight + 'px')
+                .style('font-size', fontSize)
+                .style('font-weight', 'bold')
+                .style('font-family', 'var(--vscode-editor-font-family)')
+                .style('text-align', 'center')
+                .style('padding', '2px 4px')
+                .style('border', '1px solid var(--vscode-focusBorder)')
+                .style('border-radius', '3px')
+                .style('background', 'var(--vscode-input-background)')
+                .style('color', 'var(--vscode-input-foreground)')
+                .style('outline', 'none')
+                .style('box-sizing', 'border-box')
+                .style('box-shadow', '0 0 0 1px var(--vscode-focusBorder)');
+
+            // Store reference to active edit
+            activeInlineEdit = {
+                foreignObject: fo,
+                input: input,
+                nameText: nameText,
+                originalName: elementName,
+                nodeG: nodeG
+            };
+
+            // Focus and select all text
+            var inputNode = input.node();
+            setTimeout(function() {
+                inputNode.focus();
+                inputNode.select();
+            }, 10);
+
+            // Handle keyboard events
+            input.on('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    commitInlineEdit();
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelInlineEdit();
+                }
+                event.stopPropagation();
+            });
+
+            // Handle blur (clicking outside)
+            input.on('blur', function() {
+                // Small delay to allow Enter key to process first
+                setTimeout(function() {
+                    if (activeInlineEdit) {
+                        cancelInlineEdit();
+                    }
+                }, 100);
+            });
+
+            // Prevent click from bubbling to node
+            input.on('click', function(event) {
+                event.stopPropagation();
+            });
+        }
+
+        function commitInlineEdit() {
+            if (!activeInlineEdit) return;
+
+            var newName = activeInlineEdit.input.node().value.trim();
+            var oldName = activeInlineEdit.originalName;
+
+            // Clean up UI
+            activeInlineEdit.nameText.style('visibility', 'visible');
+            activeInlineEdit.foreignObject.remove();
+
+            if (newName && newName !== oldName) {
+                // Update the text display immediately for responsiveness
+                activeInlineEdit.nameText.text(newName);
+
+                // Send rename command to extension
+                vscode.postMessage({
+                    command: 'renameElement',
+                    oldName: oldName,
+                    newName: newName
+                });
+            }
+
+            activeInlineEdit = null;
+        }
+
+        function cancelInlineEdit() {
+            if (!activeInlineEdit) return;
+
+            // Restore original text visibility
+            activeInlineEdit.nameText.style('visibility', 'visible');
+            activeInlineEdit.foreignObject.remove();
+            activeInlineEdit = null;
+        }
+
         function clearVisualHighlights() {
             // Remove visual highlights without refreshing the view
             d3.selectAll('.highlighted-element').classed('highlighted-element', false);
@@ -2860,6 +3089,9 @@ export class VisualizationPanel {
 
             // Clear any selection styling
             d3.selectAll('.node-group').style('opacity', null);
+            d3.selectAll('.node-group .node-background').style('stroke', null).style('stroke-width', null);
+            d3.selectAll('.general-node .node-background').style('stroke', null).style('stroke-width', null);
+            d3.selectAll('.ibd-part rect').style('stroke', null).style('stroke-width', null);
             d3.selectAll('.graph-node-group').style('opacity', null);
             d3.selectAll('.hierarchy-cell').style('opacity', null);
             if (cy) {
@@ -4086,7 +4318,7 @@ export class VisualizationPanel {
             }, 100);
         }
 
-        function highlightElementInVisualization(elementName) {
+        function highlightElementInVisualization(elementName, skipCentering = false) {
             // Remove any existing highlights without refreshing
             clearVisualHighlights();
 
@@ -4137,6 +4369,26 @@ export class VisualizationPanel {
                         elementData = { name: elementName, type: 'sequence element' };
                     }
                 });
+            } else if (currentView === 'elk') {
+                // In General View (elk), find nodes by data-element-name attribute
+                d3.selectAll('.general-node').each(function() {
+                    const node = d3.select(this);
+                    const nodeName = node.attr('data-element-name');
+                    if (nodeName === elementName) {
+                        targetElement = node;
+                        elementData = { name: elementName, type: 'element' };
+                    }
+                });
+            } else if (currentView === 'ibd') {
+                // In Interconnection View (ibd), find parts by data-element-name attribute
+                d3.selectAll('.ibd-part').each(function() {
+                    const partG = d3.select(this);
+                    const partName = partG.attr('data-element-name');
+                    if (partName === elementName) {
+                        targetElement = partG;
+                        elementData = { name: elementName, type: 'part' };
+                    }
+                });
             } else if (currentView === 'sysml' && cy) {
                 const nodeId = resolveElementIdByName(elementName);
                 if (nodeId) {
@@ -4160,7 +4412,10 @@ export class VisualizationPanel {
                 statusText.textContent = 'Selected: ' + elementData.name + ' [' + elementData.type + ']';
                 statusBar.style.display = 'flex';
 
-                centerOnNode(sysmlTarget, 80);
+                // Only center if not skipping (i.e., click came from text editor, not diagram)
+                if (!skipCentering) {
+                    centerOnNode(sysmlTarget, 80);
+                }
                 return;
             }
 
@@ -4168,46 +4423,37 @@ export class VisualizationPanel {
                 // Add highlight class for styling
                 targetElement.classed('highlighted-element', true);
 
+                // Apply direct style to node-background for immediate visual feedback
+                // This works for general-node, ibd-part, and node-group elements
+                targetElement.select('.node-background')
+                    .style('stroke', '#FFD700')
+                    .style('stroke-width', '3px');
+                // For IBD parts, the rect is a direct child
+                targetElement.select('rect')
+                    .style('stroke', '#FFD700')
+                    .style('stroke-width', '3px');
+
                 // Update status bar
                 const statusBar = document.getElementById('status-bar');
                 const statusText = document.getElementById('status-text');
                 statusText.textContent = 'Selected: ' + elementData.name + ' [' + elementData.type + ']';
                 statusBar.style.display = 'flex';
 
-                // Create a pulsing circle animation
-                const bbox = targetElement.node().getBBox();
-                const centerX = bbox.x + bbox.width / 2;
-                const centerY = bbox.y + bbox.height / 2;
+                // Only center the view if not skipping (i.e., click came from text editor, not diagram)
+                if (!skipCentering) {
+                    const bbox = targetElement.node().getBBox();
+                    const centerX = bbox.x + bbox.width / 2;
+                    const centerY = bbox.y + bbox.height / 2;
 
-                // Add pulsing animation
-                const pulse = g.append('circle')
-                    .attr('class', 'element-pulse')
-                    .attr('cx', centerX)
-                    .attr('cy', centerY)
-                    .attr('r', 10)
-                    .style('fill', 'none')
-                    .style('stroke', '#FFD700')
-                    .style('stroke-width', '3px')
-                    .style('opacity', 1);
+                    const transform = d3.zoomTransform(svg.node());
+                    const scale = Math.min(1.5, transform.k); // Don't zoom in too much
+                    const translateX = (svg.node().clientWidth / 2) - (centerX * scale);
+                    const translateY = (svg.node().clientHeight / 2) - (centerY * scale);
 
-                // Animate the pulse
-                pulse.transition()
-                    .duration(1000)
-                    .attr('r', 50)
-                    .style('opacity', 0)
-                    .on('end', function() {
-                        d3.select(this).remove();
-                    });
-
-                // Center the view on the highlighted element
-                const transform = d3.zoomTransform(svg.node());
-                const scale = Math.min(1.5, transform.k); // Don't zoom in too much
-                const translateX = (svg.node().clientWidth / 2) - (centerX * scale);
-                const translateY = (svg.node().clientHeight / 2) - (centerY * scale);
-
-                svg.transition()
-                    .duration(750)
-                    .call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
+                    svg.transition()
+                        .duration(750)
+                        .call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
+                }
             }
         }
 
@@ -4783,6 +5029,8 @@ export class VisualizationPanel {
             svg.on('click', (event) => {
                 // Only close if clicking on the SVG background (not on nodes or details)
                 if (event.target === svg.node() || event.target === g.node()) {
+                    // Clear all highlights when clicking on empty space
+                    clearVisualHighlights();
                     g.selectAll('.expanded-details').remove();
                     // Reset both graph and tree view selections
                     g.selectAll('.graph-node-background')
@@ -4948,42 +5196,61 @@ export class VisualizationPanel {
                 const borderColor = isLibValidated ? 'var(--vscode-charts-green)' : 'var(--vscode-panel-border)';
                 const borderWidth = isLibValidated ? '2px' : '1px';
 
+                // Calculate node dimensions for inline edit
+                const nodeWidth = Math.max(85, maxLength * 6.5);
+
+                // Click handler function - reused for node group and background
+                const handleNodeClick = function(event) {
+                    event.stopPropagation();
+                    // Clear previous highlights and highlight this node
+                    clearVisualHighlights();
+                    node.classed('highlighted-element', true);
+                    // Also apply direct style to node-background for immediate visual feedback
+                    node.select('.node-background')
+                        .style('stroke', '#FFD700')
+                        .style('stroke-width', '3px');
+                    vscode.postMessage({
+                        command: 'jumpToElement',
+                        elementName: d.data.name,
+                        skipCentering: true  // Don't pan diagram when clicking directly on element
+                    });
+                };
+
                 // Background rectangle
                 node.append('rect')
                     .attr('class', 'node-background')
                     .attr('x', -8)
                     .attr('y', -15)
-                    .attr('width', Math.max(85, maxLength * 6.5))
+                    .attr('width', nodeWidth)
                     .attr('height', 46)
                     .attr('rx', 5)
                     .style('fill', 'var(--vscode-editor-background)')
                     .style('stroke', borderColor)
                     .style('stroke-width', borderWidth)
-                    .style('opacity', 0.9);
+                    .style('opacity', 0.9)
+                    .style('cursor', 'pointer')
+                    .on('click', handleNodeClick);
+
+                // Add click handler to node group for navigation
+                node.style('cursor', 'pointer')
+                    .on('click', handleNodeClick)
+                    .on('dblclick', function(event) {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        // Get node position from transform
+                        const transform = node.attr('transform');
+                        const matches = transform.match(/translate[(]([^,]+),([^)]+)[)]/);
+                        const nodeX = parseFloat(matches[1]);
+                        const nodeY = parseFloat(matches[2]);
+                        startInlineEdit(node, d.data.name, nodeX - 8, nodeY - 15, nodeWidth);
+                    });
 
                 // Circle node - use library color if validated
                 const nodeColor = getNodeColor(d.data);
                 node.append('circle')
                     .attr('class', 'node')
                     .attr('r', 6)
-                    .style('fill', nodeColor)
-                    .on('click', (event, d) => {
-                        event.stopPropagation();
-                        expandTreeNodeDetails(d, node);
-                    })
-                    .on('dblclick', (event, d) => {
-                        event.stopPropagation();
-                        event.preventDefault(); // Prevent default browser double-click behavior
-
-                        // Keep the expanded popup open and maintain focus
-                        vscode.postMessage({
-                            command: 'jumpToElement',
-                            elementName: d.data.name
-                        });
-
-                        // Don't close the popup on double-click
-                        // The popup will remain open for better user experience
-                    });
+                    .style('fill', nodeColor);
 
                 // Element name (truncate if too long)
                 const truncatedName = d.data.name.length > 15
@@ -4991,7 +5258,8 @@ export class VisualizationPanel {
                     : d.data.name;
 
                 node.append('text')
-                    .attr('class', 'node-label')
+                    .attr('class', 'node-label node-name-text')
+                    .attr('data-element-name', d.data.name)
                     .attr('dx', 10)
                     .attr('dy', -2)
                     .text(truncatedName)
@@ -6058,35 +6326,43 @@ export class VisualizationPanel {
                     // Thicker border for library types
                     return isLibraryValidated(d.data) ? '2px' : '1px';
                 })
-                .style('cursor', 'pointer')
-                .on('click', (event, d) => {
-                    event.stopPropagation();
+                .style('cursor', 'pointer');
 
-                    // Clear previous selections
-                    g.selectAll('.hierarchy-cell rect')
-                        .style('stroke', 'var(--vscode-charts-blue)')
-                        .style('stroke-width', '1px')
-                        .style('stroke-opacity', 0.6)
-                        .style('filter', 'none');
-                    g.selectAll('.hierarchy-cell').classed('selected', false);
+            // Add click handlers to cells for navigation and inline edit
+            cells.on('click', function(event, d) {
+                event.stopPropagation();
 
-                    const cellGroup = event.currentTarget && event.currentTarget.parentNode
-                        ? d3.select(event.currentTarget.parentNode)
-                        : d3.select(event.target);
-                    cellGroup.classed('selected', true);
+                // Clear previous selections
+                g.selectAll('.hierarchy-cell rect')
+                    .style('stroke', 'var(--vscode-charts-blue)')
+                    .style('stroke-width', '1px')
+                    .style('stroke-opacity', 0.6)
+                    .style('filter', 'none');
+                g.selectAll('.hierarchy-cell').classed('selected', false);
 
-                    // Highlight clicked cell with modern glow effect
-                    d3.select(event.target)
-                        .style('stroke', 'var(--vscode-charts-orange)')
-                        .style('stroke-width', '3px')
-                        .style('stroke-opacity', 1)
-                        .style('filter', 'drop-shadow(0 0 6px var(--vscode-charts-orange))');
+                const cellGroup = d3.select(this);
+                cellGroup.classed('selected', true);
 
-                    vscode.postMessage({
-                        command: 'jumpToElement',
-                        elementName: d.data.name
-                    });
+                // Highlight clicked cell with modern glow effect
+                cellGroup.select('rect')
+                    .style('stroke', 'var(--vscode-charts-orange)')
+                    .style('stroke-width', '3px')
+                    .style('stroke-opacity', 1)
+                    .style('filter', 'drop-shadow(0 0 6px var(--vscode-charts-orange))');
+
+                vscode.postMessage({
+                    command: 'jumpToElement',
+                    elementName: d.data.name,
+                    skipCentering: true  // Don't pan diagram when clicking directly on element
                 });
+            })
+            .on('dblclick', function(event, d) {
+                event.stopPropagation();
+                const cellWidth = isHorizontal ? (d.y1 - d.y0) : (d.x1 - d.x0);
+                const cellX = isHorizontal ? (d.y0 + 50) : (d.x0 + 50);
+                const cellY = isHorizontal ? (d.x0 + 50) : (d.y0 + 50);
+                startInlineEdit(d3.select(this), d.data.name, cellX, cellY, Math.max(8, cellWidth));
+            });
 
             // Render nested details or compact labels depending on available space
             cells.each(function(d) {
@@ -6121,7 +6397,8 @@ export class VisualizationPanel {
             let cursorY = 0;
 
             const titleText = content.append('text')
-                .attr('class', 'hierarchy-card-title')
+                .attr('class', 'hierarchy-card-title node-name-text')
+                .attr('data-element-name', node.data.name)
                 .attr('x', 0)
                 .attr('y', cursorY + 12)
                 .text(truncatedName);
@@ -6297,7 +6574,8 @@ export class VisualizationPanel {
 
                 if (truncatedName) {
                     const labelText = cell.append('text')
-                        .attr('class', 'node-label')
+                        .attr('class', 'node-label node-name-text')
+                        .attr('data-element-name', node.data.name)
                         .attr('x', 2)
                         .attr('y', Math.min(12, height / 2 + 2))
                         .text(truncatedName)
@@ -6327,7 +6605,8 @@ export class VisualizationPanel {
             } else {
                 const initial = node.data.name ? node.data.name.charAt(0).toUpperCase() : '?';
                 const initialText = cell.append('text')
-                    .attr('class', 'node-label')
+                    .attr('class', 'node-label node-name-text')
+                    .attr('data-element-name', node.data.name)
                     .attr('x', width / 2)
                     .attr('y', height / 2 + 2)
                     .attr('text-anchor', 'middle')
@@ -7378,6 +7657,7 @@ export class VisualizationPanel {
                     var nodeG = nodeGroup.append('g')
                         .attr('transform', 'translate(' + pos.x + ',' + pos.y + ')')
                         .attr('class', 'general-node' + (isDefinition ? ' definition-node' : ' usage-node'))
+                        .attr('data-element-name', name)
                         .style('cursor', 'pointer');
 
                     // Background - definitions have dashed border, usages have solid bold border
@@ -7436,6 +7716,8 @@ export class VisualizationPanel {
                     // Name - show with type if it's a usage (e.g., "partName : PartType")
                     var displayName = truncateText(name, 26);
                     nodeG.append('text')
+                        .attr('class', 'node-name-text')
+                        .attr('data-element-name', name)
                         .attr('x', pos.width / 2)
                         .attr('y', 31)
                         .attr('text-anchor', 'middle')
@@ -7558,12 +7840,23 @@ export class VisualizationPanel {
                         yOffset += sectionGap;
                     });
 
-                    // Click handlers
+                    // Click handlers - single click navigates, double click edits name
                     nodeG.on('click', function(event) {
                         event.stopPropagation();
+                        // Clear previous highlights and highlight this node
+                        clearVisualHighlights();
+                        const clickedNode = d3.select(this);
+                        clickedNode.classed('highlighted-element', true);
+                        // Also apply direct style to node-background for immediate visual feedback
+                        clickedNode.select('.node-background')
+                            .style('stroke', '#FFD700')
+                            .style('stroke-width', '3px');
+                        // Navigate to element in source file
+                        vscode.postMessage({ command: 'jumpToElement', elementName: name, skipCentering: true });
                     }).on('dblclick', function(event) {
                         event.stopPropagation();
-                        vscode.postMessage({ command: 'jumpToElement', elementName: name });
+                        // Start inline editing of the element name
+                        startInlineEdit(nodeG, name, pos.x, pos.y, pos.width);
                     });
 
                     // Draw ports on node boundary (SysML v2 notation)
@@ -8323,7 +8616,8 @@ export class VisualizationPanel {
 
                     const participantGroup = diagramGroup.append('g')
                         .attr('class', 'sequence-participant')
-                        .attr('transform', 'translate(' + participantX + ', 40)');
+                        .attr('transform', 'translate(' + participantX + ', 40)')
+                        .style('cursor', 'pointer');
 
                     // Participant box
                     participantGroup.append('rect')
@@ -8338,20 +8632,15 @@ export class VisualizationPanel {
 
                     // Participant name
                     participantGroup.append('text')
+                        .attr('class', 'node-name-text')
+                        .attr('data-element-name', participant.name)
                         .attr('x', 0)
                         .attr('y', 25)
                         .attr('text-anchor', 'middle')
                         .text(participant.name)
                         .style('font-size', '14px')
                         .style('font-weight', 'bold')
-                        .style('fill', 'var(--vscode-editor-foreground)')
-                        .on('click', () => {
-                            vscode.postMessage({
-                                command: 'jumpToElement',
-                                elementName: participant.name
-                            });
-                        })
-                        .style('cursor', 'pointer');
+                        .style('fill', 'var(--vscode-editor-foreground)');
 
                     // Participant type
                     participantGroup.append('text')
@@ -8361,6 +8650,19 @@ export class VisualizationPanel {
                         .text('[' + participant.type + ']')
                         .style('font-size', '11px')
                         .style('fill', 'var(--vscode-descriptionForeground)');
+
+                    // Click handlers - single click navigates, double click enables inline edit
+                    participantGroup.on('click', function(event) {
+                        event.stopPropagation();
+                        vscode.postMessage({
+                            command: 'jumpToElement',
+                            elementName: participant.name
+                        });
+                    })
+                    .on('dblclick', function(event) {
+                        event.stopPropagation();
+                        startInlineEdit(d3.select(this), participant.name, participantX - participantWidth/2, 40, participantWidth);
+                    });
 
                     // Lifeline (vertical line)
                     participantGroup.append('line')
@@ -9047,6 +9349,7 @@ export class VisualizationPanel {
                 const partG = partGroup.append('g')
                     .attr('transform', 'translate(' + pos.x + ',' + pos.y + ')')
                     .attr('class', 'ibd-part' + (isDefinition ? ' definition-node' : ' usage-node'))
+                    .attr('data-element-name', part.name)
                     .style('cursor', 'pointer');
 
                 // Part box (main rectangle) - matching General View
@@ -9092,6 +9395,8 @@ export class VisualizationPanel {
                 // Part name
                 const displayName = part.name.length > 18 ? part.name.substring(0, 16) + '..' : part.name;
                 partG.append('text')
+                    .attr('class', 'node-name-text')
+                    .attr('data-element-name', part.name)
                     .attr('x', partWidth / 2)
                     .attr('y', 31)
                     .attr('text-anchor', 'middle')
@@ -9165,11 +9470,23 @@ export class VisualizationPanel {
                         .style('fill', portColor);
                 });
 
-                // Click handlers
-                partG.on('click', () => {})
-                    .on('dblclick', () => {
-                        vscode.postMessage({ command: 'jumpToElement', elementName: part.name });
-                    });
+                // Click handlers - single click navigates, double click enables inline edit
+                partG.on('click', function(event) {
+                    event.stopPropagation();
+                    // Clear previous highlights and highlight this node
+                    clearVisualHighlights();
+                    const clickedPart = d3.select(this);
+                    clickedPart.classed('highlighted-element', true);
+                    // Also apply direct style to first rect for immediate visual feedback
+                    clickedPart.select('rect')
+                        .style('stroke', '#FFD700')
+                        .style('stroke-width', '3px');
+                    vscode.postMessage({ command: 'jumpToElement', elementName: part.name, skipCentering: true });
+                })
+                .on('dblclick', function(event) {
+                    event.stopPropagation();
+                    startInlineEdit(d3.select(this), part.name, pos.x, pos.y, partWidth);
+                });
             });
         }
 
@@ -9585,6 +9902,8 @@ export class VisualizationPanel {
                     const fontSize = actionName.length > 20 ? '11px' : '13px';
 
                     actionElement.append('text')
+                        .attr('class', 'node-name-text')
+                        .attr('data-element-name', actionName)
                         .attr('x', actionWidth / 2)
                         .attr('y', actionHeight / 2 - 5)
                         .attr('text-anchor', 'middle')
@@ -9605,6 +9924,12 @@ export class VisualizationPanel {
                             .style('fill', 'var(--vscode-descriptionForeground)')
                             .style('user-select', 'none');
                     }
+
+                    // Double-click for inline edit on regular actions
+                    actionElement.on('dblclick', function(event) {
+                        event.stopPropagation();
+                        startInlineEdit(d3.select(this), actionName, pos.x, pos.y, actionWidth);
+                    });
                 }
             });
         }
@@ -10278,6 +10603,8 @@ export class VisualizationPanel {
                         : state.name;
 
                     stateElement.append('text')
+                        .attr('class', 'node-name-text')
+                        .attr('data-element-name', state.name)
                         .attr('x', stateWidth / 2)
                         .attr('y', stateHeight / 2 + 4)
                         .attr('text-anchor', 'middle')
@@ -10287,13 +10614,18 @@ export class VisualizationPanel {
                         .style('fill', 'var(--vscode-editor-foreground)')
                         .style('pointer-events', 'none');
 
-                    // Double-click to navigate
-                    stateElement.on('dblclick', function(event) {
+                    // Click handlers: single-click navigate, double-click edit
+                    stateElement.style('cursor', 'pointer');
+                    stateElement.on('click', function(event) {
                         event.stopPropagation();
                         vscode.postMessage({
                             command: 'jumpToElement',
                             elementName: state.name
                         });
+                    })
+                    .on('dblclick', function(event) {
+                        event.stopPropagation();
+                        startInlineEdit(d3.select(this), state.name, pos.x, pos.y, stateWidth);
                     });
                 }
             });
@@ -10794,14 +11126,20 @@ export class VisualizationPanel {
                     .attr('ry', useCaseHeight / 2)
                     .style('fill', 'var(--vscode-editor-background)')
                     .style('stroke', 'var(--vscode-charts-purple)')
-                    .style('stroke-width', '2px')
-                    .on('dblclick', function(event) {
-                        event.stopPropagation();
-                        vscode.postMessage({
-                            command: 'jumpToElement',
-                            elementName: useCase.name
-                        });
+                    .style('stroke-width', '2px');
+
+                // Click handlers: single-click navigate, double-click edit
+                useCaseElement.on('click', function(event) {
+                    event.stopPropagation();
+                    vscode.postMessage({
+                        command: 'jumpToElement',
+                        elementName: useCase.name
                     });
+                })
+                .on('dblclick', function(event) {
+                    event.stopPropagation();
+                    startInlineEdit(d3.select(this), useCase.name, pos.x, pos.y, useCaseWidth);
+                });
 
                 // Use case name (wrapped if long)
                 const maxChars = 16;
@@ -10832,6 +11170,8 @@ export class VisualizationPanel {
 
                 if (line2) {
                     useCaseElement.append('text')
+                        .attr('class', 'node-name-text')
+                        .attr('data-element-name', useCase.name)
                         .attr('x', useCaseWidth / 2)
                         .attr('y', useCaseHeight / 2 - 6)
                         .attr('text-anchor', 'middle')
@@ -10850,6 +11190,8 @@ export class VisualizationPanel {
                         .style('user-select', 'none');
                 } else {
                     useCaseElement.append('text')
+                        .attr('class', 'node-name-text')
+                        .attr('data-element-name', useCase.name)
                         .attr('x', useCaseWidth / 2)
                         .attr('y', useCaseHeight / 2 + 4)
                         .attr('text-anchor', 'middle')
@@ -10893,14 +11235,20 @@ export class VisualizationPanel {
                     .attr('d', 'M0,0 L' + (requirementWidth - 12) + ',0 L' + requirementWidth + ',12 L' + requirementWidth + ',' + requirementHeight + ' L0,' + requirementHeight + ' Z')
                     .style('fill', 'var(--vscode-editor-background)')
                     .style('stroke', '#B5CEA8')  // Green for requirements
-                    .style('stroke-width', '2px')
-                    .on('dblclick', function(event) {
-                        event.stopPropagation();
-                        vscode.postMessage({
-                            command: 'jumpToElement',
-                            elementName: requirement.name
-                        });
+                    .style('stroke-width', '2px');
+
+                // Click handlers: single-click navigate, double-click edit
+                reqElement.on('click', function(event) {
+                    event.stopPropagation();
+                    vscode.postMessage({
+                        command: 'jumpToElement',
+                        elementName: requirement.name
                     });
+                })
+                .on('dblclick', function(event) {
+                    event.stopPropagation();
+                    startInlineEdit(d3.select(this), requirement.name, pos.x, pos.y, requirementWidth);
+                });
 
                 // Corner fold effect
                 reqElement.append('path')
@@ -10928,6 +11276,8 @@ export class VisualizationPanel {
                 }
 
                 reqElement.append('text')
+                    .attr('class', 'node-name-text')
+                    .attr('data-element-name', requirement.name)
                     .attr('x', requirementWidth / 2)
                     .attr('y', requirementHeight / 2 + 6)
                     .attr('text-anchor', 'middle')
@@ -10947,14 +11297,20 @@ export class VisualizationPanel {
                 const actorElement = actorGroup.append('g')
                     .attr('class', 'actor-node')
                     .attr('transform', 'translate(' + (pos.x - actorSize / 2) + ',' + (pos.y - actorSize / 2) + ')')
-                    .style('cursor', 'grab')
-                    .on('dblclick', function(event) {
-                        event.stopPropagation();
-                        vscode.postMessage({
-                            command: 'jumpToElement',
-                            elementName: actor.name
-                        });
+                    .style('cursor', 'grab');
+
+                // Click handlers: single-click navigate, double-click edit
+                actorElement.on('click', function(event) {
+                    event.stopPropagation();
+                    vscode.postMessage({
+                        command: 'jumpToElement',
+                        elementName: actor.name
                     });
+                })
+                .on('dblclick', function(event) {
+                    event.stopPropagation();
+                    startInlineEdit(d3.select(this), actor.name, pos.x - actorSize / 2, pos.y - actorSize / 2, actorSize);
+                });
 
                 // Add drag behavior
                 const actorDrag = d3.drag()
@@ -11026,6 +11382,8 @@ export class VisualizationPanel {
                 // Actor name below figure
                 const truncatedName = actor.name.length > 12 ? actor.name.substring(0, 9) + '...' : actor.name;
                 actorElement.append('text')
+                    .attr('class', 'node-name-text')
+                    .attr('data-element-name', actor.name)
                     .attr('x', actorSize / 2)
                     .attr('y', 10 + headRadius + bodyHeight + legHeight + 18)
                     .attr('text-anchor', 'middle')
@@ -11045,14 +11403,20 @@ export class VisualizationPanel {
                     const actionElement = actionGroup.append('g')
                         .attr('class', 'action-node')
                         .attr('transform', 'translate(' + pos.x + ',' + pos.y + ')')
-                        .style('cursor', 'grab')
-                        .on('dblclick', function(event) {
-                            event.stopPropagation();
-                            vscode.postMessage({
-                                command: 'jumpToElement',
-                                elementName: action.name
-                            });
+                        .style('cursor', 'grab');
+
+                    // Click handlers: single-click navigate, double-click edit
+                    actionElement.on('click', function(event) {
+                        event.stopPropagation();
+                        vscode.postMessage({
+                            command: 'jumpToElement',
+                            elementName: action.name
                         });
+                    })
+                    .on('dblclick', function(event) {
+                        event.stopPropagation();
+                        startInlineEdit(d3.select(this), action.name, pos.x, pos.y, actionWidth);
+                    });
 
                     // Add drag behavior
                     const actionDrag = d3.drag()
@@ -11089,6 +11453,8 @@ export class VisualizationPanel {
                         : action.name;
 
                     actionElement.append('text')
+                        .attr('class', 'node-name-text')
+                        .attr('data-element-name', action.name)
                         .attr('x', actionWidth / 2)
                         .attr('y', actionHeight / 2 + 4)
                         .attr('text-anchor', 'middle')
@@ -11208,6 +11574,19 @@ export class VisualizationPanel {
                     .attr('transform', 'translate(' + pos.x + ',' + pos.y + ')')
                     .style('cursor', 'pointer');
 
+                // Click handlers: single-click navigate, double-click edit
+                packageElement.on('click', function(event) {
+                    event.stopPropagation();
+                    vscode.postMessage({
+                        command: 'jumpToElement',
+                        elementName: pkg.name
+                    });
+                })
+                .on('dblclick', function(event) {
+                    event.stopPropagation();
+                    startInlineEdit(d3.select(this), pkg.name, pos.x, pos.y, packageWidth);
+                });
+
                 // Package rectangle (tab style)
                 const tabHeight = 25;
                 const tabWidth = 60;
@@ -11219,17 +11598,7 @@ export class VisualizationPanel {
                     .attr('rx', 4)
                     .style('fill', 'var(--vscode-editor-background)')
                     .style('stroke', 'var(--vscode-charts-blue)')
-                    .style('stroke-width', '2px')
-                    .on('click', function(event) {
-                        event.stopPropagation();
-                    })
-                    .on('dblclick', function(event) {
-                        event.stopPropagation();
-                        vscode.postMessage({
-                            command: 'jumpToElement',
-                            elementName: pkg.name
-                        });
-                    });
+                    .style('stroke-width', '2px');
 
                 // Tab at top left
                 packageElement.append('rect')
@@ -11256,6 +11625,8 @@ export class VisualizationPanel {
                 const pkgName = pkg.name || 'Unnamed Package';
                 const truncatedName = pkgName.length > 20 ? pkgName.substring(0, 17) + '...' : pkgName;
                 packageElement.append('text')
+                    .attr('class', 'node-name-text')
+                    .attr('data-element-name', pkgName)
                     .attr('x', packageWidth / 2)
                     .attr('y', 25)
                     .attr('text-anchor', 'middle')

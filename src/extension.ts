@@ -345,9 +345,34 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.jumpToDefinition', (uri: vscode.Uri, range: vscode.Range) => {
-            vscode.window.showTextDocument(uri).then(editor => {
+            if (!uri || !range) {
+                vscode.window.showWarningMessage('Cannot navigate: missing location information');
+                return;
+            }
+
+            vscode.window.showTextDocument(uri, {
+                preserveFocus: false,
+                preview: false
+            }).then(editor => {
+                // Set selection and reveal the range
                 editor.selection = new vscode.Selection(range.start, range.end);
                 editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+
+                // Create a prominent highlight for the selected element
+                const decorationType = vscode.window.createTextEditorDecorationType({
+                    backgroundColor: 'rgba(255, 215, 0, 0.4)', // Gold background
+                    border: '2px solid #FFD700', // Gold border
+                    borderRadius: '3px',
+                    isWholeLine: false,
+                    rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+                });
+
+                editor.setDecorations(decorationType, [range]);
+
+                // Clear the highlight after 3 seconds
+                setTimeout(() => {
+                    decorationType.dispose();
+                }, 3000);
             });
         })
     );
