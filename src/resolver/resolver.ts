@@ -401,6 +401,20 @@ export class SemanticResolver {
      * Create a range from element position data
      */
     private createRange(element: any): vscode.Range {
+        // First, check if the element already has a proper range object from the parser
+        if (element.range && element.range instanceof vscode.Range) {
+            return element.range;
+        }
+        // Check for range-like object with start/end positions
+        if (element.range && element.range.start && element.range.end) {
+            return new vscode.Range(
+                element.range.start.line,
+                element.range.start.character,
+                element.range.end.line,
+                element.range.end.character
+            );
+        }
+        // Fallback to line/column if available (legacy support)
         if (element.line !== undefined && element.column !== undefined) {
             return new vscode.Range(
                 element.line,
