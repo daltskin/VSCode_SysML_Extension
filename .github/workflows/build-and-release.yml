@@ -1,15 +1,10 @@
-name: Build and Release
+name: Legacy Build and Release (disabled)
 
 on:
-  push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   test:
