@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import { SysMLElement, SysMLParser } from '../parser/sysmlParser';
 import { DiagnosticFormatter } from '../resolver/diagnostics';
+import { getSysMLKeywordIndex, suggestSysMLKeywords } from './keywords';
 
 export class SysMLValidator {
     private diagnosticCollection: vscode.DiagnosticCollection;
     private semanticDiagnostics: DiagnosticFormatter;
 
-     
+
     constructor(private _parser: SysMLParser) {
         this.diagnosticCollection = vscode.languages.createDiagnosticCollection('sysml');
         this.semanticDiagnostics = new DiagnosticFormatter('sysml-semantic');
@@ -29,6 +30,7 @@ export class SysMLValidator {
             this.validateElements(elements, diagnostics, document);
             this.validateRelationships(diagnostics);
             this.validateSyntax(document, diagnostics);
+            this.validateKeywordTypos(document, diagnostics);
 
             this.diagnosticCollection.set(document.uri, diagnostics);
         } catch (error) {
@@ -46,7 +48,7 @@ export class SysMLValidator {
         return diagnostics;
     }
 
-     
+
     private validateElements(elements: SysMLElement[], diagnostics: vscode.Diagnostic[], _document: vscode.TextDocument): void {
         const nameSet = new Set<string>();
 
@@ -141,6 +143,75 @@ export class SysMLValidator {
                 'Unclosed braces in document',
                 vscode.DiagnosticSeverity.Error
             ));
+        }
+    }
+
+    private validateKeywordTypos(document: vscode.TextDocument, diagnostics: vscode.Diagnostic[]): void {
+        const { keywordSet } = getSysMLKeywordIndex();
+        const text = document.getText();
+
+        const lines = text.split('\n');
+        for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
+            const line = lines[lineNumber];
+            const trimmed = line.trim();
+
+            if (trimmed.length === 0) {
+                continue;
+            }
+            if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*') || trimmed.startsWith('*/')) {
+                continue;
+            }
+            if (trimmed.startsWith('}') || trimmed.startsWith('{')) {
+                continue;
+            }
+
+            const match = line.match(/^[\s]*([A-Za-z_][A-Za-z0-9_]*)/);
+            if (!match || !match[1]) {
+                continue;
+            }
+
+            const firstWord = match[1];
+            const wordLower = firstWord.toLowerCase();
+
+            if (keywordSet.has(wordLower)) {
+                continue;
+            }
+
+            // Only warn in places that *look like* a statement/decl start:
+            // - keyword Name { ...
+            // - keyword name : Type
+            // - keyword def ...
+            const after = line.slice(match[0].length);
+            const looksLikeDecl =
+                /^\s+def\b/.test(after) ||
+                /^\s+[A-Za-z_][A-Za-z0-9_]*\s*(\{|:)/.test(after);
+
+            if (!looksLikeDecl) {
+                continue;
+            }
+
+            const suggestions = suggestSysMLKeywords(wordLower, 3);
+            if (suggestions.length === 0) {
+                continue;
+            }
+
+            const startChar = match.index ?? line.indexOf(firstWord);
+            const range = new vscode.Range(lineNumber, startChar, lineNumber, startChar + firstWord.length);
+
+            // Avoid duplicates if other validators already reported this exact range.
+            if (diagnostics.some(d => d.range.isEqual(range))) {
+                continue;
+            }
+
+            const best = suggestions[0];
+            const diag = new vscode.Diagnostic(
+                range,
+                `Unknown keyword '${firstWord}'. Did you mean '${best}'?`,
+                vscode.DiagnosticSeverity.Error
+            );
+            diag.source = 'sysml';
+            diag.code = 'sysml.keywordTypo';
+            diagnostics.push(diag);
         }
     }
 

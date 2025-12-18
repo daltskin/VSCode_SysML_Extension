@@ -5,6 +5,7 @@ import { LibraryService } from './library';
 import { SysMLDefinitionProvider } from './navigation/definitionProvider';
 import { SysMLDocumentSymbolProvider } from './navigation/symbolProvider';
 import { SysMLParser } from './parser/sysmlParser';
+import { SysMLCodeActionProvider } from './validation/codeActions';
 import { SysMLValidator } from './validation/validator';
 import { VisualizationPanel } from './visualization/visualizationPanel';
 
@@ -51,6 +52,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.languages.registerDocumentSymbolProvider('sysml', new SysMLDocumentSymbolProvider(parser))
+    );
+
+    context.subscriptions.push(
+        vscode.languages.registerCodeActionsProvider(
+            'sysml',
+            new SysMLCodeActionProvider(),
+            { providedCodeActionKinds: SysMLCodeActionProvider.providedCodeActionKinds }
+        )
     );
 
     context.subscriptions.push(
@@ -388,6 +397,21 @@ export function activate(context: vscode.ExtensionContext) {
             if (editor && editor.document.languageId === 'sysml') {
                 vscode.commands.executeCommand('setContext', 'sysml.modelLoaded', true);
                 modelExplorerProvider.loadDocument(editor.document);
+
+                if (vscode.workspace.getConfiguration('sysml').get('validation.enabled')) {
+                    validator.validate(editor.document);
+                }
+            }
+        })
+    );
+
+    // Validate on open so diagnostics/squiggles appear without requiring an edit.
+    context.subscriptions.push(
+        vscode.workspace.onDidOpenTextDocument(document => {
+            if (document.languageId === 'sysml') {
+                if (vscode.workspace.getConfiguration('sysml').get('validation.enabled')) {
+                    validator.validate(document);
+                }
             }
         })
     );
