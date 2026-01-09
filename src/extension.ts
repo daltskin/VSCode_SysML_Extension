@@ -101,6 +101,21 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('sysml.showModelExplorer', async () => {
+            // Set context to make the view visible
+            await vscode.commands.executeCommand('setContext', 'sysml.modelLoaded', true);
+            // Focus the Model Explorer view in the sidebar
+            await vscode.commands.executeCommand('sysmlModelExplorer.focus');
+
+            // If there's an active SysML document, load it into the explorer
+            const editor = vscode.window.activeTextEditor;
+            if (editor && editor.document.languageId === 'sysml') {
+                modelExplorerProvider.loadDocument(editor.document);
+            }
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('sysml.refreshVisualization', () => {
             if (VisualizationPanel.currentPanel) {
                 // Get the document from the current panel

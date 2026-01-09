@@ -28,6 +28,7 @@
   "activationEvents": [
     "onLanguage:sysml",
     "onCommand:sysml.showVisualizer",
+    "onCommand:sysml.showModelExplorer",
     "onCommand:sysml.formatDocument",
     "onCommand:sysml.validateModel",
     "onCommand:sysml.visualizeFolder",
