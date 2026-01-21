@@ -129,4 +129,82 @@ package TestPackage {
         const activity = activities[0];
         assert.ok(activity.actions.length >= 3, 'Should have extracted at least 3 actions');
     });
+
+    test('Should extract fork and join nodes with correct flows', async () => {
+        const content = `
+package TestPackage {
+    action def ParallelWorkflow {
+        action taskA;
+        action taskB;
+        join joinPoint;
+
+        first start;
+        then fork forkPoint;
+        then taskA;
+        then taskB;
+        first taskA then joinPoint;
+        first taskB then joinPoint;
+        first joinPoint then done;
+    }
+}`;
+
+        const document = createMockDocument(content);
+
+        const activities = parser.getActivityDiagrams(document);
+
+        assert.strictEqual(activities.length, 1, 'Should extract one activity diagram');
+
+        const activity = activities[0];
+
+        // Check for fork and join nodes
+        const forkNodes = activity.actions.filter(a => a.kind === 'fork' || a.type === 'fork');
+        const joinNodes = activity.actions.filter(a => a.kind === 'join' || a.type === 'join');
+
+        assert.ok(forkNodes.length >= 1, 'Should have at least one fork node');
+        assert.ok(joinNodes.length >= 1, 'Should have at least one join node');
+
+        // Check for parallel flows from fork
+        const flowsFromFork = activity.flows.filter(f => f.from === 'forkPoint');
+        assert.strictEqual(flowsFromFork.length, 2, 'Fork should have 2 outgoing flows (to taskA and taskB)');
+
+        // Check for converging flows to join
+        const flowsToJoin = activity.flows.filter(f => f.to === 'joinPoint');
+        assert.strictEqual(flowsToJoin.length, 2, 'Join should have 2 incoming flows (from taskA and taskB)');
+    });
+
+    test('Should handle standalone fork declarations with subsequent then statements', async () => {
+        const content = `
+package TestPackage {
+    use case ParallelProcess {
+        action processA;
+        action processB;
+        join merge;
+
+        first start;
+        first start then fork1;
+
+        fork fork1;
+        then processA;
+        then processB;
+        first processA then merge;
+        first processB then merge;
+        first merge then done;
+    }
+}`;
+
+        const document = createMockDocument(content);
+
+        const activities = parser.getActivityDiagrams(document);
+
+        assert.strictEqual(activities.length, 1, 'Should extract one activity diagram');
+
+        const activity = activities[0];
+
+        // Check that both processA and processB flow from fork1
+        const flowsFromFork = activity.flows.filter(f => f.from === 'fork1');
+        assert.strictEqual(flowsFromFork.length, 2, 'Both parallel tasks should flow from fork1');
+
+        const flowTargets = flowsFromFork.map(f => f.to).sort();
+        assert.deepStrictEqual(flowTargets, ['processA', 'processB'], 'Fork should flow to both parallel tasks');
+    });
 });

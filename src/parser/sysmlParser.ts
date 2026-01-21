@@ -993,7 +993,6 @@ export class SysMLParser {
 
                     if (actionName && partName) {
                         swimlaneAssignments.set(actionName, partName);
-                        // console.log(`[Swimlane] Action '${actionName}' assigned to lane '${partName}'`);
                     }
                 }
             }
@@ -1006,15 +1005,18 @@ export class SysMLParser {
 
         // Collect swimlane assignments first
         elements.forEach(el => collectSwimlanesFromParts(el));
-        // console.log(`[Swimlane] Total swimlane assignments: ${swimlaneAssignments.size}`);
 
         const extractFromElement = (element: SysMLElement) => {
             // Check for action or action def elements with children
             // Include 'definition' type as ANTLR may categorize some action definitions this way
+            // Also include 'perform' for inline action definitions (perform action X { ... })
+            // Include 'use case' since they can contain activity flows with first/then/done
             const isActionType = element.type === 'action' ||
                                 element.type === 'action def' ||
                                 element.type === 'action definition' ||
-                                element.type === 'definition';
+                                element.type === 'definition' ||
+                                element.type === 'use case' ||
+                                (element.type === 'perform' && element.attributes?.get?.('hasBody') === 'true');
 
             if (isActionType && element.range) {
                 // Get the element body from the document
@@ -1038,7 +1040,6 @@ export class SysMLParser {
                         const lane = swimlaneAssignments.get(action.name);
                         if (lane) {
                             (action as any).lane = lane;
-                            // console.log(`[Swimlane] Applied lane '${lane}' to action '${action.name}'`);
                         }
                     });
 
@@ -1340,6 +1341,9 @@ export class SysMLParser {
         let previousNode: string | null = null;
         let currentDecision: DecisionNode | null = null;
         let _afterDecide = false;
+        // Track current fork context - when inside a fork, all subsequent "then" statements
+        // should flow FROM the fork until we hit a "first X then Y" pattern or another fork/join
+        let currentForkContext: string | null = null;
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -1373,23 +1377,159 @@ export class SysMLParser {
                 continue;
             }
 
+            // Match "fork forkName;" - fork node declaration (standalone, sets context for following then statements)
+            const forkDeclMatch = trimmed.match(/^fork\s+(\w+)\s*;?\s*$/i);
+            if (forkDeclMatch) {
+                const forkName = forkDeclMatch[1];
+                if (!declaredNodes.has(forkName)) {
+                    declaredNodes.set(forkName, { type: 'fork', range });
+                    actions.push({
+                        name: forkName,
+                        type: 'fork',
+                        kind: 'fork',
+                        range
+                    });
+                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Added fork node: ${forkName}`);
+                }
+                // Set fork context so subsequent "then X;" statements flow from this fork
+                currentForkContext = forkName;
+                previousNode = forkName;
+                currentOffset += line.length + 1;
+                continue;
+            }
+
+            // Match "join joinName;" - join node declaration
+            const joinDeclMatch = trimmed.match(/^join\s+(\w+)\s*;?\s*$/i);
+            if (joinDeclMatch) {
+                const joinName = joinDeclMatch[1];
+                if (!declaredNodes.has(joinName)) {
+                    declaredNodes.set(joinName, { type: 'join', range });
+                    actions.push({
+                        name: joinName,
+                        type: 'join',
+                        kind: 'join',
+                        range
+                    });
+                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Added join node: ${joinName}`);
+                }
+                currentOffset += line.length + 1;
+                continue;
+            }
+
+            // Match "then fork forkName;" - flow to fork
+            const thenForkMatch = trimmed.match(/^then\s+fork\s+(\w+)\s*;?\s*$/i);
+            if (thenForkMatch) {
+                const forkName = thenForkMatch[1];
+                // Ensure fork exists
+                if (!declaredNodes.has(forkName)) {
+                    declaredNodes.set(forkName, { type: 'fork', range });
+                    actions.push({
+                        name: forkName,
+                        type: 'fork',
+                        kind: 'fork',
+                        range
+                    });
+                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Added fork node (from then): ${forkName}`);
+                }
+                if (previousNode) {
+                    flows.push({
+                        from: previousNode,
+                        to: forkName,
+                        condition: '',
+                        range
+                    });
+                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Created flow to fork: ${previousNode} → ${forkName}`);
+                }
+                // Set fork context so subsequent "then X;" statements flow from this fork
+                currentForkContext = forkName;
+                previousNode = forkName;
+                currentOffset += line.length + 1;
+                continue;
+            }
+
+            // Match "then join joinName;" - flow to join (not typically used, but support it)
+            const thenJoinMatch = trimmed.match(/^then\s+join\s+(\w+)\s*;?\s*$/i);
+            if (thenJoinMatch) {
+                const joinName = thenJoinMatch[1];
+                // Ensure join exists
+                if (!declaredNodes.has(joinName)) {
+                    declaredNodes.set(joinName, { type: 'join', range });
+                    actions.push({
+                        name: joinName,
+                        type: 'join',
+                        kind: 'join',
+                        range
+                    });
+                }
+                if (previousNode) {
+                    flows.push({
+                        from: previousNode,
+                        to: joinName,
+                        condition: '',
+                        range
+                    });
+                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Created flow to join: ${previousNode} → ${joinName}`);
+                }
+                previousNode = joinName;
+                currentOffset += line.length + 1;
+                continue;
+            }
+
+            // Match "first source then target;" - explicit flow from source to target
+            const firstThenMatch = trimmed.match(/^first\s+(\w+)\s+then\s+(\w+)\s*;?\s*$/i);
+            if (firstThenMatch) {
+                const sourceName = firstThenMatch[1];
+                const targetName = firstThenMatch[2];
+
+                // Handle special case for 'done' as target - add final node if not exists
+                if (targetName.toLowerCase() === 'done' && !declaredNodes.has('done')) {
+                    declaredNodes.set('done', { type: 'final', range });
+                    actions.push({
+                        name: 'done',
+                        type: 'final',
+                        kind: 'final',
+                        range
+                    });
+                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Added final node: done (from first X then done)`);
+                }
+
+                flows.push({
+                    from: sourceName,
+                    to: targetName,
+                    condition: '',
+                    range
+                });
+                if (DEBUG_ACTIVITY_PARSING) console.log(`  → Created explicit flow: ${sourceName} → ${targetName}`);
+                // Clear fork context since this is an explicit flow specification
+                currentForkContext = null;
+                previousNode = targetName;
+                currentOffset += line.length + 1;
+                continue;
+            }
+
             // Match "then action name { ... }" or "then action name;" or "then action name {"
             // Updated to handle multi-line action bodies (opening brace without closing on same line)
+            // When in fork context, flow from the fork; otherwise flow from previousNode
             const thenActionMatch = trimmed.match(/^then\s+action\s+(?:'([^']+)'|(\w+))(?:\s*\{[^}]*\}|\s*\{|\s*;)?\s*$/i);
             if (thenActionMatch) {
                 const actionName = thenActionMatch[1] || thenActionMatch[2];
                 _afterDecide = false; // Reset after non-decision flow
 
-                if (previousNode && actionName) {
+                // Determine source: use fork context if available, otherwise use previousNode
+                const sourceNode = currentForkContext || previousNode;
+                if (sourceNode && actionName) {
                     flows.push({
-                        from: previousNode,
+                        from: sourceNode,
                         to: actionName,
                         condition: '',
                         range
                     });
-                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Created flow: ${previousNode} → ${actionName}`);
+                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Created flow: ${sourceNode} → ${actionName}${currentForkContext ? ' (from fork context)' : ''}`);
                 }
-                previousNode = actionName;
+                // Don't update previousNode if we're in fork context
+                if (!currentForkContext) {
+                    previousNode = actionName;
+                }
                 currentOffset += line.length + 1;
                 continue;
             }
@@ -1515,18 +1655,27 @@ export class SysMLParser {
             }
 
             // Match "then targetName;" - simple flow to existing node
+            // When in fork context, flow from the fork; otherwise flow from previousNode
             const thenTargetMatch = trimmed.match(/^then\s+(\w+)\s*;?\s*$/i);
             if (thenTargetMatch) {
                 const targetName = thenTargetMatch[1];
-                if (targetName !== 'decide' && targetName !== 'done' && previousNode) {
-                    flows.push({
-                        from: previousNode,
-                        to: targetName,
-                        condition: '',
-                        range
-                    });
-                    if (DEBUG_ACTIVITY_PARSING) console.log(`  → Created flow: ${previousNode} → ${targetName}`);
-                    previousNode = targetName;
+                if (targetName !== 'decide' && targetName !== 'done') {
+                    // Determine source: use fork context if available, otherwise use previousNode
+                    const sourceNode = currentForkContext || previousNode;
+                    if (sourceNode) {
+                        flows.push({
+                            from: sourceNode,
+                            to: targetName,
+                            condition: '',
+                            range
+                        });
+                        if (DEBUG_ACTIVITY_PARSING) console.log(`  → Created flow: ${sourceNode} → ${targetName}${currentForkContext ? ' (from fork context)' : ''}`);
+                    }
+                    // Don't update previousNode if we're in fork context - keep it pointing to the fork
+                    // so that all parallel branches come from the same fork
+                    if (!currentForkContext) {
+                        previousNode = targetName;
+                    }
                 }
                 _afterDecide = false;
                 currentOffset += line.length + 1;

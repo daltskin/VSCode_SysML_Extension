@@ -262,9 +262,9 @@ actionUsage
     ;
 
 // Behavioral Constructs
-// perform action ref; or perform ref redefines parent;
+// perform action ref; or perform ref redefines parent; or perform action name { body }
 performAction
-    : PERFORM ACTION? qualifiedName multiplicity? specialization? ';'?
+    : PERFORM ACTION? qualifiedName multiplicity? specialization? (body | ';')?
     | PERFORM qualifiedName REDEFINES qualifiedName ';'?
     ;
 

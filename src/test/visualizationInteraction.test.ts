@@ -178,7 +178,8 @@ package RenameTest {
     });
 
     suite('JumpToElement Navigation', () => {
-        test('Elements should be findable by name for jumpToElement', async () => {
+        test('Elements should be findable by name for jumpToElement', async function() {
+            this.timeout(30000); // Increase timeout for file I/O
             const samplesPath = path.join(__dirname, '..', '..', 'samples', 'smart-home.sysml');
 
             if (!fs.existsSync(samplesPath)) {

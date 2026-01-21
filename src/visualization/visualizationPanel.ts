@@ -1147,6 +1147,7 @@ export class VisualizationPanel {
             <button id="layout-direction-btn" class="action-btn" title="Toggle layout direction">→ LR</button>
             <button id="category-headers-btn" class="action-btn" title="Toggle category headers">☰ Group</button>
             <button id="minimap-toolbar-btn" class="action-btn" title="Toggle minimap">🗺</button>
+            <button id="activity-debug-btn" class="action-btn" title="Show Labels on Forks and Joins" style="display: none;">🏷️ Show Labels</button>
             <span style="color: var(--vscode-panel-border);">|</span>
             <div class="export-dropdown" style="position: relative; display: inline-block;">
                 <button id="export-btn" class="primary-btn" title="Export diagram">⇓ Export</button>
@@ -1214,6 +1215,7 @@ export class VisualizationPanel {
         let currentData = null;
         let currentView = 'elk';  // General View as default
         let selectedDiagramIndex = 0; // Track currently selected diagram for multi-diagram views
+        let activityDebugLabels = false; // Toggle for showing debug labels on forks/joins in Activity view
         const STRUCTURAL_VIEWS = new Set(['elk', 'hierarchy']);
         const MIN_CANVAS_ZOOM = 0.04;
         const MAX_CANVAS_ZOOM = 5;
@@ -1279,6 +1281,8 @@ export class VisualizationPanel {
                 if (textEl) textEl.textContent = message;
                 overlay.classList.remove('hidden');
             }
+            // Set cursor to wait/hourglass while loading
+            document.body.style.cursor = 'wait';
         }
 
         function hideLoading() {
@@ -1286,6 +1290,8 @@ export class VisualizationPanel {
             if (overlay) {
                 overlay.classList.add('hidden');
             }
+            // Reset cursor to default
+            document.body.style.cursor = '';
         }
 
         // ============== MINIMAP FUNCTIONALITY ==============
@@ -1349,6 +1355,40 @@ export class VisualizationPanel {
             canvas.addEventListener('mousemove', handleMinimapDrag);
             canvas.addEventListener('mouseup', () => { minimapDragging = false; });
             canvas.addEventListener('mouseleave', () => { minimapDragging = false; });
+        }
+
+        // Activity Debug Labels toggle
+        function setupActivityDebugToggle() {
+            const debugBtn = document.getElementById('activity-debug-btn');
+            if (!debugBtn) return;
+
+            debugBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                activityDebugLabels = !activityDebugLabels;
+
+                if (activityDebugLabels) {
+                    debugBtn.classList.add('active');
+                    debugBtn.style.background = 'var(--vscode-button-background)';
+                    debugBtn.style.color = 'var(--vscode-button-foreground)';
+                } else {
+                    debugBtn.classList.remove('active');
+                    debugBtn.style.background = '';
+                    debugBtn.style.color = '';
+                }
+
+                // Re-render current view to apply label changes
+                if (currentView === 'activity') {
+                    renderVisualization('activity');
+                }
+            });
+        }
+
+        // Show/hide activity debug button based on current view
+        function updateActivityDebugButtonVisibility(view) {
+            const debugBtn = document.getElementById('activity-debug-btn');
+            if (debugBtn) {
+                debugBtn.style.display = (view === 'activity') ? 'inline-block' : 'none';
+            }
         }
 
         function handleMinimapClick(event) {
@@ -1616,6 +1656,8 @@ export class VisualizationPanel {
 
         // Initialize minimap on load
         document.addEventListener('DOMContentLoaded', initMinimap);
+        // Initialize activity debug toggle
+        document.addEventListener('DOMContentLoaded', setupActivityDebugToggle);
         // ============== END MINIMAP ==============
 
         function prepareDataForView(data, view) {
@@ -4492,6 +4534,9 @@ export class VisualizationPanel {
 
                 // Update button highlighting to show active view
                 updateActiveViewButton(view);
+
+                // Show/hide activity debug button based on view
+                updateActivityDebugButtonVisibility(view);
 
                 // Small delay to allow UI to update before rendering
                 setTimeout(() => {
@@ -9528,11 +9573,11 @@ export class VisualizationPanel {
             const isHorizontal = activityLayoutDirection === 'horizontal';
             const actionWidth = 220;
             const actionHeight = 60;
-            const verticalSpacing = 80;
-            const horizontalSpacing = 140;
+            const verticalSpacing = 100;  // Increased from 80 to prevent overlaps
+            const horizontalSpacing = 60; // Reduced from 140 for tighter horizontal packing
             const startX = 80;
             const startY = 80;
-            const swimLaneWidth = 250;
+            const swimLaneWidth = 280;    // Increased from 250 for more room
 
             // Organize actions by swim lanes
             const swimLanes = new Map();
@@ -9615,6 +9660,36 @@ export class VisualizationPanel {
 
                     laneIndex++;
                 });
+
+                // Also position actions that don't have a lane (noLaneActions)
+                // Place them in a "default" column to the right of swim lanes
+                if (noLaneActions.length > 0) {
+                    const noLaneX = 60 + laneIndex * (swimLaneWidth + 40);
+
+                    // Build actionsByLevel for noLaneActions
+                    const noLaneActionsByLevel = new Map();
+                    noLaneActions.forEach(action => {
+                        const level = levels.get(action.id) || 0;
+                        if (!noLaneActionsByLevel.has(level)) {
+                            noLaneActionsByLevel.set(level, []);
+                        }
+                        noLaneActionsByLevel.get(level).push(action);
+                    });
+
+                    noLaneActions.forEach((action) => {
+                        const level = levels.get(action.id) || 0;
+                        const actionsAtLevel = noLaneActionsByLevel.get(level) || [action];
+                        const positionInLevel = actionsAtLevel.indexOf(action);
+                        const totalAtLevel = actionsAtLevel.length;
+                        const centerOffset = (totalAtLevel - 1) * (actionWidth + horizontalSpacing) / 2;
+
+                        actionPositions.set(action.id, {
+                            x: noLaneX + (swimLaneWidth / 2) - centerOffset + positionInLevel * (actionWidth + horizontalSpacing),
+                            y: startY + level * verticalSpacing,
+                            action: action
+                        });
+                    });
+                }
             } else {
                 // No swim lanes - center actions, respecting layout direction
                 actions.forEach((action, index) => {
@@ -9675,7 +9750,25 @@ export class VisualizationPanel {
             // Draw flows (behind actions)
             const flowGroup = g.append('g').attr('class', 'activity-flows');
 
+            // Track flows from same source to apply horizontal offset for parallel branches
+            const flowsFromSource = new Map();
             flows.forEach(flow => {
+                if (!flowsFromSource.has(flow.from)) {
+                    flowsFromSource.set(flow.from, []);
+                }
+                flowsFromSource.get(flow.from).push(flow);
+            });
+
+            // Track flows to same target to apply horizontal offset for merge paths
+            const flowsToTarget = new Map();
+            flows.forEach(flow => {
+                if (!flowsToTarget.has(flow.to)) {
+                    flowsToTarget.set(flow.to, []);
+                }
+                flowsToTarget.get(flow.to).push(flow);
+            });
+
+            flows.forEach((flow, flowIndex) => {
                 const sourcePos = actionPositions.get(flow.from);
                 const targetPos = actionPositions.get(flow.to);
 
@@ -9686,6 +9779,16 @@ export class VisualizationPanel {
                 let pathData;
                 let labelX, labelY;
 
+                // Calculate offset for parallel flows from same fork
+                const siblingsFromSource = flowsFromSource.get(flow.from) || [flow];
+                const siblingIndexFromSource = siblingsFromSource.indexOf(flow);
+                const totalSiblingsFromSource = siblingsFromSource.length;
+
+                // Calculate offset for flows merging to same join
+                const siblingsToTarget = flowsToTarget.get(flow.to) || [flow];
+                const siblingIndexToTarget = siblingsToTarget.indexOf(flow);
+                const totalSiblingsToTarget = siblingsToTarget.length;
+
                 if (isHorizontal) {
                     // Horizontal layout: exit from right side, enter from left
                     const startX = sourcePos.x + actionWidth;
@@ -9693,6 +9796,7 @@ export class VisualizationPanel {
                     const endX = targetPos.x;
                     const endY = targetPos.y + actionHeight / 2;
 
+                    // Orthogonal routing
                     const midX = (startX + endX) / 2;
                     pathData = 'M ' + startX + ',' + startY +
                                ' L ' + midX + ',' + startY +
@@ -9707,12 +9811,44 @@ export class VisualizationPanel {
                     const endX = targetPos.x + actionWidth / 2;
                     const endY = targetPos.y;
 
-                    const midY = (startY + endY) / 2;
-                    pathData = 'M ' + startX + ',' + startY +
-                               ' L ' + startX + ',' + midY +
-                               ' L ' + endX + ',' + midY +
-                               ' L ' + endX + ',' + endY;
-                    labelX = (startX + endX) / 2;
+                    // Calculate horizontal offset for parallel branches from same fork
+                    let startXOffset = 0;
+                    let endXOffset = 0;
+                    const isForkSource = (sourcePos.action?.kind === 'fork' || sourcePos.action?.type === 'fork');
+                    const isJoinTarget = (targetPos.action?.kind === 'join' || targetPos.action?.type === 'join');
+
+                    // Apply offset for flows from fork to spread parallel paths
+                    if (isForkSource && totalSiblingsFromSource > 1) {
+                        const offsetRange = Math.min(actionWidth * 0.8, 100);
+                        startXOffset = (siblingIndexFromSource - (totalSiblingsFromSource - 1) / 2) * (offsetRange / (totalSiblingsFromSource - 1 || 1));
+                    }
+
+                    // Apply offset for flows entering join
+                    if (isJoinTarget && totalSiblingsToTarget > 1) {
+                        const offsetRange = Math.min(actionWidth * 0.8, 100);
+                        endXOffset = (siblingIndexToTarget - (totalSiblingsToTarget - 1) / 2) * (offsetRange / (totalSiblingsToTarget - 1 || 1));
+                    }
+
+                    const adjustedStartX = startX + startXOffset;
+                    const adjustedEndX = endX + endXOffset;
+
+                    // Orthogonal routing: for joins, go down to join level first, then connect horizontally
+                    // This prevents lines from crossing through other activities
+                    let midY;
+                    if (isJoinTarget) {
+                        // Go down to just above the join, then horizontal to the join
+                        midY = endY - 15;
+                    } else {
+                        // Default: use midpoint between source and target
+                        midY = (startY + endY) / 2;
+                    }
+
+                    pathData = 'M ' + adjustedStartX + ',' + startY +
+                               ' L ' + adjustedStartX + ',' + midY +
+                               ' L ' + adjustedEndX + ',' + midY +
+                               ' L ' + adjustedEndX + ',' + endY;
+
+                    labelX = (adjustedStartX + adjustedEndX) / 2;
                     labelY = midY - 5;
                 }
 
@@ -9884,6 +10020,20 @@ export class VisualizationPanel {
                         .attr('rx', 2)
                         .style('fill', 'var(--vscode-panel-border)')
                         .style('stroke', 'none');
+
+                    // Add debug label for fork/join when enabled
+                    if (activityDebugLabels) {
+                        actionElement.append('text')
+                            .attr('class', 'fork-join-debug-label')
+                            .attr('x', actionWidth / 2)
+                            .attr('y', actionHeight / 2 + 25)
+                            .attr('text-anchor', 'middle')
+                            .text(actionName)
+                            .style('font-size', '10px')
+                            .style('fill', 'var(--vscode-descriptionForeground)')
+                            .style('font-style', 'italic')
+                            .style('user-select', 'none');
+                    }
                 } else {
                     // Rounded rectangle for regular actions
                     actionElement.append('rect')

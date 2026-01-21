@@ -1400,6 +1400,79 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
         this.visitChildren(ctx);
     }
 
+    // Fork usage: fork forkName;
+    visitForkUsage(ctx: any): void {
+        const element = this.createElement('fork', ctx);
+        element.attributes.set('nodeType', 'fork');
+        element.attributes.set('isControlNode', 'true');
+    }
+
+    // Join usage: join joinName;
+    visitJoinUsage(ctx: any): void {
+        const element = this.createElement('join', ctx);
+        element.attributes.set('nodeType', 'join');
+        element.attributes.set('isControlNode', 'true');
+    }
+
+    // First statement: first source then target; - creates a control flow
+    visitFirstStatement(ctx: any): void {
+        // Extract source (first qualifiedName)
+        let source: string | null = null;
+        let target: string | null = null;
+
+        try {
+            // qualifiedName() returns an array when there are multiple
+            const qualifiedNames = ctx.qualifiedName?.();
+            if (qualifiedNames) {
+                const names = Array.isArray(qualifiedNames) ? qualifiedNames : [qualifiedNames];
+                if (names.length >= 1 && names[0]) {
+                    source = typeof names[0].getText === 'function' ? names[0].getText() : String(names[0]);
+                }
+                if (names.length >= 2 && names[1]) {
+                    target = typeof names[1].getText === 'function' ? names[1].getText() : String(names[1]);
+                }
+            }
+        } catch {
+            // Silently handle extraction errors
+        }
+
+        if (source && target) {
+            // Create a flow relationship
+            this.relationships.push({
+                type: 'control-flow',
+                source: source,
+                target: target
+            });
+        }
+    }
+
+    // Then statement with fork/join: then fork forkName; or then join joinName;
+    visitThenStatement(ctx: any): void {
+        // Check for FORK or JOIN tokens
+        const text = ctx.getText ? ctx.getText() : '';
+
+        if (text.includes('fork') || text.includes('join')) {
+            // Extract the identifier
+            try {
+                const identifier = ctx.identifier?.();
+                if (identifier) {
+                    const name = typeof identifier.getText === 'function' ? identifier.getText() : String(identifier);
+                    const nodeType = text.includes('fork') ? 'fork' : 'join';
+
+                    // Create element for the fork/join reference in flow context
+                    const element = this.createElement(nodeType, ctx);
+                    element.attributes.set('nodeType', nodeType);
+                    element.attributes.set('isControlNode', 'true');
+                    element.attributes.set('isFlowTarget', 'true');
+                }
+            } catch {
+                // Silently handle extraction errors
+            }
+        }
+
+        this.visitChildren(ctx);
+    }
+
     visitRequirementDefinition(ctx: any): void {
         const element = this.createElement('requirement def', ctx);
         this.parentStack.push(element);
@@ -2039,7 +2112,29 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
         } catch {
             // qualifiedName might not exist - that's ok
         }
-        this.visitChildren(ctx);
+
+        // Check if this perform action has a body (inline action definition)
+        // The grammar now supports: PERFORM ACTION? qualifiedName multiplicity? specialization? (body | ';')?
+        let hasBody = false;
+        try {
+            // Check if there's a body context (from the grammar's body rule)
+            if (ctx.body && typeof ctx.body === 'function') {
+                const bodyCtx = ctx.body();
+                hasBody = bodyCtx !== null && bodyCtx !== undefined;
+            }
+        } catch {
+            // Ignore errors in body detection
+        }
+
+        if (hasBody) {
+            // Mark as having inline action body - useful for activity diagram extraction
+            element.attributes.set('hasBody', 'true');
+            this.parentStack.push(element);
+            this.visitChildren(ctx);
+            this.parentStack.pop();
+        } else {
+            this.visitChildren(ctx);
+        }
     }
 
     visitExhibitState(ctx: any): void {
