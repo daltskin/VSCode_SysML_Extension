@@ -1456,7 +1456,7 @@ class SysMLElementVisitor extends AbstractParseTreeVisitor<void> implements SysM
             try {
                 const identifier = ctx.identifier?.();
                 if (identifier) {
-                    const name = typeof identifier.getText === 'function' ? identifier.getText() : String(identifier);
+                    const _name = typeof identifier.getText === 'function' ? identifier.getText() : String(identifier);
                     const nodeType = text.includes('fork') ? 'fork' : 'join';
 
                     // Create element for the fork/join reference in flow context
