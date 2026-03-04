@@ -63,33 +63,20 @@ For single-folder workspaces, files are parsed lazily when opened.
 
 ## Screenshots
 
-### General View
-
-![General View](assets/general_view.png)
-
-### Interconnection View
-
-![Interconnection View](assets/interconnection_view.png)
-
-### Action Flow View
-
-![Action Flow View](assets/action_flow_view.png)
-
-### State Transition View
-
-![State Transition View](assets/state_view.png)
-
-### Hierarchy View
-
-![Hierarchy View](assets/hierarchy_view.png)
-
-### Graph View
-
-![Graph View](assets/graph_view.png)
-
-### Tree View
-
-![Tree View](assets/tree_view.png)
+<table>
+<tr>
+<td align="center"><strong>General</strong><br><img src="assets/general_view.png" width="250" alt="General View"></td>
+<td align="center"><strong>Interconnection</strong><br><img src="assets/interconnection_view.png" width="250" alt="Interconnection View"></td>
+<td align="center"><strong>Action Flow</strong><br><img src="assets/action_flow_view.png" width="250" alt="Action Flow View"></td>
+<td align="center"><strong>State Transition</strong><br><img src="assets/state_view.png" width="250" alt="State Transition View"></td>
+</tr>
+<tr>
+<td align="center"><strong>Hierarchy</strong><br><img src="assets/hierarchy_view.png" width="250" alt="Hierarchy View"></td>
+<td align="center"><strong>Graph</strong><br><img src="assets/graph_view.png" width="250" alt="Graph View"></td>
+<td align="center"><strong>Tree</strong><br><img src="assets/tree_view.png" width="250" alt="Tree View"></td>
+<td></td>
+</tr>
+</table>
 
 ## Installation
 
