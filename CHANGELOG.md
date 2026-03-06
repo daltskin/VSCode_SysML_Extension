@@ -5,6 +5,41 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0]
+
+### Added
+
+- **Comprehensive test suite** — new test files covering CodeLens, diagram buttons, editing features, MCP server, Model Explorer integration, performance and visualization panel (224 tests total, 176 unit + 48 integration)
+- **CI pipeline restructured** — split into 3 parallel jobs: `lint`, `unit-tests`, and `integration-tests` (runs after lint + unit pass)
+- **Release pipeline test gate** — `test` job must pass before the `release` job runs
+
+### Changed
+
+- Updated `sysml-v2-lsp` dependency from 0.5.1 to 0.6.0
+- Makefile: `make test` runs unit tests only; `make test-integration` runs the full Extension Host suite
+
+### Fixed
+
+- **`end port` validation false positive** ([#15](https://github.com/daltskin/VSCode_SysML_Extension/issues/15)) — parser erroneously rejected `end port`, `end part`, `end item`, and other `end <keyword>` syntax in interface/connection definitions; root cause was a stale DFA snapshot in the LSP server that didn't cover the new grammar paths
+- **DFA snapshot robustness** — LSP parser now retries with a cleared DFA when pre-seeded states produce parse errors, preventing stale snapshots from causing silent failures
+
+## [0.24.0]
+
+### Changed
+
+- Updated `sysml-v2-lsp` dependency from 0.5.0 to 0.5.1 (enhanced code actions with structured diagnostic data, qualified name resolution)
+- Simplified CI configuration by removing Node.js version matrix
+
+## [0.23.0]
+
+### Changed
+
+- Updated `sysml-v2-lsp` dependency from 0.4.1 to 0.5.0
+
+### Fixed
+
+- Removed `minimatch` override from `package.json`
+
 ## [0.22.0]
 
 ### Added

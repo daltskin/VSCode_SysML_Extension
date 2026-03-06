@@ -26,7 +26,7 @@ A VS Code extension providing SysML v2.0 language support with interactive visua
 │         │                  │  * Diagnostics & keyword typos       │ │
 │         │                  │  * Completions / signature help      │ │
 │         │                  │  * Hover / go-to-def / references    │ │
-│         │                  │  * Semantic tokens / CodeLens         │ │
+│         │                  │  * Semantic tokens / CodeLens        │ │
 │         │                  │  * Rename / linked editing           │ │
 │         │                  │  * Inlay hints / document links      │ │
 │         │                  │  * Type & call hierarchy             │ │
@@ -40,10 +40,10 @@ A VS Code extension providing SysML v2.0 language support with interactive visua
 │  ┌──────┴──────────────────────────────────────────────────────┐    │
 │  │                    Extension Features                       │    │
 │  │                                                             │    │
-│  │  ┌────────────┐  ┌───────────────┐  ┌────────────────────┐ │    │
-│  │  │ Model Tree │  │  LSP Model    │  │  Model Dashboard   │ │    │
-│  │  │  Explorer  │  │  Provider     │  │     Panel          │ │    │
-│  │  └────────────┘  └───────────────┘  └────────────────────┘ │    │
+│  │  ┌────────────┐  ┌───────────────┐  ┌────────────────────┐  │    │
+│  │  │ Model Tree │  │  LSP Model    │  │  Model Dashboard   │  │    │
+│  │  │  Explorer  │  │  Provider     │  │     Panel          │  │    │
+│  │  └────────────┘  └───────────────┘  └────────────────────┘  │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                                                                     │
 │  ┌────────────────────────────────────────────────────────────────┐ │

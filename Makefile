@@ -30,9 +30,9 @@ help:
 	@echo "  $(GREEN)install$(NC)        - Install dependencies"
 	@echo "  $(GREEN)compile$(NC)        - Compile TypeScript to JavaScript"
 	@echo "  $(GREEN)watch$(NC)          - Watch and compile on changes"
-	@echo "  $(GREEN)test$(NC)           - Run all tests"
+	@echo "  $(GREEN)test$(NC)           - Run unit tests (fast, no VS Code required)"
+	@echo "  $(GREEN)test-integration$(NC) - Run full integration tests (requires VS Code)"
 	@echo "  $(GREEN)test-syntax$(NC)    - Test syntax and compilation (no VS Code required)"
-	@echo "  $(GREEN)test-unit$(NC)      - Run unit tests only"
 	@echo "  $(GREEN)install-test-deps$(NC) - Install system dependencies for testing"
 	@echo "  $(GREEN)lint$(NC)           - Run linting"
 	@echo "  $(GREEN)lint-fix$(NC)       - Fix linting issues automatically"
@@ -72,12 +72,19 @@ watch: $(NODE_MODULES)
 	@echo "$(BLUE)Press Ctrl+C to stop$(NC)"
 	npm run watch
 
-# Run tests
+# Run unit tests (fast — no VS Code instance required)
 .PHONY: test
 test: compile
-	@echo "$(YELLOW)Running tests...$(NC)"
+	@echo "$(YELLOW)Running unit tests...$(NC)"
+	npm run test:unit
+	@echo "$(GREEN)Unit tests completed!$(NC)"
+
+# Run full integration tests (requires VS Code / Electron)
+.PHONY: test-integration
+test-integration: compile
+	@echo "$(YELLOW)Running integration tests...$(NC)"
 	@if npm run test; then \
-		echo "$(GREEN)Tests completed successfully!$(NC)"; \
+		echo "$(GREEN)Integration tests completed successfully!$(NC)"; \
 	else \
 		exit_code=$$?; \
 		if [ $$exit_code -eq 127 ]; then \
@@ -115,12 +122,9 @@ install-test-deps:
 		exit 1; \
 	fi
 
-# Run unit tests only
+# Legacy alias — kept for backwards compatibility
 .PHONY: test-unit
-test-unit: compile
-	@echo "$(YELLOW)Running unit tests...$(NC)"
-	npm run test:unit
-	@echo "$(GREEN)Unit tests completed!$(NC)"
+test-unit: test
 
 # Run linting
 .PHONY: lint
