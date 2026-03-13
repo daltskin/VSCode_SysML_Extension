@@ -17,6 +17,26 @@ const _isUnitTest = (vscode as any)._isMock === true;
 
 suite('MCP Server Test Suite', () => {
 
+    test('Workspace MCP config pins local sysml MCP server', async function () {
+        if (_isUnitTest) { return this.skip(); }
+        this.timeout(5000);
+
+        const workspaceMcpPath = path.resolve(__dirname, '../../.vscode/mcp.json');
+        assert.ok(fs.existsSync(workspaceMcpPath), `Expected workspace MCP config: ${workspaceMcpPath}`);
+
+        const workspaceMcp = JSON.parse(fs.readFileSync(workspaceMcpPath, 'utf-8'));
+        const localServer = workspaceMcp.servers?.['sysml-v2-local'];
+
+        assert.ok(localServer, 'Expected servers.sysml-v2-local in .vscode/mcp.json');
+        assert.strictEqual(localServer.type, 'stdio', 'sysml-v2-local should use stdio transport');
+        assert.strictEqual(localServer.command, 'node', 'sysml-v2-local should launch with node');
+        assert.ok(
+            Array.isArray(localServer.args) && localServer.args.some((a: string) =>
+                a.includes('node_modules/sysml-v2-lsp/dist/server/mcpServer.js')),
+            'sysml-v2-local args should point to local sysml-v2-lsp MCP server script',
+        );
+    });
+
     test('MCP server definition provider ID is declared in package.json', () => {
         // Verify the package.json declares the MCP server definition provider
         const pkgPath = path.resolve(__dirname, '../../package.json');
@@ -65,8 +85,11 @@ suite('MCP Server Test Suite', () => {
 
         const ext = vscode.extensions.getExtension('jamied.sysml-v2-support');
         assert.ok(ext, 'Extension should be present');
-        if (!ext!.isActive) {
-            await ext!.activate();
+        if (!ext) {
+            return;
+        }
+        if (!ext.isActive) {
+            await ext.activate();
         }
 
         // After activation, the 'sysml-v2-mcp' provider should be
@@ -74,7 +97,7 @@ suite('MCP Server Test Suite', () => {
         // and the extension activated without error, the provider was
         // registered (the registerMcpServerDefinitionProvider call is
         // guarded by fs.existsSync which we already tested above).
-        assert.strictEqual(ext!.isActive, true, 'Extension should be active');
+        assert.strictEqual(ext.isActive, true, 'Extension should be active');
     });
 
     test('All 22 extension commands are registered after activation', async function () {
@@ -103,6 +126,7 @@ suite('MCP Server Test Suite', () => {
             'sysml.showCallHierarchy',
             'sysml.showFeatureInspector',
             'sysml.showModelDashboard',
+            'sysml.openProblemForUri',
             'sysml.showSysRunner',
             'sysml.visualizePackage',
         ];

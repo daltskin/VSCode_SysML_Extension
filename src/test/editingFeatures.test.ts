@@ -87,8 +87,11 @@ suite('Editing Features Test Suite', () => {
         const text = vehicleDoc.getText();
         const engineUsageMatch = text.match(/:\s*Engine\b/);
         assert.ok(engineUsageMatch, 'Should find Engine type reference in source');
+        if (!engineUsageMatch) {
+            return;
+        }
 
-        const offset = text.indexOf(engineUsageMatch![0]) + engineUsageMatch![0].indexOf('Engine');
+        const offset = text.indexOf(engineUsageMatch[0]) + engineUsageMatch[0].indexOf('Engine');
         const position = vehicleDoc.positionAt(offset);
 
         const definitions = await pollForResult(
@@ -113,8 +116,11 @@ suite('Editing Features Test Suite', () => {
         const text = vehicleDoc.getText();
         const realMatch = text.match(/:\s*Real\b/);
         assert.ok(realMatch, 'Should find Real type reference');
+        if (!realMatch) {
+            return;
+        }
 
-        const offset = text.indexOf(realMatch![0]) + realMatch![0].indexOf('Real');
+        const offset = text.indexOf(realMatch[0]) + realMatch[0].indexOf('Real');
         const position = vehicleDoc.positionAt(offset);
 
         const definitions = await pollForResult(
@@ -139,8 +145,11 @@ suite('Editing Features Test Suite', () => {
         const text = vehicleDoc.getText();
         const defMatch = text.match(/part def Engine\b/);
         assert.ok(defMatch, 'Should find Engine definition');
+        if (!defMatch) {
+            return;
+        }
 
-        const offset = text.indexOf(defMatch![0]) + defMatch![0].indexOf('Engine');
+        const offset = text.indexOf(defMatch[0]) + defMatch[0].indexOf('Engine');
         const position = vehicleDoc.positionAt(offset);
 
         const references = await pollForResult(
@@ -165,8 +174,11 @@ suite('Editing Features Test Suite', () => {
         const text = vehicleDoc.getText();
         const vehicleMatch = text.match(/part def Vehicle\b/);
         assert.ok(vehicleMatch, 'Should find Vehicle definition');
+        if (!vehicleMatch) {
+            return;
+        }
 
-        const offset = text.indexOf(vehicleMatch![0]) + vehicleMatch![0].indexOf('Vehicle');
+        const offset = text.indexOf(vehicleMatch[0]) + vehicleMatch[0].indexOf('Vehicle');
         const position = vehicleDoc.positionAt(offset);
 
         const hovers = await pollForResult(
@@ -197,9 +209,12 @@ suite('Editing Features Test Suite', () => {
             symbols && symbols.length > 0,
             `Document symbols should return elements, got ${symbols?.length ?? 0}`,
         );
+        if (!symbols) {
+            return;
+        }
 
         // Should contain the VehicleModel package or Vehicle part
-        const names = flattenSymbolNames(symbols!);
+        const names = flattenSymbolNames(symbols);
         const hasVehicle = names.some(n =>
             n.includes('Vehicle') || n.includes('VehicleModel'),
         );

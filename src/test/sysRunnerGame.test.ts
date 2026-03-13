@@ -18,6 +18,13 @@ import { sleep } from './helpers/integrationHelper';
 
 const _isUnitTest = (vscode as any)._isMock === true;
 
+async function ensureExtensionActive(): Promise<void> {
+    const ext = vscode.extensions.getExtension('jamied.sysml-v2-support');
+    if (ext && !ext.isActive) {
+        await ext.activate();
+    }
+}
+
 suite('Easter Egg — SysML World Game Test Suite', () => {
 
     // ── Unit tests ───────────────────────────────────────────────
@@ -249,6 +256,8 @@ suite('Easter Egg — SysML World Game Test Suite', () => {
         if (_isUnitTest) { return this.skip(); }
         this.timeout(10000);
 
+        await ensureExtensionActive();
+
         const commands = await vscode.commands.getCommands(true);
         assert.ok(
             commands.includes('sysml.showSysRunner'),
@@ -259,6 +268,8 @@ suite('Easter Egg — SysML World Game Test Suite', () => {
     test('sysml.showSysRunner opens a webview panel', async function () {
         if (_isUnitTest) { return this.skip(); }
         this.timeout(15000);
+
+        await ensureExtensionActive();
 
         const beforeTabs = vscode.window.tabGroups.all
             .flatMap(g => g.tabs).length;
@@ -278,6 +289,8 @@ suite('Easter Egg — SysML World Game Test Suite', () => {
     test('Running showSysRunner twice reveals same panel (singleton)', async function () {
         if (_isUnitTest) { return this.skip(); }
         this.timeout(15000);
+
+        await ensureExtensionActive();
 
         await vscode.commands.executeCommand('sysml.showSysRunner');
         await sleep(500);

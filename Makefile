@@ -32,6 +32,7 @@ help:
 	@echo "  $(GREEN)watch$(NC)          - Watch and compile on changes"
 	@echo "  $(GREEN)test$(NC)           - Run unit tests (fast, no VS Code required)"
 	@echo "  $(GREEN)test-integration$(NC) - Run full integration tests (requires VS Code)"
+	@echo "  $(GREEN)test-integration-parallel$(NC) - Run integration tests in 2 parallel shards"
 	@echo "  $(GREEN)test-syntax$(NC)    - Test syntax and compilation (no VS Code required)"
 	@echo "  $(GREEN)install-test-deps$(NC) - Install system dependencies for testing"
 	@echo "  $(GREEN)lint$(NC)           - Run linting"
@@ -39,7 +40,7 @@ help:
 	@echo "  $(GREEN)coverage$(NC)       - Generate coverage report"
 	@echo "  $(GREEN)package$(NC)        - Create VSIX package"
 	@echo "  $(GREEN)clean$(NC)          - Clean build artifacts"
-	@echo "  $(GREEN)clean-all$(NC)      - Clean everything including node_modules"
+	@echo "  $(GREEN)clean-all$(NC)      - Clean + deterministic reinstall + refresh local file deps"
 	@echo "  $(GREEN)dev$(NC)            - Start development environment"
 	@echo "  $(GREEN)debug$(NC)          - Prepare for debugging (then press F5 in VS Code)"
 	@echo "  $(GREEN)debug-watch$(NC)    - Launch watch mode for debugging with auto-recompile"
@@ -83,7 +84,7 @@ test: compile
 .PHONY: test-integration
 test-integration: compile
 	@echo "$(YELLOW)Running integration tests...$(NC)"
-	@if npm run test; then \
+	@if node ./out/test/runTest.js; then \
 		echo "$(GREEN)Integration tests completed successfully!$(NC)"; \
 	else \
 		exit_code=$$?; \
@@ -99,6 +100,27 @@ test-integration: compile
 		echo "$(YELLOW)Run 'make test-syntax' for basic validation without full test suite$(NC)"; \
 		exit $$exit_code; \
 	fi
+
+# Run integration tests in two shards in parallel. This is opt-in because
+# some environments may prefer deterministic single-host execution.
+.PHONY: test-integration-parallel
+test-integration-parallel: compile
+	@echo "$(YELLOW)Running integration tests in parallel (2 shards)...$(NC)"
+	@set +e; \
+	SHARD1="integration.test.js,visualizationPanel.test.js,modelExplorerIntegration.test.js,modelDashboardPanel.test.js,performance.test.js"; \
+	SHARD2="codeActions.test.js,codeLens.test.js,diagramButtons.test.js,editingFeatures.test.js,exportFunctionality.test.js,exportScaleLogic.test.js,featureExplorerProvider.test.js,keywordDiagnostics.test.js,lspClient.test.js,mcpServer.test.js,modelExplorerProvider.test.js,sysRunnerGame.test.js"; \
+	SYSML_TEST_FILES="$$SHARD1" node ./out/test/runTest.js > /tmp/sysml-test-shard1.log 2>&1 & pid1=$$!; \
+	SYSML_TEST_FILES="$$SHARD2" node ./out/test/runTest.js > /tmp/sysml-test-shard2.log 2>&1 & pid2=$$!; \
+	wait $$pid1; code1=$$?; \
+	wait $$pid2; code2=$$?; \
+	echo "$(BLUE)=== Shard 1 output ===$(NC)"; cat /tmp/sysml-test-shard1.log; \
+	echo "$(BLUE)=== Shard 2 output ===$(NC)"; cat /tmp/sysml-test-shard2.log; \
+	rm -f /tmp/sysml-test-shard1.log /tmp/sysml-test-shard2.log; \
+	if [ $$code1 -ne 0 ] || [ $$code2 -ne 0 ]; then \
+		echo "$(RED)Parallel integration tests failed (shard1=$$code1, shard2=$$code2)$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)Parallel integration tests completed successfully!$(NC)"
 
 # Test syntax and compilation without VS Code
 .PHONY: test-syntax
@@ -209,15 +231,22 @@ clean:
 	rm -f tsconfig.tsbuildinfo
 	@echo "$(GREEN)Build artifacts cleaned!$(NC)"
 
-# Clean everything including dependencies, then reinstall and recompile
+# Clean everything including dependencies, then reinstall and recompile.
+# Keeps package-lock for deterministic installs and force-refreshes local
+# file: dependencies (for example local .tgz packages) to avoid stale npm cache.
 .PHONY: clean-all
 clean-all: clean
 	@echo "$(YELLOW)Cleaning all files including dependencies...$(NC)"
 	rm -rf $(NODE_MODULES)
-	rm -f package-lock.json
 	@echo "$(GREEN)All files cleaned!$(NC)"
+	@echo "$(YELLOW)Clearing npm cache to avoid stale local package artifacts...$(NC)"
+	npm cache clean --force
+	@echo "$(YELLOW)Refreshing package-lock for local file: dependencies (if any)...$(NC)"
+	@node -e "const cp=require('child_process');const pkg=require('./package.json');const deps={...(pkg.dependencies||{}),...(pkg.devDependencies||{})};const local=Object.entries(deps).filter(([,ref])=>typeof ref==='string'&&ref.startsWith('file:'));if(local.length===0){console.log('No local file: dependencies found.');process.exit(0);}for(const [name,ref] of local){console.log('Updating lock entry for '+name+' from '+ref);cp.execFileSync('npm',['install',name+'@'+ref,'--package-lock-only','--save-exact','--ignore-scripts','--force'],{stdio:'inherit'});}"
 	@echo "$(YELLOW)Reinstalling dependencies...$(NC)"
 	npm install
+	@echo "$(YELLOW)Refreshing local file: dependencies (if any)...$(NC)"
+	@node -e "const cp=require('child_process');const pkg=require('./package.json');const deps={...(pkg.dependencies||{}),...(pkg.devDependencies||{})};const local=Object.entries(deps).filter(([,ref])=>typeof ref==='string'&&ref.startsWith('file:'));if(local.length===0){console.log('No local file: dependencies found.');process.exit(0);}for(const [name,ref] of local){console.log('Refreshing '+name+' from '+ref);cp.execFileSync('npm',['install',name+'@'+ref,'--force'],{stdio:'inherit'});}"
 	@echo "$(YELLOW)Recompiling...$(NC)"
 	npm run compile
 	@echo "$(GREEN)Clean rebuild complete - ready for F5 debugging!$(NC)"

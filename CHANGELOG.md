@@ -5,6 +5,29 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0]
+
+### Added
+
+- Model Explorer package context menu action: **View Model Dashboard**
+- Model Dashboard now support workspaces
+
+### Changed
+
+- LSP updated to 0.7.0
+  - Improved semantic validation
+  - New quick fix actions
+  - Model Complexity Index calculation tweaks
+  - Model Dashboard workspace targeting UI: file/semantic mode toggle with filtered target dropdown
+  - Updated to OMG 2026-02 - SysML v2 Release
+
+### Fixed
+
+- Visualizer filter reliability across diagram data sources (including non-standard element collections)
+- State transition rendering for qualified names and selected-machine transition mapping
+- Webview disposal race conditions in visualizer updates/postMessage paths
+- Model Dashboard auto-refresh on file changes while open
+
 ## [0.25.0]
 
 ### Added

@@ -28,6 +28,26 @@ suite('Visualization Panel Test Suite', () => {
         vehicleDoc = res.doc;
     });
 
+    const disposeVisualizerIfOpen = async () => {
+        const mod = require('../visualization/visualizationPanel');
+        const panel = mod.VisualizationPanel?.currentPanel;
+        if (panel) {
+            panel.dispose();
+            // Let debounced callbacks settle before the next test starts.
+            await sleep(500);
+        }
+    };
+
+    teardown(async () => {
+        if (_isUnitTest) { return; }
+        await disposeVisualizerIfOpen();
+    });
+
+    suiteTeardown(async () => {
+        if (_isUnitTest) { return; }
+        await disposeVisualizerIfOpen();
+    });
+
     // ── Unit tests (mock-safe) ────────────────────────────────────
 
     test('VisualizationPanel module is importable', () => {

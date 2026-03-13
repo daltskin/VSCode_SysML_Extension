@@ -109,8 +109,8 @@ A VS Code extension providing SysML v2.0 language support with interactive visua
                          │                               │
                          v                               v
                   ┌─────────────┐              ┌───────────────┐
-                  │ Model Tree  │              │  Visualization │
-                  │  Explorer   │              │    Webview     │
+                  │ Model Tree  │              │  Visualization│
+                  │  Explorer   │              │    Webview    │
                   └─────────────┘              └───────────────┘
 ```
 

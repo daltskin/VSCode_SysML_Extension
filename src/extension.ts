@@ -1031,8 +1031,68 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ─── Model Dashboard ────────────────────────────────────────────
     context.subscriptions.push(
-        vscode.commands.registerCommand('sysml.showModelDashboard', async (fileUri?: vscode.Uri) => {
-            ModelDashboardPanel.createOrShow(context.extensionUri, lspModelProvider, fileUri);
+        vscode.commands.registerCommand('sysml.showModelDashboard', async (target?: vscode.Uri | ModelTreeItem) => {
+            let fileUri: vscode.Uri | undefined;
+            let packageName: string | undefined;
+
+            if (target instanceof vscode.Uri) {
+                fileUri = target;
+            } else if (target && typeof target === 'object' && 'elementUri' in target) {
+                // Tree item from Model Explorer package nodes.
+                const treeItem = target as ModelTreeItem;
+                fileUri = treeItem.elementUri;
+                if (treeItem.element?.type === 'package') {
+                    packageName = treeItem.element.name;
+                }
+            }
+
+            ModelDashboardPanel.createOrShow(context.extensionUri, lspModelProvider, fileUri, packageName);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('sysml.openProblemForUri', async (uriLike?: string | vscode.Uri) => {
+            let targetUri: vscode.Uri | undefined;
+            if (typeof uriLike === 'string') {
+                try { targetUri = vscode.Uri.parse(uriLike); } catch { /* ignore */ }
+            } else if (uriLike && typeof (uriLike as vscode.Uri).toString === 'function') {
+                targetUri = uriLike as vscode.Uri;
+            }
+
+            if (!targetUri) {
+                const editor = vscode.window.activeTextEditor;
+                if (editor && editor.document.languageId === 'sysml') {
+                    targetUri = editor.document.uri;
+                }
+            }
+
+            if (!targetUri) {
+                await vscode.commands.executeCommand('workbench.actions.view.problems');
+                return;
+            }
+
+            const diagnostics = vscode.languages.getDiagnostics(targetUri)
+                .filter(d => d.severity === vscode.DiagnosticSeverity.Error || d.severity === vscode.DiagnosticSeverity.Warning)
+                .sort((a, b) => {
+                    if (a.severity !== b.severity) {
+                        return a.severity - b.severity; // Error first
+                    }
+                    if (a.range.start.line !== b.range.start.line) {
+                        return a.range.start.line - b.range.start.line;
+                    }
+                    return a.range.start.character - b.range.start.character;
+                });
+
+            if (diagnostics.length > 0) {
+                const doc = await vscode.workspace.openTextDocument(targetUri);
+                const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
+                const pos = diagnostics[0].range.start;
+                const sel = new vscode.Selection(pos, pos);
+                editor.selection = sel;
+                editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+            }
+
+            await vscode.commands.executeCommand('workbench.actions.view.problems');
         })
     );
 
@@ -1240,6 +1300,9 @@ export function activate(context: vscode.ExtensionContext) {
                 // Re-parse for model explorer / visualization only.
                 // Language features are handled by the LSP server.
                 parseSysMLDocument(event.document);
+
+                // Keep the model dashboard in sync while it's open.
+                ModelDashboardPanel.currentPanel?.notifyFileChanged(event.document.uri);
             }
         })
     );
@@ -1266,10 +1329,11 @@ export function activate(context: vscode.ExtensionContext) {
     // external changes.
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(document => {
-            if (document.languageId === 'sysml' && VisualizationPanel.currentPanel) {
-                // Short delay gives the LSP server time to process the save
+            if (document.languageId === 'sysml') {
+                // Short delay gives the LSP server time to process the save.
                 setTimeout(() => {
                     VisualizationPanel.currentPanel?.notifyFileChanged(document.uri);
+                    ModelDashboardPanel.currentPanel?.notifyFileChanged(document.uri);
                 }, 500);
             }
         })
@@ -1286,6 +1350,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (VisualizationPanel.currentPanel) {
                 VisualizationPanel.currentPanel.notifyFileChanged(uri);
             }
+            ModelDashboardPanel.currentPanel?.notifyFileChanged(uri);
         })
     );
 
@@ -1295,6 +1360,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (VisualizationPanel.currentPanel) {
                 VisualizationPanel.currentPanel.notifyFileChanged(uri);
             }
+            ModelDashboardPanel.currentPanel?.notifyFileChanged(uri);
         })
     );
 
@@ -1304,6 +1370,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (VisualizationPanel.currentPanel) {
                 VisualizationPanel.currentPanel.notifyFileChanged(uri);
             }
+            ModelDashboardPanel.currentPanel?.notifyFileChanged(uri);
         })
     );
 }

@@ -153,6 +153,8 @@ Right-click a package node in the **SysML Model Explorer** → **Visualize Packa
 npm install && npm run compile && npm test
 ```
 
+Note for when packaged as a VSIX, the extension registers its MCP server from the extension install path at activation time. A workspace `.vscode/mcp.json` is only a local development override (for example, to pin Copilot chat to a specific local server build).
+
 ## License
 
 MIT

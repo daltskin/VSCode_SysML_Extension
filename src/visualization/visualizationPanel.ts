@@ -8,6 +8,7 @@ export class VisualizationPanel {
     public static currentPanel: VisualizationPanel | undefined;
     private readonly _panel: vscode.WebviewPanel;
     private _disposables: vscode.Disposable[] = [];
+    private _isDisposed: boolean = false;
     private _currentView: string = 'elk'; // Store current view state - default to General View
     private _isNavigating: boolean = false; // Flag to prevent view reset during navigation
     private _lastUpdateTime: number = 0; // Prevent rapid successive updates
@@ -42,7 +43,7 @@ export class VisualizationPanel {
             const columnChanged = this._panel.viewColumn !== this._lastViewColumn;
             this._lastViewColumn = this._panel.viewColumn;
 
-            if (this._panel.visible) {
+            if (this.isPanelVisible()) {
                 if (this._needsUpdateWhenVisible || columnChanged) {
                     this._needsUpdateWhenVisible = false;
                     // Reset content hash so the update is not skipped
@@ -56,7 +57,7 @@ export class VisualizationPanel {
 
         // Request current view state from webview after initialization
         setTimeout(() => {
-            this._panel.webview.postMessage({ command: 'requestCurrentView' });
+            this.postMessageSafe({ command: 'requestCurrentView' });
         }, 100);
 
         this._panel.webview.onDidReceiveMessage(
@@ -193,7 +194,31 @@ export class VisualizationPanel {
     }
 
     public exportVisualization(format: string, scale: number = 2) {
-        this._panel.webview.postMessage({ command: 'export', format: format.toLowerCase(), scale });
+        this.postMessageSafe({ command: 'export', format: format.toLowerCase(), scale });
+    }
+
+    private isPanelVisible(): boolean {
+        if (this._isDisposed) {
+            return false;
+        }
+
+        try {
+            return this._panel.visible;
+        } catch {
+            return false;
+        }
+    }
+
+    private postMessageSafe(message: unknown): void {
+        if (this._isDisposed) {
+            return;
+        }
+
+        try {
+            this._panel.webview.postMessage(message);
+        } catch {
+            // Ignore races where the webview is disposed between scheduling and send.
+        }
     }
 
     // Simple hash function for content comparison
@@ -208,13 +233,17 @@ export class VisualizationPanel {
     }
 
     private async updateVisualization(forceUpdate: boolean = false) {
+        if (this._isDisposed) {
+            return;
+        }
+
         // Skip update if we're currently navigating to prevent view reset
         if (this._isNavigating) {
             return;
         }
 
         // Defer work when the panel is not visible (e.g. user switched tabs)
-        if (!this._panel.visible) {
+        if (!this.isPanelVisible()) {
             this._needsUpdateWhenVisible = true;
             return;
         }
@@ -230,7 +259,7 @@ export class VisualizationPanel {
         this._lastContentHash = contentHash;
 
         // Tell the webview to show loading indicator immediately
-        this._panel.webview.postMessage({ command: 'showLoading', message: 'Parsing SysML model...' });
+        this.postMessageSafe({ command: 'showLoading', message: 'Parsing SysML model...' });
 
         // Yield to the event loop so the webview can render the loading state
         // before the synchronous ANTLR parse blocks the extension host
@@ -290,11 +319,11 @@ export class VisualizationPanel {
                 msg.pendingPackageName = this._pendingPackageName;
                 this._pendingPackageName = undefined;
             }
-            this._panel.webview.postMessage(msg);
+            this.postMessageSafe(msg);
         } catch {
             // LSP model request failed — hide the loading overlay so the
             // webview doesn't stay stuck on "Parsing SysML model...".
-            this._panel.webview.postMessage({ command: 'hideLoading' });
+            this.postMessageSafe({ command: 'hideLoading' });
         }
     }
 
@@ -502,7 +531,7 @@ export class VisualizationPanel {
                 // Only send if click didn't originate from the diagram (skipCentering=false)
                 // When skipCentering=true, the diagram already highlighted the element
                 if (!skipCentering) {
-                    this._panel.webview.postMessage({
+                    this.postMessageSafe({
                         command: 'highlightElement',
                         elementName: elementName,
                         skipCentering: skipCentering
@@ -706,7 +735,7 @@ export class VisualizationPanel {
     }
 
     public changeView(viewId: string): void {
-        this._panel.webview.postMessage({
+        this.postMessageSafe({
             command: 'changeView',
             view: viewId
         });
@@ -718,7 +747,7 @@ export class VisualizationPanel {
         this._pendingPackageName = packageName;
         this._currentView = 'elk';
         // Also post directly in case the webview already has data
-        this._panel.webview.postMessage({
+        this.postMessageSafe({
             command: 'selectPackage',
             packageName: packageName
         });
@@ -742,14 +771,38 @@ export class VisualizationPanel {
             }
             this._fileChangeDebounceTimer = setTimeout(() => {
                 this._fileChangeDebounceTimer = undefined;
+                if (this._isDisposed) {
+                    return;
+                }
                 this.updateVisualization(true);
             }, 400);
         }
     }
 
     public dispose() {
+        if (this._isDisposed) {
+            return;
+        }
+
+        this._isDisposed = true;
         VisualizationPanel.currentPanel = undefined;
-        this._panel.dispose();
+
+        if (this._fileChangeDebounceTimer) {
+            clearTimeout(this._fileChangeDebounceTimer);
+            this._fileChangeDebounceTimer = undefined;
+        }
+
+        if (this._pendingUpdate) {
+            clearTimeout(this._pendingUpdate);
+            this._pendingUpdate = undefined;
+        }
+
+        try {
+            this._panel.dispose();
+        } catch {
+            // Already disposed by VS Code.
+        }
+
         while (this._disposables.length) {
             const disposable = this._disposables.pop();
             if (disposable) {
@@ -1561,7 +1614,7 @@ export class VisualizationPanel {
                 </div>
             </div>
             <span style="color: var(--vscode-panel-border);">|</span>
-            <input type="text" class="filter-input" id="element-filter" placeholder="Filter..." oninput="filterElements(this.value)" title="Filter elements">
+            <input type="text" class="filter-input" id="element-filter" placeholder="Filter..." title="Filter elements">
             <button id="clear-filter-btn" class="action-btn" title="Clear filter" style="padding: 4px 6px;">✕</button>
         </div>
     </div>
@@ -2664,16 +2717,39 @@ export class VisualizationPanel {
 
                 case 'state':
                     // State Machine View needs states and transitions
-                    const stateElements = allElements.filter(el => el.type && (
-                        el.type.includes('state') ||
-                        el.type.includes('State')
-                    ));
+                    const stateElements = allElements.filter(el => {
+                        const typeLower = String(el.type || '').toLowerCase();
+                        return typeLower.includes('state') || typeLower.includes('exhibit');
+                    });
+
+                    const getStateSimpleName = (name) => {
+                        const raw = String(name || '').trim();
+                        if (!raw) {
+                            return raw;
+                        }
+
+                        // Support both SysML qualified names and dotted paths.
+                        const colonParts = raw.split('::');
+                        const rightMostColon = colonParts[colonParts.length - 1] || raw;
+                        const dotParts = rightMostColon.split('.');
+                        return dotParts[dotParts.length - 1] || rightMostColon;
+                    };
+
+                    const stateTransitions = relationships
+                        .filter(rel => String(rel.type || '').toLowerCase().includes('transition'))
+                        .map(rel => ({
+                            ...rel,
+                            sourceQualified: rel.source,
+                            targetQualified: rel.target,
+                            source: getStateSimpleName(rel.source),
+                            target: getStateSimpleName(rel.target),
+                            label: rel.name || rel.label || ''
+                        }));
+
                     return {
                         ...data,
                         states: stateElements,
-                        transitions: relationships.filter(rel =>
-                            rel.type && rel.type.includes('transition')
-                        )
+                        transitions: stateTransitions
                     };
 
                 case 'sequence':
@@ -7942,6 +8018,9 @@ export class VisualizationPanel {
             if (!currentData || (!currentData.elements && !currentData.pillarElements)) return;
 
             const searchTerm = query.toLowerCase().trim();
+            const sourceElements = Array.isArray(currentData.elements)
+                ? currentData.elements
+                : (Array.isArray(currentData.pillarElements) ? currentData.pillarElements : []);
 
             if (searchTerm === '') {
                 // Reset to show all elements
@@ -7949,9 +8028,7 @@ export class VisualizationPanel {
                 document.getElementById('status-text').textContent = 'Ready • Use filter to search elements';
             } else {
                 // Filter elements based on name, type, or properties
-                const filteredDiagramElements = currentData.elements
-                    ? filterElementsRecursive(cloneElements(currentData.elements), searchTerm)
-                    : [];
+                const filteredDiagramElements = filterElementsRecursive(cloneElements(sourceElements), searchTerm);
 
                 filteredData = {
                     ...currentData,
@@ -7959,7 +8036,7 @@ export class VisualizationPanel {
                 };
 
                 // Update status to show filter results
-                const activeSource = currentData.elements;
+                const activeSource = sourceElements;
                 const activeFiltered = filteredDiagramElements;
                 const totalElements = countAllElements(activeSource || []);
                 const filteredCount = countAllElements(activeFiltered || []);
@@ -7987,26 +8064,46 @@ export class VisualizationPanel {
         }
 
         function filterElementsRecursive(elements, searchTerm) {
+            if (!Array.isArray(elements)) {
+                return [];
+            }
+
             return elements.filter(element => {
+                if (!element || typeof element !== 'object') {
+                    return false;
+                }
+
                 // Check if element matches search term
-                const nameMatch = element.name.toLowerCase().includes(searchTerm);
-                const typeMatch = element.type.toLowerCase().includes(searchTerm);
+                const nameMatch = String(element.name || '').toLowerCase().includes(searchTerm);
+                const typeMatch = String(element.type || '').toLowerCase().includes(searchTerm);
 
                 // Check properties
                 let propertyMatch = false;
-                if (element.properties) {
-                    for (const [key, value] of Object.entries(element.properties)) {
+                const propertySources = [element.properties, element.attributes];
+                for (const source of propertySources) {
+                    if (!source) {
+                        continue;
+                    }
+
+                    const entries = typeof source.entries === 'function'
+                        ? Array.from(source.entries())
+                        : Object.entries(source);
+
+                    for (const [key, value] of entries) {
                         if (key.toLowerCase().includes(searchTerm) ||
                             String(value).toLowerCase().includes(searchTerm)) {
                             propertyMatch = true;
                             break;
                         }
                     }
+                    if (propertyMatch) {
+                        break;
+                    }
                 }
 
                 // Check children recursively
                 let hasMatchingChildren = false;
-                if (element.children && element.children.length > 0) {
+                if (Array.isArray(element.children) && element.children.length > 0) {
                     const filteredChildren = filterElementsRecursive(element.children, searchTerm);
                     if (filteredChildren.length > 0) {
                         element.children = filteredChildren; // Update children to filtered ones
@@ -12169,9 +12266,13 @@ export class VisualizationPanel {
                 if (alreadyAssigned) return;
 
                 // Try to find parent state machine by parent property
-                if (s.parent) {
+                const parentRef = typeof s.parent === 'string'
+                    ? s.parent
+                    : (s.parent && typeof s.parent.name === 'string' ? s.parent.name : '');
+
+                if (parentRef) {
                     for (const [machineName, machineData] of stateMachineMap) {
-                        if (s.parent === machineName || s.parent.includes(machineName)) {
+                        if (parentRef === machineName || parentRef.includes(machineName)) {
                             // Avoid duplicates
                             if (!machineData.states.some(existing => existing.name === s.name)) {
                                 machineData.states.push(s);
@@ -12272,7 +12373,27 @@ export class VisualizationPanel {
             });
 
             // Build adjacency list from transitions for layout (using filtered states)
+            const getSimpleStateName = (name) => {
+                const raw = String(name || '').trim();
+                if (!raw) {
+                    return raw;
+                }
+                const colonParts = raw.split('::');
+                const rightMostColon = colonParts[colonParts.length - 1] || raw;
+                const dotParts = rightMostColon.split('.');
+                return dotParts[dotParts.length - 1] || rightMostColon;
+            };
+
             const stateKeys = new Set(stateUsages.map(s => getStateKey(s)));
+            const stateNameToKey = new Map();
+            stateUsages.forEach(s => {
+                const key = getStateKey(s);
+                const name = String(s.name || '');
+                if (name) {
+                    stateNameToKey.set(name, key);
+                    stateNameToKey.set(getSimpleStateName(name), key);
+                }
+            });
             const outgoing = new Map(); // state -> [target states]
             const incoming = new Map(); // state -> [source states]
 
@@ -12285,13 +12406,16 @@ export class VisualizationPanel {
             // Use transitions from selected machine
             const machineTransitions = selectedMachine.transitions || transitions;
             machineTransitions.forEach(t => {
+                const sourceKey = stateNameToKey.get(t.source) || stateNameToKey.get(getSimpleStateName(t.source)) || t.source;
+                const targetKey = stateNameToKey.get(t.target) || stateNameToKey.get(getSimpleStateName(t.target)) || t.target;
+
                 // Only include transitions between visible states
-                if (stateKeys.has(t.source) && stateKeys.has(t.target)) {
-                    if (outgoing.has(t.source)) {
-                        outgoing.get(t.source).push(t.target);
+                if (stateKeys.has(sourceKey) && stateKeys.has(targetKey)) {
+                    if (outgoing.has(sourceKey)) {
+                        outgoing.get(sourceKey).push(targetKey);
                     }
-                    if (incoming.has(t.target)) {
-                        incoming.get(t.target).push(t.source);
+                    if (incoming.has(targetKey)) {
+                        incoming.get(targetKey).push(sourceKey);
                     }
                 }
             });
@@ -12382,9 +12506,9 @@ export class VisualizationPanel {
 
                 // Create links from transitions
                 const links = [];
-                transitions.forEach(t => {
-                    const sourceKey = t.sourceName;
-                    const targetKey = t.targetName;
+                machineTransitions.forEach(t => {
+                    const sourceKey = stateNameToKey.get(t.source) || stateNameToKey.get(getSimpleStateName(t.source)) || t.source;
+                    const targetKey = stateNameToKey.get(t.target) || stateNameToKey.get(getSimpleStateName(t.target)) || t.target;
                     if (nodeMap.has(sourceKey) && nodeMap.has(targetKey) && sourceKey !== targetKey) {
                         links.push({
                             source: nodeMap.get(sourceKey),
@@ -12576,12 +12700,22 @@ export class VisualizationPanel {
 
                 // Group transitions by source-target pair to handle multiple edges
                 const transitionPairs = new Map();
-                transitions.forEach(t => {
-                    const pairKey = t.source + '->' + t.target;
+                machineTransitions.forEach(t => {
+                    const sourceKey = stateNameToKey.get(t.source) || stateNameToKey.get(getSimpleStateName(t.source)) || t.source;
+                    const targetKey = stateNameToKey.get(t.target) || stateNameToKey.get(getSimpleStateName(t.target)) || t.target;
+                    if (!stateKeys.has(sourceKey) || !stateKeys.has(targetKey)) {
+                        return;
+                    }
+
+                    const pairKey = sourceKey + '->' + targetKey;
                     if (!transitionPairs.has(pairKey)) {
                         transitionPairs.set(pairKey, []);
                     }
-                    transitionPairs.get(pairKey).push(t);
+                    transitionPairs.get(pairKey).push({
+                        ...t,
+                        source: sourceKey,
+                        target: targetKey
+                    });
                 });
 
                 transitionPairs.forEach((transitionsForPair, pairKey) => {
@@ -13897,6 +14031,14 @@ export class VisualizationPanel {
         document.getElementById('layout-direction-btn').addEventListener('click', toggleLayoutDirection);
         document.getElementById('category-headers-btn').addEventListener('click', toggleCategoryHeaders);
         document.getElementById('clear-filter-btn').addEventListener('click', clearSelection);
+        const filterInputEl = document.getElementById('element-filter');
+        if (filterInputEl) {
+            filterInputEl.addEventListener('input', function(event) {
+                const target = event.target;
+                const value = target && typeof target.value === 'string' ? target.value : '';
+                filterElements(value);
+            });
+        }
 
         // Legend popup toggle
         (function setupLegend() {

@@ -73,4 +73,6 @@ package CameraTestBDD {
         part spareLens : LensAssembly;
         part battery : PowerModule;
     }
+
+    attribute def Resolution;
 }

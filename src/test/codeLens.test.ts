@@ -90,8 +90,11 @@ suite('CodeLens Test Suite', () => {
         if (resolvedLenses.length > 0) {
             const firstResolved = resolvedLenses[0];
             assert.ok(firstResolved.command, 'Resolved CodeLens should have a command');
+            if (!firstResolved.command) {
+                return;
+            }
             assert.ok(
-                firstResolved.command!.title,
+                firstResolved.command.title,
                 'CodeLens command should have a title (e.g. "N references")',
             );
         }

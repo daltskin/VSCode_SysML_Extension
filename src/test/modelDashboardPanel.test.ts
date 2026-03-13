@@ -63,6 +63,7 @@ function createFakeSysmlDocument(uri: string) {
         uri: vscode.Uri.parse(uri),
         languageId: 'sysml',
         fileName: uri.split('/').pop() ?? 'test.sysml',
+        version: 1,
         isClosed: false,
         getText: () => 'package TestPkg {}',
     };
@@ -86,11 +87,13 @@ function disposeDashboard() {
 // ── Tests ────────────────────────────────────────────────────────
 
 suite('ModelDashboardPanel', () => {
+    const originalGetDiagnostics = vscode.languages.getDiagnostics;
 
     teardown(() => {
         disposeDashboard();
         // Restore activeTextEditor to undefined
         setActiveTextEditor(undefined);
+        (vscode.languages as any).getDiagnostics = originalGetDiagnostics;
     });
 
     // ── Singleton lifecycle ──────────────────────────────────────
@@ -291,6 +294,51 @@ suite('ModelDashboardPanel', () => {
         });
     });
 
+    suite('Performance safeguards', () => {
+
+        test('reuses cached dashboard data for same document version', async () => {
+            const doc = createFakeSysmlDocument('file:///workspace/cached.sysml');
+            setActiveTextEditor({ document: doc });
+
+            let calls = 0;
+            const provider = {
+                getModel: async (_uri: string, _scopes?: string[]) => {
+                    calls++;
+                    return {
+                        version: 1,
+                        elements: [],
+                        relationships: [],
+                        stats: {
+                            totalElements: 5,
+                            resolvedElements: 4,
+                            unresolvedElements: 1,
+                            parseTimeMs: 12,
+                            modelBuildTimeMs: 8,
+                        },
+                        resolvedTypes: {
+                            Vehicle: {
+                                qualifiedName: 'pkg::Vehicle',
+                                simpleName: 'Vehicle',
+                                kind: 'PartDefinition',
+                                isLibraryType: false,
+                                specializationChain: [],
+                                specializes: [],
+                                features: [],
+                            },
+                        },
+                    };
+                },
+            } as any;
+
+            const panel = await ModelDashboardPanel.createOrShow(
+                vscode.Uri.parse('file:///ext'), provider
+            );
+            await panel.refresh();
+
+            assert.strictEqual(calls, 1, 'Should not call LSP again for unchanged document version');
+        });
+    });
+
     // ── Dashboard content validation ────────────────────────────
 
     suite('Dashboard content', () => {
@@ -335,6 +383,29 @@ suite('ModelDashboardPanel', () => {
 
             const html = (panel as any)._panel.webview.html as string;
             assert.ok(html.includes('PartDefinition'), 'Should display resolved type kind in breakdown');
+        });
+
+        test('shows issue navigation link when diagnostics exist', async () => {
+            const doc = createFakeSysmlDocument('file:///workspace/warn.sysml');
+            setActiveTextEditor({ document: doc });
+
+            (vscode.languages as any).getDiagnostics = () => [
+                {
+                    severity: vscode.DiagnosticSeverity.Warning,
+                    range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1)),
+                    message: 'Test warning',
+                    source: 'sysml',
+                },
+            ];
+
+            const provider = createMockLspProvider();
+            const panel = await ModelDashboardPanel.createOrShow(
+                vscode.Uri.parse('file:///ext'), provider
+            );
+
+            const html = (panel as any)._panel.webview.html as string;
+            assert.ok(html.includes('command:sysml.openProblemForUri?'), 'Should render problem navigation command link');
+            assert.ok(html.includes('Go to issue'), 'Should render issue navigation label');
         });
     });
 });

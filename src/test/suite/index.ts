@@ -13,7 +13,23 @@ export function run(): Promise<void> {
 
     return new Promise((resolve, reject) => {
         glob('**/**.test.js', { cwd: testsRoot }).then((files) => {
-            files.forEach(f => mocha.addFile(path.resolve(testsRoot, f)));
+            // Optional sharding/filtering: comma-separated list of test file basenames.
+            // Example: SYSML_TEST_FILES="integration.test.js,visualizationPanel.test.js"
+            const requestedFiles = (process.env.SYSML_TEST_FILES ?? '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+
+            const filteredFiles = requestedFiles.length > 0
+                ? files.filter(f => requestedFiles.some(req => f.endsWith(req)))
+                : files;
+
+            if (requestedFiles.length > 0 && filteredFiles.length === 0) {
+                reject(new Error(`No tests matched SYSML_TEST_FILES=${process.env.SYSML_TEST_FILES}`));
+                return;
+            }
+
+            filteredFiles.forEach(f => mocha.addFile(path.resolve(testsRoot, f)));
 
             try {
                 mocha.run(failures => {
@@ -24,7 +40,7 @@ export function run(): Promise<void> {
                     }
                 });
             } catch (err) {
-                 
+
                 console.error(err);
                 reject(err);
             }

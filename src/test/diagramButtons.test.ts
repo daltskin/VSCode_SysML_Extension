@@ -65,6 +65,27 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         assert.ok(source.includes('id="fit-btn"'), 'Should have fit-to-view button');
     });
 
+    test('Visualization filter input is wired via JS listener (CSP-safe)', () => {
+        const fs = require('fs');
+        const panelPath = path.resolve(
+            __dirname, '../../src/visualization/visualizationPanel.ts',
+        );
+        const source = fs.readFileSync(panelPath, 'utf-8');
+
+        assert.ok(
+            source.includes('id="element-filter"'),
+            'Should include element filter input',
+        );
+        assert.ok(
+            !source.includes('oninput="filterElements(this.value)"'),
+            'Filter input should not use inline oninput handler (blocked by CSP)',
+        );
+        assert.ok(
+            source.includes("filterInputEl.addEventListener('input'"),
+            'Filter input should be wired with addEventListener',
+        );
+    });
+
     test('Visualization panel HTML contains export button and menu', () => {
         const fs = require('fs');
         const panelPath = path.resolve(

@@ -42,10 +42,13 @@ suite('Performance Test Suite', () => {
 
         const ext = vscode.extensions.getExtension('jamied.sysml-v2-support');
         assert.ok(ext, 'Extension should be present');
+        if (!ext) {
+            return;
+        }
 
         const start = Date.now();
-        if (!ext!.isActive) {
-            await ext!.activate();
+        if (!ext.isActive) {
+            await ext.activate();
         }
         const elapsed = Date.now() - start;
 

@@ -1,4 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/mcp-config",
-  "servers": {}
+  "servers": {
+    "sysml-v2-local": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "./node_modules/sysml-v2-lsp/dist/server/mcpServer.js"
+      ],
+      "tools": [
+        "*"
+      ]
+    }
+  }
 }
