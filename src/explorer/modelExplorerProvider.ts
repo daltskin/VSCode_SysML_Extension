@@ -773,6 +773,7 @@ export class ModelTreeItem extends vscode.TreeItem {
             'enum': '📚 ',
             'datatype': '🔢 ',
             'view': '👁️ ',
+            'metadata': '🏷️ ',
             'comment': '💬 ',
             'doc': '📖 '
         };
@@ -799,6 +800,7 @@ export class ModelTreeItem extends vscode.TreeItem {
             'enum': 'symbol-enum',
             'datatype': 'symbol-field',
             'view': 'eye',
+            'metadata': 'tag',
             'comment': 'comment',
             'doc': 'book'
         };

@@ -3391,7 +3391,17 @@ export class VisualizationPanel {
                     if (typeLower === 'attribute' || typeLower.includes('attribute')) {
                         const attrName = child.name || 'unnamed';
                         const attrType = child.typing || '';
-                        attributes.push(attrType ? attrName + ': ' + attrType : attrName);
+                        // Show attribute value if available
+                        let attrVal = '';
+                        if (child.attributes) {
+                            attrVal = typeof child.attributes.get === 'function'
+                                ? (child.attributes.get('value') || '')
+                                : (child.attributes.value || '');
+                        }
+                        let display = attrName;
+                        if (attrType) display += ': ' + attrType;
+                        if (attrVal) display += ' = ' + attrVal;
+                        attributes.push(display);
                     } else if (typeLower.includes('port')) {
                         const portName = child.name || 'unnamed';
                         const portType = child.typing || '';
@@ -3526,6 +3536,8 @@ export class VisualizationPanel {
             'calc': '#DCDCAA',          // Yellow for calcs
             'constraint def': '#F14C4C', // Red for constraint defs
             'constraint': '#F14C4C',    // Red for constraints
+            'metadata def': '#D4A5FF',  // Purple for metadata defs
+            'metadata': '#D4A5FF',      // Purple for metadata
             'default': 'var(--vscode-panel-border)'
         };
 
@@ -4112,6 +4124,15 @@ export class VisualizationPanel {
                         // Build SysML-style label with metadata
                         const parts = [baseLabel];
 
+                        // Add metadata annotation prefixes (#name) if available
+                        if (metadata.properties && metadata.properties.metadataAnnotations) {
+                            const annotations = String(metadata.properties.metadataAnnotations)
+                                .split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+                            if (annotations.length > 0) {
+                                parts.unshift(annotations.map(function(a) { return '#' + a; }).join(' '));
+                            }
+                        }
+
                         // Add documentation if available
                         if (metadata.documentation) {
                             const docText = String(metadata.documentation);
@@ -4217,6 +4238,7 @@ export class VisualizationPanel {
             { id: 'interfaces', label: 'Interfaces', keywords: ['interface'], color: '#D7BA7D' },
             { id: 'usecases', label: 'Use Cases', keywords: ['use case', 'usecase'], color: '#569CD6' },
             { id: 'concerns', label: 'Concerns', keywords: ['concern', 'viewpoint', 'stakeholder', 'frame'], color: '#E5C07B' },
+            { id: 'metadata', label: 'Metadata', keywords: ['metadata'], color: '#D4A5FF' },
             { id: 'items', label: 'Items', keywords: ['item'], color: '#6A9955' },
             { id: 'other', label: 'Other', keywords: [], color: '#808080' }
         ];
@@ -7879,9 +7901,7 @@ export class VisualizationPanel {
         // Helper to identify metadata element types that shouldn't be visualized as nodes
         function isMetadataElement(type) {
             return type === 'doc' ||
-                   type === 'comment' ||
-                   type === 'metadata' ||
-                   type === 'metadata def';
+                   type === 'comment';
         }
 
         function flattenElements(elements, result = []) {
@@ -8590,7 +8610,15 @@ export class VisualizationPanel {
                             if (cType === 'attribute' || cType.includes('attribute')) {
                                 var dataType = child.attributes && child.attributes.get ? child.attributes.get('dataType') : null;
                                 var typeStr = dataType ? ' : ' + dataType.split('::').pop() : '';
-                                attrLines.push({ type: 'attr', text: '◆ ' + child.name + typeStr });
+                                // Show attribute value if available (e.g., redefines partNumber = "101")
+                                var attrVal = null;
+                                if (child.attributes) {
+                                    attrVal = typeof child.attributes.get === 'function'
+                                        ? child.attributes.get('value')
+                                        : child.attributes.value;
+                                }
+                                var valStr = attrVal ? ' = ' + attrVal : '';
+                                attrLines.push({ type: 'attr', text: '◆ ' + child.name + typeStr + valStr });
                             }
                             // Collect ports
                             else if (cType === 'port' || cType.includes('port')) {
@@ -8599,10 +8627,15 @@ export class VisualizationPanel {
                                 portLines.push({ type: 'port', name: child.name, text: '▢ ' + child.name + pTypeStr });
                                 portToOwner.set(child.name, el.name);
                             }
-                            // Collect parts
+                            // Collect parts - show typing if available
                             else if (cType.includes('part')) {
-                                var partType = child.type ? child.type.split(' ').pop() : '';
-                                partLines.push({ type: 'part', text: '■ ' + child.name + (partType ? ' : ' + partType : '') });
+                                var childTyping = child.typing || '';
+                                if (!childTyping && child.attributes) {
+                                    childTyping = typeof child.attributes.get === 'function'
+                                        ? (child.attributes.get('partType') || child.attributes.get('typedBy') || '')
+                                        : (child.attributes.partType || child.attributes.typedBy || '');
+                                }
+                                partLines.push({ type: 'part', text: '■ ' + child.name + (childTyping ? ' : ' + childTyping : '') });
                             }
                             // Collect actions
                             else if (cType.includes('action')) {
@@ -8814,11 +8847,20 @@ export class VisualizationPanel {
                     var isUsage = !isDefinition && (typeLower.includes('part') || typeLower.includes('action') || typeLower.includes('port'));
 
                     // Get the typed-by reference for usages (e.g., "part x : Vehicle")
+                    // or specialization for definitions (e.g., "part def Vehicle :> Base")
                     var typedByName = null;
                     if (el.attributes && el.attributes.get) {
                         typedByName = el.attributes.get('partType') || el.attributes.get('type') || el.attributes.get('typedBy');
                     }
                     if (!typedByName && el.partType) typedByName = el.partType;
+                    if (!typedByName && el.typing) typedByName = el.typing;
+                    // Check specialization relationships for base type
+                    if (!typedByName && el.relationships) {
+                        var specRel = el.relationships.find(function(r) {
+                            return r.type === 'specialization' || r.type === 'specializes' || r.type === 'subclassification';
+                        });
+                        if (specRel) typedByName = specRel.target;
+                    }
 
                     var nodeG = nodeGroup.append('g')
                         .attr('transform', 'translate(' + pos.x + ',' + pos.y + ')')
@@ -8897,12 +8939,14 @@ export class VisualizationPanel {
                         .style('fill', 'var(--vscode-editor-foreground)');
 
                     // Show typed-by reference below name for usages (e.g., ": Vehicle")
+                    // or specialization for definitions (e.g., ":> Base")
                     if (typedByName) {
+                        var typePrefix = isDefinition ? ':> ' : ': ';
                         nodeG.append('text')
                             .attr('x', pos.width / 2)
                             .attr('y', 43)
                             .attr('text-anchor', 'middle')
-                            .text(': ' + truncateText(typedByName, 24))
+                            .text(typePrefix + truncateText(typedByName, 24))
                             .style('font-size', '10px')
                             .style('font-style', 'italic')
                             .style('fill', '#569CD6');
@@ -11315,6 +11359,8 @@ export class VisualizationPanel {
                 else if (typeLower.includes('port def')) stereoDisplay = 'port def';
                 else if (typeLower.includes('action def')) stereoDisplay = 'action def';
                 else if (typeLower.includes('action')) stereoDisplay = 'action';
+                else if (typeLower.includes('metadata def')) stereoDisplay = 'metadata def';
+                else if (typeLower.includes('metadata')) stereoDisplay = 'metadata';
 
                 partG.append('text')
                     .attr('x', partWidth / 2)
