@@ -5,6 +5,24 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0]
+
+### Added
+
+- **Metadata visualization** — `metadata def` and `metadata` elements now render as first-class structural nodes in diagram views
+- **Base type display on nodes** — diagram nodes show specialization and typing relationships using SysML notation (`:>` for definitions, `:` for usages)
+- **Attribute values in diagram nodes** — definition nodes display attribute values inline
+
+### Changed
+
+- Updated `sysml-v2-lsp` dependency from 0.7.0 to 0.8.0
+  - Fixed `extractName()` picking up prefix metadata annotation names instead of element names
+  - Metadata annotations extracted and emitted in model DTOs
+
+### Fixed
+
+- **Metadata keyword text colour** — `metadata def` and `metadata` keywords now render in purple (`#D4A5FF`) instead of falling through to the grey default
+
 ## [0.26.0]
 
 ### Added

@@ -6,6 +6,10 @@ A Visual Studio Code extension for SysML v2.0 with syntax highlighting, formatti
 
 [![Install from Marketplace](https://img.shields.io/badge/Install-VS%20Code%20Marketplace-007ACC?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support)
 
+## Demo
+
+![Demo](assets/visualiser.webp)
+
 ## Features
 
 ### Language Support (LSP)
@@ -56,10 +60,6 @@ When you open a **multi-root workspace** (`.code-workspace` file), the extension
 - **Exclude patterns** — skip directories from scanning via `sysml.workspace.excludePatterns` (e.g. `temp`, `archive`)
 
 For single-folder workspaces, files are parsed lazily when opened.
-
-## Demo
-
-![Demo](assets/visualiser.webp)
 
 ## Screenshots
 
