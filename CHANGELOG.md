@@ -5,6 +5,26 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0]
+
+### Added
+
+- **Requirement satisfy/verify diagnostics** — warnings for unsatisfied and unverified requirements
+- **Cross-file go-to-definition** — Ctrl+Click navigates to definitions in other workspace files and standard library packages
+- **Library unit resolution** — SI and USCustomary units (`kg`, `foot`, `knot`, etc.) resolve in constraint expressions
+
+### Changed
+
+- Updated `sysml-v2-lsp` dependency from 0.8.0 to 0.9.0
+- CI/release workflows updated to Node.js 22 LTS; GitHub Release action bumped to v4
+- Sequence diagram spacing adapts to label width; long labels truncated with tooltip
+
+### Fixed
+
+- **False-positive syntax errors suppressed** — arithmetic operators, collection expressions (`->select`, `->collect`), and unit expressions (`W/m^2`) no longer flagged inside block bodies
+- **Concatenated type names**
+- **Keyword validator** — `collect`, `xor`, `null`, `implies` no longer flagged as misspelled keywords
+
 ## [0.27.0]
 
 ### Added
