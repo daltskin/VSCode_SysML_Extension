@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: npm
 
       - name: Install dependencies
@@ -51,7 +51,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: npm
 
       - name: Install dependencies
@@ -98,7 +98,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -117,7 +117,7 @@ jobs:
             code --install-extension sysml-v2-support-${{ steps.version.outputs.version }}.vsix
             ```
 
-            Or install directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support).
+            Or install directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support) or [Open VSX Registry](https://open-vsx.org/extension/JamieD/sysml-v2-support).
           files: |
             *.vsix
           draft: false
@@ -128,3 +128,9 @@ jobs:
         env:
           VSCODE_MARKETPLACE_TOKEN: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
         run: npx vsce publish --packagePath "sysml-v2-support-${{ steps.version.outputs.version }}.vsix" --pat "$VSCODE_MARKETPLACE_TOKEN"
+
+      - name: Publish to Open VSX Registry
+        if: env.OVSX_TOKEN != ''
+        env:
+          OVSX_TOKEN: ${{ secrets.OVSX_TOKEN }}
+        run: npx ovsx publish "sysml-v2-support-${{ steps.version.outputs.version }}.vsix" -p "$OVSX_TOKEN"

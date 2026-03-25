@@ -33,3 +33,22 @@ assets/**
 Makefile
 eslint.config.js
 ARCHITECTURE.md
+ROADMAP.md
+CHANGELOG.md
+
+# Test output and build artifacts
+out/test/**
+**/*.test.js
+**/*.test.d.ts
+**/*.test.js.map
+
+# Node modules dev dependencies (test frameworks, linters)
+node_modules/@types/**
+node_modules/typescript/**
+node_modules/@typescript-eslint/**
+node_modules/eslint/**
+node_modules/mocha/**
+node_modules/@vscode/test-electron/**
+node_modules/glob/**
+node_modules/c8/**
+node_modules/vitest/**
