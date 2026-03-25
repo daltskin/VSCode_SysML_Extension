@@ -7,8 +7,24 @@ import { SysRunnerPanel } from './game/sysRunnerPanel';
 import { startLanguageClient, stopLanguageClient } from './lsp/client';
 import { FeatureInspectorPanel } from './panels/featureInspectorPanel';
 import { ModelDashboardPanel } from './panels/modelDashboardPanel';
-import { LspModelProvider, type LspServerStats } from './providers/lspModelProvider';
+import { LspModelProvider } from './providers/lspModelProvider';
+import {
+    clearMetricsKey,
+    deleteCachedMetrics,
+    disposeStatusBar,
+    getCachedMetrics,
+    getLastMetricsArgs,
+    hideModelMetrics,
+    hideParseProgress,
+    setServerStats as setStatusBarServerStats,
+    showMetricsLoading,
+    showParseProgress,
+    updateModelMetrics,
+} from './statusBar';
 import { VisualizationPanel } from './visualization/visualizationPanel';
+
+// Re-export so client.ts (which does `require('../extension')`) still works
+export { hideModelMetrics, hideParseProgress, showMetricsLoading, showParseProgress, updateModelMetrics } from './statusBar';
 
 let modelExplorerProvider: ModelExplorerProvider;
 let featureExplorerProvider: FeatureExplorerProvider;
@@ -17,25 +33,6 @@ let lspModelProvider: LspModelProvider;
 
 let parseDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 let activeParseCancel: vscode.CancellationTokenSource | undefined;
-let modelMetricsItem: vscode.StatusBarItem | undefined;
-let parseProgressItem: vscode.StatusBarItem | undefined;
-/** Fingerprint of the last metrics update to avoid redundant refreshes. */
-let lastMetricsKey: string | undefined;
-/** Timer driving the animated building-blocks status bar indicator. */
-let parseAnimTimer: ReturnType<typeof setInterval> | undefined;
-/** Cached LSP server stats for tooltip display. */
-let lastServerStats: LspServerStats | undefined;
-let parseAnimFrame = 0;
-/** Cached args from last updateModelMetrics call for reactive diagnostic refresh. */
-let lastMetricsStats: Parameters<typeof updateModelMetrics>[0] | undefined;
-let lastMetricsUri: vscode.Uri | undefined;
-
-/**
- * Per-file metrics cache so switching back to a previously-parsed
- * SysML file shows status-bar data instantly instead of waiting for
- * the debounce + LSP roundtrip.
- */
-const metricsCache = new Map<string, Parameters<typeof updateModelMetrics>[0]>();
 
 /** Available visualization views — matches the webview's dropdown options */
 const visualizationViews = [
@@ -126,7 +123,8 @@ function parseSysMLDocument(document: vscode.TextDocument, options?: { skipProgr
             if (stats) {
                 // Fetch LSP server health info (non-blocking, best-effort)
                 try {
-                    lastServerStats = await lspModelProvider.getServerStats();
+                    const serverStats = await lspModelProvider.getServerStats();
+                    if (serverStats) setStatusBarServerStats(serverStats);
                 } catch { /* non-critical */ }
                 updateModelMetrics(stats, document.uri);
             }
@@ -185,274 +183,71 @@ function parseSysMLDocument(document: vscode.TextDocument, options?: { skipProgr
 }
 
 /**
- * Update the status-bar model-metrics item with element counts and
- * parse time from the latest `sysml/model` response.
- *
- * "Resolved" here means elements that have an explicit type annotation
- * (e.g. `part engine : Engine`).  Elements without a type — like
- * packages, top-level definitions, and un-typed usages — are simply
- * "un-typed", **not** errors.  We show the actual diagnostic count
- * from the Problems panel instead.
- */
-export function updateModelMetrics(stats: {
-    totalElements: number;
-    resolvedElements: number;
-    unresolvedElements: number;
-    parseTimeMs: number;
-    lexTimeMs?: number;
-    parseOnlyTimeMs?: number;
-    parseCached?: boolean;
-    modelBuildTimeMs: number;
-    complexity?: {
-        complexityIndex: number;
-        rating: string;
-        definitions: number;
-        usages: number;
-        maxDepth: number;
-        avgChildrenPerDef: number;
-        couplingCount: number;
-        unusedDefinitions: number;
-        documentationCoverage: number;
-        hotspots: { qualifiedName: string; kind: string; childCount: number; depth: number; typeRefs: number; hasDoc: boolean; score: number }[];
-    };
-}, documentUri?: vscode.Uri): void {
-    // Cache latest args so the diagnostic-change listener can re-call us.
-    lastMetricsStats = stats;
-    lastMetricsUri = documentUri;
-
-    // Persist in per-file cache for instant restore on tab switch
-    if (documentUri) {
-        metricsCache.set(documentUri.toString(), stats);
-    }
-
-    // Count real diagnostics (errors/warnings) for the current file
-    const diagnostics = documentUri
-        ? vscode.languages.getDiagnostics(documentUri)
-        : [];
-    const errorCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
-    const warnCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Warning).length;
-    const issueCount = errorCount + warnCount;
-
-    // Deduplicate: skip if stats + document + diagnostics haven't changed
-    const metricsKey = `${documentUri?.toString() ?? ''}|${stats.totalElements}|${stats.resolvedElements}|${stats.unresolvedElements}|${stats.parseTimeMs}|${stats.modelBuildTimeMs}|${stats.complexity?.complexityIndex ?? ''}|${errorCount}|${warnCount}`;
-    if (metricsKey === lastMetricsKey) {
-        return;
-    }
-    lastMetricsKey = metricsKey;
-
-    if (!modelMetricsItem) {
-        modelMetricsItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Right, 100
-        );
-        modelMetricsItem.name = 'SysML Model Metrics';
-        // Click opens the Problems panel so users can see actionable issues
-        modelMetricsItem.command = 'workbench.actions.view.problems';
-    }
-
-    // Icon reflects actual problems, not type-resolution status
-    const icon = errorCount > 0 ? '$(error)' : warnCount > 0 ? '$(warning)' : '$(check)';
-    const issuesSuffix = issueCount > 0 ? ` | $(alert) ${issueCount}` : '';
-
-    // Complexity badge
-    const cx = stats.complexity;
-    const complexitySuffix = cx ? ` | MCI ${cx.complexityIndex}` : '';
-    modelMetricsItem.text = `${icon} SysML: ${stats.totalElements} elements${issuesSuffix}${complexitySuffix} | ${stats.parseTimeMs}ms`;
-
-    const totalTimeMs = stats.parseTimeMs + stats.modelBuildTimeMs;
-
-    const tooltipLines: string[] = [];
-
-    // File name
-    if (documentUri) {
-        tooltipLines.push(`📄 ${documentUri.path.split('/').pop()}`);
-        tooltipLines.push('');
-    }
-
-    // Element summary
-    tooltipLines.push(`── Elements ──`);
-    tooltipLines.push(`Total: ${stats.totalElements}`);
-    tooltipLines.push(`Typed: ${stats.resolvedElements}  |  Un-typed: ${stats.unresolvedElements}`);
-
-    // Parse timing breakdown
-    const cachedLabel = stats.parseCached ? ' (Cached)' : '';
-    tooltipLines.push('');
-    tooltipLines.push(`── Parse Details${cachedLabel} ──`);
-    if (stats.lexTimeMs !== undefined) {
-        tooltipLines.push(`Lex:   ${stats.lexTimeMs}ms`);
-    }
-    if (stats.parseOnlyTimeMs !== undefined) {
-        tooltipLines.push(`Parse: ${stats.parseOnlyTimeMs}ms`);
-    }
-    tooltipLines.push(`Build: ${stats.modelBuildTimeMs}ms`);
-    tooltipLines.push(`Total: ${totalTimeMs}ms`);
-
-    // Model Complexity Index
-    if (cx) {
-        tooltipLines.push('');
-        tooltipLines.push(`── Model Complexity Index ──`);
-        tooltipLines.push(`Score: ${cx.complexityIndex} / 100  (${cx.rating})`);
-        tooltipLines.push(`Definitions: ${cx.definitions}  |  Usages: ${cx.usages}`);
-        tooltipLines.push(`Max depth: ${cx.maxDepth}  |  Coupling: ${cx.couplingCount}`);
-        tooltipLines.push(`Unused definitions: ${cx.unusedDefinitions}`);
-        tooltipLines.push(`Documentation coverage: ${cx.documentationCoverage}%`);
-    }
-
-    // LSP server health
-    if (lastServerStats) {
-        const s = lastServerStats;
-        const uptimeStr = s.uptime >= 60
-            ? `${Math.floor(s.uptime / 60)}m ${s.uptime % 60}s`
-            : `${s.uptime}s`;
-        tooltipLines.push('');
-        tooltipLines.push(`── LSP Health ──`);
-        tooltipLines.push(`Uptime: ${uptimeStr}`);
-        tooltipLines.push(`Heap: ${s.memory.heapUsed} / ${s.memory.heapTotal} MB  |  RSS: ${s.memory.rss} MB`);
-        tooltipLines.push(`Caches: ${s.caches.documents} docs, ${s.caches.symbolTables} STs, ${s.caches.semanticTokens} tokens`);
-    }
-
-    // Diagnostics
-    if (issueCount > 0) {
-        tooltipLines.push('');
-        tooltipLines.push(`${errorCount} error(s), ${warnCount} warning(s)`);
-        tooltipLines.push('Click to open Problems panel');
-    }
-    modelMetricsItem.tooltip = tooltipLines.join('\n');
-
-    modelMetricsItem.backgroundColor = errorCount > 0
-        ? new vscode.ThemeColor('statusBarItem.errorBackground')
-        : warnCount > 0
-            ? new vscode.ThemeColor('statusBarItem.warningBackground')
-            : undefined;
-
-    modelMetricsItem.show();
-}
-
-/** Hide the model-metrics status bar item (e.g. when no SysML file is open). */
-export function hideModelMetrics(): void {
-    modelMetricsItem?.hide();
-    lastMetricsKey = undefined;
-}
-
-/**
- * Show a lightweight "loading" placeholder in the metrics status bar
- * while the LSP server processes a freshly-opened SysML file that
- * has no cached metrics yet.
- */
-function showMetricsLoading(document: vscode.TextDocument): void {
-    if (!modelMetricsItem) {
-        modelMetricsItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Right, 100,
-        );
-        modelMetricsItem.name = 'SysML Model Metrics';
-        modelMetricsItem.command = 'workbench.actions.view.problems';
-    }
-    const fileName = document.fileName.split('/').pop() || 'file';
-    modelMetricsItem.text = '$(loading~spin) SysML: Loading…';
-    modelMetricsItem.tooltip = `Parsing ${fileName}…`;
-    modelMetricsItem.backgroundColor = undefined;
-    modelMetricsItem.show();
-}
-
-/**
- * Animated building-blocks frames for the status bar indicator.
- * Each frame shows blocks assembling into a model, giving a visual
- * sense of progress while the LSP server parses.
- */
-const PARSE_FRAMES = [
-    '$(symbol-structure) ░░░░ Assembling model',
-    '$(symbol-structure) █░░░ Assembling model',
-    '$(symbol-structure) ██░░ Assembling model',
-    '$(symbol-structure) ███░ Assembling model',
-    '$(symbol-structure) ████ Assembling model',
-    '$(symbol-structure) ▪▫▫▫ Building blocks',
-    '$(symbol-structure) ▪▪▫▫ Building blocks',
-    '$(symbol-structure) ▪▪▪▫ Building blocks',
-    '$(symbol-structure) ▪▪▪▪ Building blocks',
-    '$(symbol-structure) ◧◧◧◧ Linking elements',
-    '$(symbol-structure) ◨◧◧◧ Linking elements',
-    '$(symbol-structure) ◨◨◧◧ Linking elements',
-    '$(symbol-structure) ◨◨◨◧ Linking elements',
-    '$(symbol-structure) ◨◨◨◨ Linking elements',
-];
-
-/**
- * Show an animated "building blocks" indicator in the status bar
- * while the LSP server is processing a file.
- *
- * Called eagerly from `parseSysMLDocument()` the instant a SysML file
- * is opened (before the debounce), and again from `client.ts` when
- * the server sends `sysml/status` `begin` / `progress` notifications.
- */
-export function showParseProgress(label: string): void {
-    if (!parseProgressItem) {
-        parseProgressItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Left, 0,
-        );
-        parseProgressItem.name = 'SysML Parse Progress';
-    }
-
-    // Start the frame animation if not already running
-    if (!parseAnimTimer) {
-        parseAnimFrame = 0;
-        parseAnimTimer = setInterval(() => {
-            parseAnimFrame = (parseAnimFrame + 1) % PARSE_FRAMES.length;
-            if (parseProgressItem) {
-                const suffix = label ? ` · ${label}` : '';
-                parseProgressItem.text = `${PARSE_FRAMES[parseAnimFrame]}${suffix}`;
-            }
-        }, 220);
-    }
-
-    const suffix = label ? ` · ${label}` : '';
-    parseProgressItem.text = `${PARSE_FRAMES[parseAnimFrame]}${suffix}`;
-    parseProgressItem.show();
-}
-
-/**
- * Hide the parse-progress status bar item.  Called from `client.ts`
- * when the server sends `sysml/status` `end`.
- */
-export function hideParseProgress(): void {
-    if (parseAnimTimer) {
-        clearInterval(parseAnimTimer);
-        parseAnimTimer = undefined;
-    }
-    parseProgressItem?.hide();
-}
-
-/**
  * Called when the LSP server signals that it has finished parsing a
  * file (`sysml/status` → `end`).  Re-triggers `parseSysMLDocument`
  * so the Model Explorer and Visualization panels pick up the newly
  * available model data — prevents the "0 elements" problem on cold
  * start when the DFA warm-up delays initial parsing.
+ *
+ * Debounced so rapid-fire notifications during workspace scan
+ * (one per file) coalesce into a single re-parse.
  */
-export function notifyServerParseDone(uri?: string): void {
-    // Find a matching open editor to re-parse
-    const editors = vscode.window.visibleTextEditors.filter(
-        e => e.document.languageId === 'sysml' && !e.document.isClosed,
-    );
-    let target: vscode.TextDocument | undefined;
-    if (uri) {
-        target = editors.find(e => e.document.uri.toString() === uri)?.document;
-    }
-    // Fallback: re-parse whichever SysML editor is active
-    if (!target && editors.length > 0) {
-        target = vscode.window.activeTextEditor?.document.languageId === 'sysml'
-            ? vscode.window.activeTextEditor.document
-            : editors[0].document;
-    }
-    if (target) {
-        outputChannel?.appendLine(`notifyServerParseDone: re-parsing ${target.fileName.split('/').pop()}`);
-        parseSysMLDocument(target, { skipProgress: true });
+let parseDoneTimer: ReturnType<typeof setTimeout> | undefined;
 
-        // Also notify the visualizer directly — the server has finished
-        // parsing so sysml/model will return fresh data.  This avoids
-        // waiting for the 300 ms debounce inside parseSysMLDocument.
-        if (VisualizationPanel.currentPanel) {
-            VisualizationPanel.currentPanel.notifyFileChanged(target.uri);
-        }
+export function notifyServerParseDone(uri?: string): void {
+    if (parseDoneTimer) {
+        globalThis.clearTimeout(parseDoneTimer);
     }
+    parseDoneTimer = globalThis.setTimeout(() => {
+        parseDoneTimer = undefined;
+
+        // Find a matching open editor to re-parse
+        const editors = vscode.window.visibleTextEditors.filter(
+            e => e.document.languageId === 'sysml' && !e.document.isClosed,
+        );
+        let target: vscode.TextDocument | undefined;
+        if (uri) {
+            target = editors.find(e => e.document.uri.toString() === uri)?.document;
+        }
+        // Fallback: re-parse whichever SysML editor is active
+        if (!target && editors.length > 0) {
+            target = vscode.window.activeTextEditor?.document.languageId === 'sysml'
+                ? vscode.window.activeTextEditor.document
+                : editors[0].document;
+        }
+        if (target) {
+            // Skip re-parse if a parse is already in-flight or debounce-
+            // pending — it will pick up the latest server data when it
+            // completes.  Re-triggering just cancels the current parse
+            // and starts over, causing the cascade seen during workspace
+            // scan (many sysml/status 'end' notifications in quick
+            // succession).
+            if (parseDebounceTimer || activeParseCancel) {
+                outputChannel?.appendLine(`notifyServerParseDone: skipping — parse already in progress`);
+                return;
+            }
+
+            // Skip re-parse if the Model Explorer already has valid data
+            // for this file — avoids a redundant LSP roundtrip when the
+            // initial parse from onDidChangeActiveTextEditor already
+            // succeeded (the common hot-cache case).
+            const stats = modelExplorerProvider.getLastStats();
+            if (stats && stats.totalElements > 0) {
+                outputChannel?.appendLine(`notifyServerParseDone: skipping re-parse — explorer already has ${stats.totalElements} elements`);
+                return;
+            }
+
+            outputChannel?.appendLine(`notifyServerParseDone: re-parsing ${target.fileName.split('/').pop()}`);
+            parseSysMLDocument(target, { skipProgress: true });
+
+            // Also notify the visualizer directly — the server has finished
+            // parsing so sysml/model will return fresh data.  This avoids
+            // waiting for the 300 ms debounce inside parseSysMLDocument.
+            if (VisualizationPanel.currentPanel) {
+                VisualizationPanel.currentPanel.notifyFileChanged(target.uri);
+            }
+        }
+    }, 500);
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -1147,6 +942,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (editor && editor.document.languageId === 'sysml') {
             outputChannel.appendLine(`Parsing active SysML editor: ${editor.document.fileName}`);
             vscode.commands.executeCommand('setContext', 'sysml.modelLoaded', true);
+            showMetricsLoading(editor.document);
             parseSysMLDocument(editor.document);
             return true;
         }
@@ -1155,32 +951,39 @@ export function activate(context: vscode.ExtensionContext) {
 
     /**
      * Scan the workspace for all .sysml files and:
-     * 1. Open them so the LSP server receives textDocument/didOpen for each
-     * 2. Load the workspace-wide model into the Model Explorer.
-     * 3. If a SysML file is currently active, reveal its elements.
+     * 1. Load the workspace-wide model into the Model Explorer.
+     * 2. If a SysML file is currently active, reveal its elements.
+     *
+     * The LSP server already pre-parses workspace files in onInitialized,
+     * so we don't need to open each file here (which would trigger O(n²)
+     * didOpen/validateDocument calls on the server).
      */
     async function loadWorkspaceSysMLFiles(): Promise<void> {
         const files = await vscode.workspace.findFiles('**/*.sysml', '**/node_modules/**');
         if (files.length === 0) return;
 
-        outputChannel.appendLine(`[workspace] Found ${files.length} SysML files — auto-parsing`);
+        outputChannel.appendLine(`[workspace] Found ${files.length} SysML files`);
         vscode.commands.executeCommand('setContext', 'sysml.modelLoaded', true);
 
-        // Open each file so the LSP server receives didOpen and parses it
-        for (const file of files) {
-            try {
-                await vscode.workspace.openTextDocument(file);
-            } catch {
-                // skip unreadable files
-            }
-        }
+        // Show loading indicator during the workspace model fetch
+        showMetricsLoading(`${files.length} workspace files`);
 
-        // Always load the workspace-wide model so every file is visible
+        // Load the workspace-wide model so every file is visible
         outputChannel.appendLine('[workspace] Loading workspace model');
         await modelExplorerProvider.loadWorkspaceModel(files);
 
-        // If a SysML editor is active, reveal its package in the tree
+        // Update the status bar with workspace-wide metrics.
+        // Use the active SysML editor URI when available, otherwise
+        // pass undefined so the status bar still shows aggregated stats
+        // even when no SysML file is focused.
+        const wsStats = modelExplorerProvider.getLastStats();
         const editor = vscode.window.activeTextEditor;
+        const metricsUri = editor?.document.languageId === 'sysml'
+            ? editor.document.uri
+            : undefined;
+        if (wsStats) {
+            updateModelMetrics(wsStats, metricsUri);
+        }
         if (editor && editor.document.languageId === 'sysml') {
             await modelExplorerProvider.revealActiveDocument(editor.document.uri);
         }
@@ -1220,7 +1023,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 // Show status bar immediately — use cached metrics if
                 // available, otherwise show a "loading" placeholder.
-                const cachedStats = metricsCache.get(editor.document.uri.toString());
+                const cachedStats = getCachedMetrics(editor.document.uri.toString());
                 if (cachedStats) {
                     updateModelMetrics(cachedStats, editor.document.uri);
                 } else {
@@ -1247,7 +1050,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidCloseTextDocument(document => {
             if (document.languageId === 'sysml') {
                 // Evict from per-file metrics cache
-                metricsCache.delete(document.uri.toString());
+                deleteCachedMetrics(document.uri.toString());
 
                 // Clear debounce timer so a pending parse doesn't start
                 // after the document is already gone
@@ -1311,13 +1114,14 @@ export function activate(context: vscode.ExtensionContext) {
     // the status bar icon/colour updates without needing a re-parse.
     context.subscriptions.push(
         vscode.languages.onDidChangeDiagnostics(event => {
-            if (!lastMetricsStats || !lastMetricsUri) return;
-            const uri = lastMetricsUri;
+            const lastArgs = getLastMetricsArgs();
+            if (!lastArgs || !lastArgs.uri) return;
+            const uri = lastArgs.uri;
             const affected = event.uris.some(u => u.toString() === uri.toString());
             if (affected) {
                 // Clear the dedup key so updateModelMetrics re-evaluates
-                lastMetricsKey = undefined;
-                updateModelMetrics(lastMetricsStats, lastMetricsUri);
+                clearMetricsKey();
+                updateModelMetrics(lastArgs.stats, lastArgs.uri);
             }
         })
     );
@@ -1383,10 +1187,7 @@ export function deactivate(): PromiseLike<void> | undefined {
     outputChannel?.appendLine('SysML v2.0 extension is now deactivated');
 
     // Clean up resources
-    modelMetricsItem?.dispose();
-    modelMetricsItem = undefined;
-    parseProgressItem?.dispose();
-    parseProgressItem = undefined;
+    disposeStatusBar();
     if (VisualizationPanel.currentPanel) {
         VisualizationPanel.currentPanel.dispose();
     }

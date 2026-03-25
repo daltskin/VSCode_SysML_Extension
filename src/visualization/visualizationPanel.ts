@@ -2996,7 +2996,8 @@ export class VisualizationPanel {
                                 // Subjects represent the system being described, not external actors
                                 if (isActorUsage) {
                                     // The typing attribute gives us the actor type
-                                    const actorType = child.typing || child.name;
+                                    // Fallback: check attributes.partType (LSP DTO field) when typing isn't set
+                                    const actorType = child.typing || (child.attributes && (child.attributes.partType || child.attributes['partType'])) || child.name;
                                     // Find matching actor definition or create relationship anyway
                                     useCaseRelationships.push({
                                         source: actorType,
@@ -3162,7 +3163,7 @@ export class VisualizationPanel {
                     // Use case-insensitive comparison for deduplication
                     const seenActorNames = new Set(actors.map(a => a.name.toLowerCase()));
                     actorUsages.forEach(usage => {
-                        const actorType = usage.typing || usage.name;
+                        const actorType = usage.typing || (usage.attributes && (usage.attributes.partType || usage.attributes['partType'])) || usage.name;
                         const actorTypeLower = actorType.toLowerCase();
                         if (!seenActorNames.has(actorTypeLower)) {
                             // Create a synthetic actor from the usage
@@ -3212,7 +3213,8 @@ export class VisualizationPanel {
                             const childType = (child.type || '').toLowerCase().trim();
                             if (childType === 'stakeholder') {
                                 // The typing gives us the stakeholder type (which is like an actor)
-                                const stakeholderType = child.typing || child.name;
+                                // Fallback: check attributes.partType (LSP DTO field) when typing isn't set
+                                const stakeholderType = child.typing || (child.attributes && (child.attributes.partType || child.attributes['partType'])) || child.name;
                                 const stakeholderTypeLower = stakeholderType.toLowerCase();
 
                                 // Create relationship from requirement to stakeholder
@@ -3242,6 +3244,68 @@ export class VisualizationPanel {
 
                     // Merge requirement relationships into useCaseRelationships
                     useCaseRelationships.push(...requirementRelationships);
+
+                    // Build requirement-to-requirement relationships
+                    // 1. Containment: parent requirement to nested child requirements
+                    requirements.forEach(req => {
+                        if (!req.children) return;
+                        req.children.forEach(child => {
+                            const childType = (child.type || '').toLowerCase().trim();
+                            if (childType.includes('requirement') && child.name) {
+                                // Only add if the child is also in our requirements list
+                                const childReq = requirements.find(r => r.name === child.name);
+                                if (childReq) {
+                                    useCaseRelationships.push({
+                                        source: req.name,
+                                        target: child.name,
+                                        type: 'containment',
+                                        label: ''
+                                    });
+                                }
+                            }
+                        });
+                    });
+
+                    // 2. Specialization/typing: requirement typed by a requirement def
+                    requirements.forEach(req => {
+                        const typing = req.typing || '';
+                        if (typing) {
+                            var typedName = typing.replace(/^[:~>]+/, '').trim();
+                            if ((typedName.startsWith("'") && typedName.endsWith("'")) ||
+                                (typedName.startsWith('"') && typedName.endsWith('"'))) {
+                                typedName = typedName.slice(1, -1);
+                            }
+                            const targetReq = requirements.find(r => r.name === typedName);
+                            if (targetReq && targetReq.name !== req.name) {
+                                useCaseRelationships.push({
+                                    source: req.name,
+                                    target: typedName,
+                                    type: 'specialization',
+                                    label: ''
+                                });
+                            }
+                        }
+                    });
+
+                    // Extract satisfy/verify relationships from LSP-provided relationships
+                    // These link parts (source) to requirements (target) they satisfy
+                    const satisfyVerifyRels = relationships.filter(r =>
+                        r.type === 'satisfy' || r.type === 'verify'
+                    );
+                    satisfyVerifyRels.forEach(rel => {
+                        useCaseRelationships.push({
+                            source: rel.source,
+                            target: rel.target,
+                            type: rel.type,
+                            label: ''
+                        });
+                    });
+
+                    console.debug('[UseCase] prepareDataForView summary:',
+                        'actors=' + actors.length + ' (' + actors.map(a => a.name).join(', ') + ')',
+                        'useCases=' + useCases.length + ' (' + useCases.map(uc => uc.name).join(', ') + ')',
+                        'requirements=' + requirements.length + ' (' + requirements.map(r => r.name).join(', ') + ')',
+                        'relationships=' + useCaseRelationships.length + ' (' + useCaseRelationships.map(r => r.source + '->' + r.target + ' [' + r.type + ']').join(', ') + ')');
 
                     return {
                         ...data,
@@ -7384,10 +7448,6 @@ export class VisualizationPanel {
             // Determine if horizontal or vertical layout
             const isHorizontal = layoutDirection === 'horizontal' || layoutDirection === 'auto';
 
-            const partition = d3.partition()
-                .size(isHorizontal ? [height - 100, width - 100] : [width - 100, height - 100])
-                .padding(1); // Minimal padding to maximize space usage
-
             const hierarchyData = convertToHierarchy(data.elements);
 
             // Validate hierarchy data has proper structure
@@ -7397,15 +7457,27 @@ export class VisualizationPanel {
 
             const root = d3.hierarchy(hierarchyData)
                 .sum(d => {
-                    // Ensure all nodes have a meaningful value for partitioning
                     if (!d || !d.name || !d.type) {
-                        return 0; // Skip invalid nodes completely
+                        return 0;
                     }
-                    // For partition layout, we need consistent values
-                    // Leaf nodes should have value 1, parent nodes sum their children
                     return d.children && d.children.length > 0 ? 0 : 1;
                 })
                 .sort((a, b) => b.value - a.value);
+
+            // Size layout based on content so cells remain readable for large models
+            const leafCount = Math.max(1, root.leaves().length);
+            const maxDepth = Math.max(1, root.height + 1);
+            const minCellWidth = 160;
+            const minCellHeight = 32;
+            const contentWidth = Math.max(width - 100, maxDepth * minCellWidth);
+            const contentHeight = Math.max(height - 100, leafCount * minCellHeight);
+            const dynamicPadding = Math.max(2, Math.min(6, Math.round(
+                Math.min(contentHeight / leafCount, contentWidth / maxDepth) / 12
+            )));
+
+            const partition = d3.partition()
+                .size(isHorizontal ? [contentHeight, contentWidth] : [contentWidth, contentHeight])
+                .padding(dynamicPadding);
 
             partition(root);
 
@@ -7515,11 +7587,21 @@ export class VisualizationPanel {
                 startInlineEdit(d3.select(this), d.data.name, cellX, cellY, Math.max(8, cellWidth));
             });
 
-            // Render nested details or compact labels depending on available space
-            cells.each(function(d) {
+            // Clip text overflow and render cell content
+            cells.each(function(d, i) {
                 const cell = d3.select(this);
-                const cellWidth = d.y1 - d.y0;
-                const cellHeight = d.x1 - d.x0;
+                const cellWidth = isHorizontal ? (d.y1 - d.y0) : (d.x1 - d.x0);
+                const cellHeight = isHorizontal ? (d.x1 - d.x0) : (d.y1 - d.y0);
+
+                // Add per-cell clipPath so text never overflows the rectangle
+                const clipId = 'hierarchy-clip-' + i;
+                cell.append('defs')
+                    .append('clipPath')
+                    .attr('id', clipId)
+                    .append('rect')
+                    .attr('width', Math.max(8, cellWidth))
+                    .attr('height', Math.max(8, cellHeight));
+                cell.attr('clip-path', 'url(#' + clipId + ')');
 
                 renderHierarchyCellContent(cell, d, cellWidth, cellHeight);
             });
@@ -9967,9 +10049,29 @@ export class VisualizationPanel {
                 // Calculate layout
                 const participants = diagram.participants;
                 const messages = diagram.messages;
-                const participantWidth = Math.min(150, (width - 100) / participants.length);
-                const participantSpacing = (width - 100) / Math.max(1, participants.length - 1);
-                const messageHeight = 80;
+
+                // Measure the widest message label to ensure spacing accommodates it
+                const charWidth = 7; // average px per character at 12px font
+                const labelPadding = 40; // padding around label text
+                let maxLabelWidth = 100;
+                for (const msg of messages) {
+                    const text = msg.payload || msg.name;
+                    const w = text.length * charWidth + labelPadding;
+                    if (w > maxLabelWidth) maxLabelWidth = w;
+                }
+
+                // Participant spacing: ensure enough room for the widest label,
+                // but also fill available width when labels are short.
+                const minSpacing = maxLabelWidth + 20;
+                const evenSpacing = (width - 100) / Math.max(1, participants.length - 1);
+                const participantSpacing = Math.max(minSpacing, evenSpacing);
+                const participantWidth = Math.min(150, participantSpacing * 0.6);
+
+                // Vertical spacing: increase when labels are long enough to
+                // overlap at the default 80px row height.
+                const messageHeight = maxLabelWidth > 200 ? 100 : 80;
+                const totalWidth = 50 + (participants.length - 1) * participantSpacing + 50;
+                const diagramWidth = Math.max(width, totalWidth);
                 const diagramHeight = Math.max(400, messages.length * messageHeight + 200);
 
                 // Draw participants (lifelines)
@@ -10079,8 +10181,14 @@ export class VisualizationPanel {
 
                     // Message label background
                     const labelX = (fromX + toX) / 2;
-                    const labelText = message.payload || message.name;
-                    const labelWidth = Math.max(100, labelText.length * 8);
+                    const rawLabelText = message.payload || message.name;
+                    // Truncate label if it would exceed the available space
+                    const availableWidth = Math.abs(toX - fromX) - 20;
+                    const maxLabelChars = Math.max(10, Math.floor(availableWidth / charWidth));
+                    const labelText = rawLabelText.length > maxLabelChars
+                        ? rawLabelText.slice(0, maxLabelChars - 1) + '\u2026'
+                        : rawLabelText;
+                    const labelWidth = Math.max(80, labelText.length * charWidth + labelPadding);
 
                     messageGroup.append('rect')
                         .attr('x', labelX - labelWidth/2)
@@ -10093,7 +10201,7 @@ export class VisualizationPanel {
                         .style('stroke-width', '1px');
 
                     // Message label
-                    messageGroup.append('text')
+                    const labelEl = messageGroup.append('text')
                         .attr('x', labelX)
                         .attr('y', messageY - 10)
                         .attr('text-anchor', 'middle')
@@ -10101,6 +10209,11 @@ export class VisualizationPanel {
                         .style('font-size', '12px')
                         .style('fill', 'var(--vscode-editor-foreground)')
                         .style('pointer-events', 'none');
+
+                    // Show full text on hover when truncated
+                    if (labelText !== rawLabelText) {
+                        labelEl.append('title').text(rawLabelText);
+                    }
 
                     // Timing annotation
                     if (message.occurrence > 0) {
@@ -12971,8 +13084,9 @@ export class VisualizationPanel {
             const useCaseHeight = 70;
             const actionWidth = 120;
             const actionHeight = 40;
-            const requirementWidth = 130;
-            const requirementHeight = 50;
+            const requirementWidth = 180;
+            const requirementBaseHeight = 50;
+            const requirementLineHeight = 13;
             const actorSize = 60;
             const marginLeft = 80;
             const marginTop = 80;
@@ -12982,6 +13096,159 @@ export class VisualizationPanel {
             const useCasePositions = new Map();
             const actionPositions = new Map();
             const requirementPositions = new Map();
+
+            // Helper to collect rich content for a requirement node
+            function collectRequirementContent(req) {
+                var lines = [];
+                var docLines = [];
+                var subjectLines = [];
+                var stakeholderLines = [];
+                var attrLines = [];
+                var constraintLines = [];
+                var nestedReqLines = [];
+
+                // Extract doc from attributes or children
+                var doc = null;
+                if (req.attributes) {
+                    if (typeof req.attributes.get === 'function') {
+                        doc = req.attributes.get('doc') || req.attributes.get('documentation') || req.attributes.get('text');
+                    } else {
+                        doc = req.attributes.doc || req.attributes.documentation || req.attributes.text;
+                    }
+                }
+                if (!doc && req.documentation) doc = req.documentation;
+                if (!doc && req.text) doc = req.text;
+                if (!doc && req.children && req.children.length > 0) {
+                    for (var i = 0; i < req.children.length; i++) {
+                        var child = req.children[i];
+                        if (child && child.type && child.type.toLowerCase() === 'doc') {
+                            if (child.attributes) {
+                                if (typeof child.attributes.get === 'function') {
+                                    doc = child.attributes.get('content');
+                                } else {
+                                    doc = child.attributes.content;
+                                }
+                            }
+                            if (!doc) {
+                                doc = child.fullText || child.name || '';
+                                if (doc && doc.includes('/*')) {
+                                    var startIdx = doc.indexOf('/*');
+                                    var endIdx = doc.indexOf('*/');
+                                    if (startIdx >= 0 && endIdx > startIdx) {
+                                        doc = doc.substring(startIdx + 2, endIdx).trim();
+                                    }
+                                }
+                            }
+                            if (doc) break;
+                        }
+                    }
+                }
+                if (doc && typeof doc === 'string') {
+                    var cleanDoc = doc.split('/*').join('').split('*/').join('').trim();
+                    // Remove leading * from each line
+                    cleanDoc = cleanDoc.split('\\n').map(function(l) { return l.replace(/^\\s*[*]\\s?/, '').trim(); }).filter(function(l) { return l.length > 0; }).join(' ');
+                    if (cleanDoc.length > 0) {
+                        // Word-wrap doc to fit width (~28 chars per line)
+                        var maxCharsPerLine = 28;
+                        var words = cleanDoc.split(/\\s+/);
+                        var currentLine = '';
+                        words.forEach(function(word) {
+                            if (currentLine.length + word.length + 1 <= maxCharsPerLine) {
+                                currentLine = currentLine ? currentLine + ' ' + word : word;
+                            } else {
+                                if (currentLine) docLines.push({ icon: '', text: currentLine });
+                                currentLine = word.length > maxCharsPerLine ? word.substring(0, maxCharsPerLine - 2) + '..' : word;
+                            }
+                        });
+                        if (currentLine) docLines.push({ icon: '', text: currentLine });
+                        // Limit doc lines
+                        if (docLines.length > 3) docLines = docLines.slice(0, 3);
+                    }
+                }
+
+                // Collect from children
+                if (req.children && req.children.length > 0) {
+                    req.children.forEach(function(child) {
+                        if (!child || !child.name) return;
+                        var cType = (child.type || '').toLowerCase();
+                        if (cType === 'doc') return;
+
+                        if (cType === 'subject' || cType.includes('subject')) {
+                            var subjectType = child.typing || '';
+                            if (!subjectType && child.attributes) {
+                                subjectType = typeof child.attributes.get === 'function'
+                                    ? (child.attributes.get('type') || child.attributes.get('typedBy') || child.attributes.get('partType') || '')
+                                    : (child.attributes.type || child.attributes.typedBy || child.attributes.partType || '');
+                            }
+                            if (subjectType) subjectType = subjectType.replace(/^[:~]+/, '').trim();
+                            subjectLines.push({ icon: '\u{1F464}', text: child.name + (subjectType ? ' : ' + subjectType : '') });
+                        } else if (cType === 'stakeholder' || cType.includes('stakeholder')) {
+                            var shType = child.typing || '';
+                            if (!shType && child.attributes) {
+                                shType = typeof child.attributes.get === 'function'
+                                    ? (child.attributes.get('type') || child.attributes.get('typedBy') || child.attributes.get('partType') || '')
+                                    : (child.attributes.type || child.attributes.typedBy || child.attributes.partType || '');
+                            }
+                            if (shType) shType = shType.replace(/^[:~]+/, '').trim();
+                            stakeholderLines.push({ icon: '\u{1F3E2}', text: child.name + (shType ? ' : ' + shType : '') });
+                        } else if (cType.includes('constraint') || cType === 'require constraint' || cType === 'assume constraint' || cType === 'require') {
+                            var cExpr = '';
+                            if (child.attributes) {
+                                cExpr = typeof child.attributes.get === 'function'
+                                    ? (child.attributes.get('expression') || child.attributes.get('constraint') || '')
+                                    : (child.attributes.expression || child.attributes.constraint || '');
+                            }
+                            constraintLines.push({ icon: '\u{2699}', text: child.name || cExpr || 'constraint' });
+                        } else if (cType === 'attribute' || cType.includes('attribute')) {
+                            var dataType = '';
+                            if (child.attributes) {
+                                dataType = typeof child.attributes.get === 'function'
+                                    ? (child.attributes.get('dataType') || '')
+                                    : (child.attributes.dataType || '');
+                            }
+                            var typeStr = dataType ? ' : ' + dataType.split('::').pop() : '';
+                            var attrVal = '';
+                            if (child.attributes) {
+                                attrVal = typeof child.attributes.get === 'function'
+                                    ? (child.attributes.get('value') || '')
+                                    : (child.attributes.value || '');
+                            }
+                            var valStr = attrVal ? ' = ' + attrVal : '';
+                            attrLines.push({ icon: '\u{25C6}', text: child.name + typeStr + valStr });
+                        } else if (cType.includes('requirement')) {
+                            nestedReqLines.push({ icon: '\u{2713}', text: child.name });
+                        }
+                    });
+                }
+
+                // Build ordered sections
+                if (docLines.length > 0) lines.push({ section: 'doc', items: docLines.slice(0, 3) });
+                if (subjectLines.length > 0) lines.push({ section: 'subject', items: subjectLines.slice(0, 2) });
+                if (stakeholderLines.length > 0) lines.push({ section: 'stakeholder', items: stakeholderLines.slice(0, 2) });
+                if (attrLines.length > 0) lines.push({ section: 'attributes', items: attrLines.slice(0, 3) });
+                if (constraintLines.length > 0) lines.push({ section: 'constraints', items: constraintLines.slice(0, 2) });
+                if (nestedReqLines.length > 0) lines.push({ section: 'nested', items: nestedReqLines.slice(0, 3) });
+                return lines;
+            }
+
+            // Pre-compute content and dynamic height for each requirement
+            const requirementContentMap = new Map();
+            requirements.forEach(function(req) {
+                var content = collectRequirementContent(req);
+                var totalLines = 0;
+                content.forEach(function(sec) { totalLines += sec.items.length; });
+                // Header takes ~30px (stereotype + name), each content line takes requirementLineHeight
+                // Add ~4px gap per section divider
+                var sectionGaps = content.length > 0 ? content.length * 4 : 0;
+                var dynamicHeight = Math.max(requirementBaseHeight, 32 + totalLines * requirementLineHeight + sectionGaps);
+                requirementContentMap.set(req.name, { content: content, height: dynamicHeight });
+            });
+
+            // Helper to get dynamic requirement height
+            function getReqHeight(reqName) {
+                var info = requirementContentMap.get(reqName);
+                return info ? info.height : requirementBaseHeight;
+            }
 
             if (usecaseLayoutOrientation === 'force') {
                 // Force-directed layout
@@ -13019,7 +13286,7 @@ export class VisualizationPanel {
                     } else if (n.type === 'action') {
                         actionPositions.set(n.id, { x: x, y: y, action: n.data });
                     } else if (n.type === 'requirement') {
-                        requirementPositions.set(n.id, { x: x, y: y, requirement: n.data });
+                        requirementPositions.set(n.id, { x: x, y: y, requirement: n.data, height: getReqHeight(n.id) });
                     } else {
                         useCasePositions.set(n.id, { x: x, y: y, useCase: n.data });
                     }
@@ -13086,14 +13353,20 @@ export class VisualizationPanel {
                     const reqCols = Math.min(requirements.length, Math.floor((width - marginLeft * 2) / reqSpacingX));
                     const reqStartX = marginLeft + (width - marginLeft * 2 - (Math.min(requirements.length, reqCols) - 1) * reqSpacingX - requirementWidth) / 2;
 
+                    var reqRowY = actionsBottomY;
+                    var currentReqCol = 0;
                     requirements.forEach((req, index) => {
-                        const col = index % reqCols;
-                        const row = Math.floor(index / reqCols);
+                        if (currentReqCol >= reqCols) {
+                            currentReqCol = 0;
+                            reqRowY += getReqHeight(requirements[index - reqCols] ? requirements[index - reqCols].name : req.name) + 20;
+                        }
                         requirementPositions.set(req.name, {
-                            x: reqStartX + col * reqSpacingX,
-                            y: actionsBottomY + row * (requirementHeight + 20),
-                            requirement: req
+                            x: reqStartX + currentReqCol * reqSpacingX,
+                            y: reqRowY,
+                            requirement: req,
+                            height: getReqHeight(req.name)
                         });
+                        currentReqCol++;
                     });
                 }
             } else {
@@ -13163,14 +13436,20 @@ export class VisualizationPanel {
                     const reqStartX = centerX - (Math.min(requirements.length, reqCols) * reqSpacingX) / 2;
                     const reqRows = Math.ceil(requirements.length / reqCols);
 
+                    var hReqRowY = reqStartY;
+                    var hReqCol = 0;
                     requirements.forEach((req, index) => {
-                        const col = index % reqCols;
-                        const row = Math.floor(index / reqCols);
+                        if (hReqCol >= reqCols) {
+                            hReqCol = 0;
+                            hReqRowY += getReqHeight(requirements[index - reqCols] ? requirements[index - reqCols].name : req.name) + 20;
+                        }
                         requirementPositions.set(req.name, {
-                            x: reqStartX + col * reqSpacingX,
-                            y: reqStartY + row * (requirementHeight + 20),
-                            requirement: req
+                            x: reqStartX + hReqCol * reqSpacingX,
+                            y: hReqRowY,
+                            requirement: req,
+                            height: getReqHeight(req.name)
                         });
+                        hReqCol++;
                     });
                 }
             }
@@ -13297,6 +13576,10 @@ export class VisualizationPanel {
                     const targetPos = findActorPosition(rel.target);
 
                     if (!sourcePos || !targetPos) {
+                        console.debug('[UseCase] Skipping stakeholder rel: source=' + rel.source +
+                            ' (' + (sourcePos ? 'found' : 'NOT FOUND in requirementPositions') + ')' +
+                            ', target=' + rel.target +
+                            ' (' + (targetPos ? 'found' : 'NOT FOUND in actorPositions') + ')');
                         return;
                     }
 
@@ -13342,11 +13625,189 @@ export class VisualizationPanel {
                     return;
                 }
 
+                if (rel.type === 'containment') {
+                    // Parent requirement to nested child requirement
+                    const sourcePos = requirementPositions.get(rel.source);
+                    const targetPos = requirementPositions.get(rel.target);
+                    if (!sourcePos || !targetPos) return;
+
+                    startX = sourcePos.x + requirementWidth / 2;
+                    startY = sourcePos.y + (sourcePos.height || requirementBaseHeight);
+                    endX = targetPos.x + requirementWidth / 2;
+                    endY = targetPos.y;
+
+                    var relGroupC = relationshipGroup.append('g');
+                    relGroupC.append('line')
+                        .attr('x1', startX)
+                        .attr('y1', startY)
+                        .attr('x2', endX)
+                        .attr('y2', endY)
+                        .style('stroke', '#4EC9B0')
+                        .style('stroke-width', '2px');
+
+                    // Filled diamond at the parent (source) end
+                    var dAngle = Math.atan2(startY - endY, startX - endX);
+                    var dSize = 8;
+                    relGroupC.append('polygon')
+                        .attr('points', [
+                            [startX, startY],
+                            [startX + dSize * Math.cos(dAngle - Math.PI / 5), startY + dSize * Math.sin(dAngle - Math.PI / 5)],
+                            [startX + dSize * 1.6 * Math.cos(dAngle), startY + dSize * 1.6 * Math.sin(dAngle)],
+                            [startX + dSize * Math.cos(dAngle + Math.PI / 5), startY + dSize * Math.sin(dAngle + Math.PI / 5)]
+                        ].map(function(p) { return p.join(','); }).join(' '))
+                        .style('fill', '#4EC9B0');
+
+                    return;
+                }
+
+                if (rel.type === 'specialization') {
+                    // Requirement specializes/typed by another requirement def
+                    const sourcePos = requirementPositions.get(rel.source);
+                    const targetPos = requirementPositions.get(rel.target);
+                    if (!sourcePos || !targetPos) return;
+
+                    startX = sourcePos.x + requirementWidth / 2;
+                    startY = sourcePos.y;
+                    endX = targetPos.x + requirementWidth / 2;
+                    endY = targetPos.y + (targetPos.height || requirementBaseHeight);
+
+                    var relGroupS = relationshipGroup.append('g');
+                    relGroupS.append('line')
+                        .attr('x1', startX)
+                        .attr('y1', startY)
+                        .attr('x2', endX)
+                        .attr('y2', endY)
+                        .style('stroke', '#C586C0')
+                        .style('stroke-width', '1.5px');
+
+                    // Hollow triangle arrowhead at the target (parent def)
+                    var sAngle = Math.atan2(endY - startY, endX - startX);
+                    var sSize = 9;
+                    relGroupS.append('polygon')
+                        .attr('points', [
+                            [endX, endY],
+                            [endX - sSize * Math.cos(sAngle - Math.PI / 6), endY - sSize * Math.sin(sAngle - Math.PI / 6)],
+                            [endX - sSize * Math.cos(sAngle + Math.PI / 6), endY - sSize * Math.sin(sAngle + Math.PI / 6)]
+                        ].map(function(p) { return p.join(','); }).join(' '))
+                        .style('fill', 'var(--vscode-editor-background)')
+                        .style('stroke', '#C586C0')
+                        .style('stroke-width', '1.5px');
+
+                    // Label
+                    var sMidX = (startX + endX) / 2;
+                    var sMidY = (startY + endY) / 2;
+                    relGroupS.append('text')
+                        .attr('x', sMidX + 5)
+                        .attr('y', sMidY - 5)
+                        .attr('text-anchor', 'start')
+                        .style('font-size', '9px')
+                        .style('fill', '#C586C0')
+                        .style('font-style', 'italic')
+                        .text(':>');
+
+                    return;
+                }
+
+                if (rel.type === 'satisfy' || rel.type === 'verify') {
+                    // Satisfy/verify relationship from a part to a requirement
+                    // Source is the satisfying part, target is the requirement
+                    const targetPos = requirementPositions.get(rel.target);
+
+                    if (!targetPos) {
+                        console.debug('[UseCase] Skipping ' + rel.type + ' rel: target=' + rel.target + ' NOT FOUND in requirementPositions');
+                        return;
+                    }
+
+                    // Source could be an element positioned anywhere, or not positioned at all
+                    // Try all position maps to find it
+                    const srcFromActions = actionPositions.get(rel.source);
+                    const srcFromUseCases = useCasePositions.get(rel.source);
+                    const srcFromReqs = requirementPositions.get(rel.source);
+                    const srcFromActors = findActorPosition(rel.source);
+                    const srcPos = srcFromActions || srcFromUseCases || srcFromReqs || srcFromActors;
+
+                    // If source isn't positioned, draw a floating label near the requirement
+                    if (!srcPos) {
+                        const relGroup = relationshipGroup.append('g');
+                        relGroup.append('text')
+                            .attr('x', targetPos.x + requirementWidth / 2)
+                            .attr('y', targetPos.y + (targetPos.height || requirementBaseHeight) + 16)
+                            .attr('text-anchor', 'middle')
+                            .style('font-size', '9px')
+                            .style('fill', 'var(--vscode-charts-yellow)')
+                            .style('font-style', 'italic')
+                            .text('\\u00AB' + rel.type + '\\u00BB by ' + rel.source);
+                        return;
+                    }
+
+                    // Determine start position based on source type
+                    if (srcFromActions) {
+                        startX = srcFromActions.x + actionWidth / 2;
+                        startY = srcFromActions.y + actionHeight;
+                    } else if (srcFromUseCases) {
+                        startX = srcFromUseCases.x + useCaseWidth / 2;
+                        startY = srcFromUseCases.y + useCaseHeight;
+                    } else if (srcFromReqs) {
+                        startX = srcFromReqs.x + requirementWidth / 2;
+                        startY = srcFromReqs.y + (srcFromReqs.height || requirementBaseHeight);
+                    } else {
+                        startX = srcPos.x;
+                        startY = srcPos.y + actorSize / 2;
+                    }
+
+                    endX = targetPos.x + requirementWidth / 2;
+                    endY = targetPos.y;
+
+                    const lineColor = rel.type === 'satisfy'
+                        ? 'var(--vscode-charts-yellow)'
+                        : 'var(--vscode-charts-orange)';
+                    const relGroup = relationshipGroup.append('g');
+
+                    // Dashed line with arrow
+                    relGroup.append('line')
+                        .attr('x1', startX)
+                        .attr('y1', startY)
+                        .attr('x2', endX)
+                        .attr('y2', endY)
+                        .style('stroke', lineColor)
+                        .style('stroke-width', '1.5px')
+                        .style('stroke-dasharray', '6,3');
+
+                    // Arrowhead pointing to requirement
+                    const angle = Math.atan2(endY - startY, endX - startX);
+                    const arrowSize = 7;
+                    relGroup.append('polygon')
+                        .attr('points', [
+                            [endX, endY],
+                            [endX - arrowSize * Math.cos(angle - Math.PI / 6), endY - arrowSize * Math.sin(angle - Math.PI / 6)],
+                            [endX - arrowSize * Math.cos(angle + Math.PI / 6), endY - arrowSize * Math.sin(angle + Math.PI / 6)]
+                        ].map(function(p) { return p.join(','); }).join(' '))
+                        .style('fill', lineColor);
+
+                    // Label
+                    var midX = (startX + endX) / 2;
+                    var midY = (startY + endY) / 2;
+                    relGroup.append('text')
+                        .attr('x', midX)
+                        .attr('y', midY - 5)
+                        .attr('text-anchor', 'middle')
+                        .style('font-size', '9px')
+                        .style('fill', lineColor)
+                        .style('font-style', 'italic')
+                        .text('«' + rel.type + '»');
+
+                    return;
+                }
+
                 // Actor to use case relationships
                 const sourcePos = findActorPosition(rel.source);
                 const targetPos = useCasePositions.get(rel.target);
 
                 if (!sourcePos || !targetPos) {
+                    console.debug('[UseCase] Skipping relationship: source=' + rel.source +
+                        ' (' + (sourcePos ? 'found' : 'NOT FOUND in actorPositions') + ')' +
+                        ', target=' + rel.target +
+                        ' (' + (targetPos ? 'found' : 'NOT FOUND in useCasePositions') + ')');
                     return;
                 }
 
@@ -13526,6 +13987,9 @@ export class VisualizationPanel {
 
             requirementPositions.forEach((pos, reqName) => {
                 const requirement = pos.requirement;
+                const reqHeight = pos.height || requirementBaseHeight;
+                const reqContent = requirementContentMap.get(reqName);
+                const contentSections = reqContent ? reqContent.content : [];
 
                 const reqElement = requirementGroup.append('g')
                     .attr('class', 'requirement-node')
@@ -13551,7 +14015,7 @@ export class VisualizationPanel {
 
                 // Requirement rectangle with note-style corner fold
                 reqElement.append('path')
-                    .attr('d', 'M0,0 L' + (requirementWidth - 12) + ',0 L' + requirementWidth + ',12 L' + requirementWidth + ',' + requirementHeight + ' L0,' + requirementHeight + ' Z')
+                    .attr('d', 'M0,0 L' + (requirementWidth - 12) + ',0 L' + requirementWidth + ',12 L' + requirementWidth + ',' + reqHeight + ' L0,' + reqHeight + ' Z')
                     .style('fill', 'var(--vscode-editor-background)')
                     .style('stroke', '#B5CEA8')  // Green for requirements
                     .style('stroke-width', '2px');
@@ -13577,19 +14041,29 @@ export class VisualizationPanel {
                     .style('stroke-width', '1px');
 
                 // <<requirement>> stereotype
+                var reqTypeLower = (requirement.type || '').toLowerCase();
+                var stereoText = reqTypeLower.includes('requirement def') ? 'requirement def' : 'requirement';
                 reqElement.append('text')
                     .attr('x', requirementWidth / 2)
                     .attr('y', 12)
                     .attr('text-anchor', 'middle')
-                    .text('«req»')
+                    .text('\\u00AB' + stereoText + '\\u00BB')
                     .style('font-size', '9px')
                     .style('fill', '#B5CEA8')
                     .style('font-style', 'italic')
                     .style('user-select', 'none');
 
                 // Requirement name (truncated if long)
-                const maxChars = 18;
+                const maxChars = 28;
                 let displayName = requirement.name;
+                // Show shortName (e.g., REQ42) if available in attributes
+                const shortNameVal = requirement.attributes && (
+                    (typeof requirement.attributes.get === 'function' ? requirement.attributes.get('shortName') : null)
+                    || requirement.attributes.shortName || requirement.attributes['shortName']
+                );
+                if (shortNameVal) {
+                    displayName = '<' + shortNameVal + '> ' + displayName;
+                }
                 if (displayName.length > maxChars) {
                     displayName = displayName.substring(0, maxChars - 3) + '...';
                 }
@@ -13598,13 +14072,52 @@ export class VisualizationPanel {
                     .attr('class', 'node-name-text')
                     .attr('data-element-name', requirement.name)
                     .attr('x', requirementWidth / 2)
-                    .attr('y', requirementHeight / 2 + 6)
+                    .attr('y', 26)
                     .attr('text-anchor', 'middle')
                     .text(displayName)
                     .style('font-size', '11px')
                     .style('fill', 'var(--vscode-editor-foreground)')
                     .style('font-weight', '500')
                     .style('user-select', 'none');
+
+                // Section divider under header
+                if (contentSections.length > 0) {
+                    reqElement.append('line')
+                        .attr('x1', 0).attr('y1', 30)
+                        .attr('x2', requirementWidth).attr('y2', 30)
+                        .style('stroke', '#B5CEA8')
+                        .style('stroke-width', '0.5px')
+                        .style('opacity', 0.6);
+                }
+
+                // Render content sections
+                var contentY = 32;
+                var sectionColors = {
+                    doc: 'var(--vscode-descriptionForeground)',
+                    subject: '#569CD6',
+                    stakeholder: '#4EC9B0',
+                    attributes: '#DCDCAA',
+                    constraints: '#C586C0',
+                    nested: '#B5CEA8'
+                };
+
+                contentSections.forEach(function(section) {
+                    var color = sectionColors[section.section] || 'var(--vscode-descriptionForeground)';
+                    section.items.forEach(function(item) {
+                        var lineText = item.icon ? item.icon + ' ' + item.text : item.text;
+                        if (lineText.length > 28) lineText = lineText.substring(0, 26) + '..';
+                        reqElement.append('text')
+                            .attr('x', 6)
+                            .attr('y', contentY + requirementLineHeight - 3)
+                            .text(lineText)
+                            .style('font-size', section.section === 'doc' ? '9px' : '10px')
+                            .style('fill', color)
+                            .style('font-style', section.section === 'doc' ? 'italic' : 'normal')
+                            .style('user-select', 'none');
+                        contentY += requirementLineHeight;
+                    });
+                    contentY += 4; // Section gap
+                });
             });
 
             // Draw actors (in front of everything) with drag behavior
@@ -13698,8 +14211,9 @@ export class VisualizationPanel {
                     .style('stroke', 'var(--vscode-charts-orange)')
                     .style('stroke-width', '2px');
 
-                // Actor name below figure
-                const truncatedName = actor.name.length > 12 ? actor.name.substring(0, 9) + '...' : actor.name;
+                // Actor name below figure — use full name, let SVG handle overflow
+                const maxActorChars = 20;
+                const truncatedName = actor.name.length > maxActorChars ? actor.name.substring(0, maxActorChars - 3) + '...' : actor.name;
                 actorElement.append('text')
                     .attr('class', 'node-name-text')
                     .attr('data-element-name', actor.name)

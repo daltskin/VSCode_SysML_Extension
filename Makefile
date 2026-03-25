@@ -197,7 +197,7 @@ dev: install
 debug: compile
 	@echo "$(YELLOW)Launching VS Code Extension Development Host...$(NC)"
 	@echo "$(BLUE)Using Wayland-optimized settings for best compatibility$(NC)"
-	@npm run debug
+	@code --extensionDevelopmentPath="$(CURDIR)" "$(CURDIR)/samples"
 	@echo "$(GREEN)✓ Extension Development Host should be starting!$(NC)"
 	@echo "$(BLUE)Look for a new VS Code window with your extension loaded$(NC)"
 

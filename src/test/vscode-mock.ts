@@ -283,6 +283,13 @@ export enum ConfigurationTarget {
     WorkspaceFolder = 3
 }
 
+// ─── StatusBarAlignment ─────────────────────────────────────────
+
+export enum StatusBarAlignment {
+    Left = 1,
+    Right = 2,
+}
+
 // ─── Document types ──────────────────────────────────────────────
 
 export class Diagnostic {
@@ -504,6 +511,21 @@ export const window = {
         dispose: () => {},
         selection: [],
         visible: true,
+    }),
+    createStatusBarItem: (_alignmentOrId?: any, _priority?: number) => ({
+        text: '',
+        tooltip: '' as string | undefined,
+        backgroundColor: undefined as any,
+        color: undefined as any,
+        command: undefined as string | undefined,
+        name: undefined as string | undefined,
+        alignment: typeof _alignmentOrId === 'number' ? _alignmentOrId : StatusBarAlignment.Left,
+        priority: _priority,
+        show: function () { (this as any)._visible = true; },
+        hide: function () { (this as any)._visible = false; },
+        dispose: function () { (this as any)._disposed = true; },
+        _visible: false,
+        _disposed: false,
     }),
 };
 

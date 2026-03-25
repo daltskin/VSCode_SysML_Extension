@@ -33,6 +33,9 @@
   "explorer.confirmDelete": false,
   "git.autofetch": true,
   "terminal.integrated.defaultProfile.linux": "zsh",
+  "terminal.integrated.automationProfile.linux": {
+    "path": "zsh"
+  },
   "copilot.enable": {
     "typescript": true,
     "javascript": true,
