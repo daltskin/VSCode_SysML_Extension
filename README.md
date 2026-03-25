@@ -5,6 +5,7 @@ A Visual Studio Code extension for SysML v2.0 with syntax highlighting, formatti
 ![SysML v2.0](https://img.shields.io/badge/SysML-v2.0-blue) ![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-green) ![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
 
 [![Install from Marketplace](https://img.shields.io/badge/Install-VS%20Code%20Marketplace-007ACC?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support)
+[![Install from Open VSX](https://img.shields.io/badge/Install-Open%20VSX%20Registry-C160EF?logo=eclipse)](https://open-vsx.org/extension/JamieD/sysml-v2-support)
 
 ## Demo
 
@@ -80,9 +81,9 @@ For single-folder workspaces, files are parsed lazily when opened.
 
 ## Installation
 
-Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support):
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support) or the [Open VSX Registry](https://open-vsx.org/extension/JamieD/sysml-v2-support) (for VS Code-compatible editors such as VSCodium, AWS Kiro, and other Eclipse Theia-based IDEs):
 
-1. Open VS Code Extensions (Ctrl+Shift+X)
+1. Open the Extensions panel (Ctrl+Shift+X)
 2. Search for "SysML v2"
 3. Click Install
 
