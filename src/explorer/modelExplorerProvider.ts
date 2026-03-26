@@ -226,6 +226,14 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
             this._onDidChangeTreeData.fire();
         } finally {
             this.isLoading = false;
+
+            // If a single-file loadDocument was called while the workspace
+            // scan was running, process it now so it isn't silently dropped.
+            if (this.pendingDocument) {
+                const pending = this.pendingDocument;
+                this.pendingDocument = undefined;
+                this.loadDocument(pending);
+            }
         }
     }
 

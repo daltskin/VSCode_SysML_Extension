@@ -497,7 +497,7 @@
   },
   "dependencies": {
     "elkjs": "^0.11.0",
-    "sysml-v2-lsp": "^0.9.0",
+    "sysml-v2-lsp": "^0.10.0",
     "vscode-languageclient": "^9.0.1"
   },
   "overrides": {

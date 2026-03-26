@@ -231,6 +231,9 @@ const PARSE_FRAMES = [
     '$(symbol-structure) ◨◨◨◨ Linking elements',
 ];
 
+/** The label currently shown alongside the parse animation. */
+let parseAnimLabel = '';
+
 export function showParseProgress(label: string): void {
     if (!parseProgressItem) {
         parseProgressItem = vscode.window.createStatusBarItem(
@@ -239,12 +242,16 @@ export function showParseProgress(label: string): void {
         parseProgressItem.name = 'SysML Parse Progress';
     }
 
+    // Always update the label — the timer reads from the module-level
+    // variable so it picks up the latest value on every tick.
+    parseAnimLabel = label;
+
     if (!parseAnimTimer) {
         parseAnimFrame = 0;
         parseAnimTimer = setInterval(() => {
             parseAnimFrame = (parseAnimFrame + 1) % PARSE_FRAMES.length;
             if (parseProgressItem) {
-                const suffix = label ? ` · ${label}` : '';
+                const suffix = parseAnimLabel ? ` · ${parseAnimLabel}` : '';
                 parseProgressItem.text = `${PARSE_FRAMES[parseAnimFrame]}${suffix}`;
             }
         }, 220);

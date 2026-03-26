@@ -5,6 +5,21 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0]
+
+### Added
+
+- **Worker thread parsing** — ANTLR parsing now runs in a dedicated `worker_threads` thread; diagnostics appear immediately while the symbol table builds on the main thread, keeping hover/completion/go-to-def responsive
+- **Parse lifecycle test suites** — tests covering `ModelExplorerProvider` concurrency (queuing, cancellation, rapid edits, workspace/file mode transitions) and `ParseOrchestrator` debounce/cooldown/guard logic
+- **Enum value symbol extraction** — bare enum values (`red;`) and explicit enum values (`enum red;`) inside `enum def` bodies now produce `EnumUsage` symbols in the symbol table
+
+### Fixed
+
+- **Redundant re-parsing on activation** — `parseDebounceTimer` now clears correctly after firing; 3-second cooldown on `notifyServerParseDone` prevents cascading re-parses during cold start
+- **False-positive "no viable alternative at input 'import'"** — DFA snapshot regenerated to cover bare `import` (without `private`/`public` prefix); server defers diagnostics for documents opened before DFA is loaded
+- **False "empty enum" hint** — `checkEmptyEnum` validator no longer flags enums with bare values as empty
+- **Status bar bug fix**
+
 ## [0.28.0]
 
 ### Added

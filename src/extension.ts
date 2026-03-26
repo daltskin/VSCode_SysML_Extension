@@ -7,6 +7,7 @@ import { SysRunnerPanel } from './game/sysRunnerPanel';
 import { startLanguageClient, stopLanguageClient } from './lsp/client';
 import { FeatureInspectorPanel } from './panels/featureInspectorPanel';
 import { ModelDashboardPanel } from './panels/modelDashboardPanel';
+import { ParseOrchestrator } from './parseOrchestrator';
 import { LspModelProvider } from './providers/lspModelProvider';
 import {
     clearMetricsKey,
@@ -30,9 +31,7 @@ let modelExplorerProvider: ModelExplorerProvider;
 let featureExplorerProvider: FeatureExplorerProvider;
 let outputChannel: vscode.OutputChannel;
 let lspModelProvider: LspModelProvider;
-
-let parseDebounceTimer: ReturnType<typeof setTimeout> | undefined;
-let activeParseCancel: vscode.CancellationTokenSource | undefined;
+let parseOrchestrator: ParseOrchestrator;
 
 /** Available visualization views — matches the webview's dropdown options */
 const visualizationViews = [
@@ -54,132 +53,11 @@ const visualizationViews = [
  * go-to-def, formatting, etc.) are handled by the LSP server.
  *
  * All parsing is performed by the LSP server via `sysml/model` requests.
+ * Orchestration (debounce, cancellation, cooldown) is handled by
+ * {@link ParseOrchestrator}.
  */
 function parseSysMLDocument(document: vscode.TextDocument, options?: { skipProgress?: boolean }): void {
-    // Cancel any in-flight parse for a previous file
-    if (parseDebounceTimer) {
-        globalThis.clearTimeout(parseDebounceTimer);
-    }
-    if (activeParseCancel) {
-        activeParseCancel.cancel();
-        activeParseCancel.dispose();
-        activeParseCancel = undefined;
-    }
-
-    // Show the animated progress indicator immediately — before the
-    // debounce timer fires — so the user sees feedback the instant
-    // a SysML file opens, not after the LSP roundtrip.
-    // Skip when re-triggered from notifyServerParseDone (server already done).
-    const fileName = document.fileName.split('/').pop() || 'file';
-    if (!options?.skipProgress) {
-        showParseProgress(fileName);
-    }
-
-    const cancelSource = new vscode.CancellationTokenSource();
-    activeParseCancel = cancelSource;
-
-    // Debounce (300 ms) — wait for the user to pause typing before
-    // kicking off the model request.
-    parseDebounceTimer = setTimeout(async () => {
-        if (cancelSource.token.isCancellationRequested || document.isClosed) {
-            return;
-        }
-
-        try {
-            if (cancelSource.token.isCancellationRequested || document.isClosed) {
-                return;
-            }
-
-            // --- Model explorer update ---
-            const fileName = document.fileName.split('/').pop() || 'file';
-            outputChannel?.appendLine(`parseSysMLDocument: loading ${fileName} (LSP)`);
-            try {
-                if (modelExplorerProvider.isWorkspaceMode()) {
-                    // Workspace mode: keep the full workspace model and
-                    // just reveal/expand the node for the active file.
-                    await modelExplorerProvider.revealActiveDocument(document.uri);
-                } else {
-                    await modelExplorerProvider.loadDocument(document, cancelSource.token);
-                }
-            } catch {
-                // Model explorer failure is non-critical — continue to
-                // update the visualizer so it always gets a chance to
-                // fetch fresh data from the LSP server.
-            }
-
-            // Parsing is done — hide the animated progress bar now,
-            // before the secondary UI updates (metrics, feature inspector,
-            // visualization) which can add noticeable latency.
-            hideParseProgress();
-
-            // --- Status-bar model metrics ---
-            // Update metrics BEFORE the cancellation check so the status
-            // bar always reflects the latest available data.  When a new
-            // parse was queued (e.g. from notifyServerParseDone) the
-            // cancelSource is cancelled, but the model explorer may
-            // already hold valid stats that should be displayed.  The
-            // next parse will override with fresh data if needed.
-            const stats = modelExplorerProvider.getLastStats();
-            if (stats) {
-                // Fetch LSP server health info (non-blocking, best-effort)
-                try {
-                    const serverStats = await lspModelProvider.getServerStats();
-                    if (serverStats) setStatusBarServerStats(serverStats);
-                } catch { /* non-critical */ }
-                updateModelMetrics(stats, document.uri);
-            }
-
-            // Bail out if cancelled or closed — skip the remaining
-            // secondary UI updates (Feature Inspector, Visualization)
-            // which are more expensive and will be retried by the
-            // follow-up parse.
-            if (cancelSource.token.isCancellationRequested || document.isClosed) {
-                outputChannel?.appendLine(`parseSysMLDocument: cancelled after model explorer update`);
-                return;
-            }
-
-            // Push resolved types to Feature Inspector and Feature Explorer
-            if ((FeatureInspectorPanel.currentPanel || featureExplorerProvider) && lspModelProvider) {
-                try {
-                    const typeResult = await lspModelProvider.getModel(
-                        document.uri.toString(), ['resolvedTypes'], cancelSource.token,
-                    );
-                    if (typeResult.resolvedTypes) {
-                        if (FeatureInspectorPanel.currentPanel) {
-                            FeatureInspectorPanel.currentPanel.updateResolvedTypes(
-                                typeResult.resolvedTypes, document.uri.toString(),
-                            );
-                        }
-                        if (featureExplorerProvider) {
-                            featureExplorerProvider.pushResolvedTypes(
-                                document.uri.toString(), typeResult.resolvedTypes,
-                            );
-                        }
-                    }
-                } catch {
-                    // Non-critical — inspector/explorer will fetch on next interaction
-                }
-            }
-
-            // Bail out if cancelled or closed
-            if (cancelSource.token.isCancellationRequested || document.isClosed) {
-                return;
-            }
-
-            // --- Visualization panel update ---
-            if (VisualizationPanel.currentPanel) {
-                VisualizationPanel.currentPanel.notifyFileChanged(document.uri);
-            }
-        } finally {
-            if (activeParseCancel === cancelSource) {
-                activeParseCancel = undefined;
-            }
-            cancelSource.dispose();
-            // Safety net: ensure the indicator is hidden even if an
-            // early return or exception skipped the inline call above.
-            hideParseProgress();
-        }
-    }, 300);
+    parseOrchestrator.requestParse(document, options);
 }
 
 /**
@@ -188,66 +66,9 @@ function parseSysMLDocument(document: vscode.TextDocument, options?: { skipProgr
  * so the Model Explorer and Visualization panels pick up the newly
  * available model data — prevents the "0 elements" problem on cold
  * start when the DFA warm-up delays initial parsing.
- *
- * Debounced so rapid-fire notifications during workspace scan
- * (one per file) coalesce into a single re-parse.
  */
-let parseDoneTimer: ReturnType<typeof setTimeout> | undefined;
-
 export function notifyServerParseDone(uri?: string): void {
-    if (parseDoneTimer) {
-        globalThis.clearTimeout(parseDoneTimer);
-    }
-    parseDoneTimer = globalThis.setTimeout(() => {
-        parseDoneTimer = undefined;
-
-        // Find a matching open editor to re-parse
-        const editors = vscode.window.visibleTextEditors.filter(
-            e => e.document.languageId === 'sysml' && !e.document.isClosed,
-        );
-        let target: vscode.TextDocument | undefined;
-        if (uri) {
-            target = editors.find(e => e.document.uri.toString() === uri)?.document;
-        }
-        // Fallback: re-parse whichever SysML editor is active
-        if (!target && editors.length > 0) {
-            target = vscode.window.activeTextEditor?.document.languageId === 'sysml'
-                ? vscode.window.activeTextEditor.document
-                : editors[0].document;
-        }
-        if (target) {
-            // Skip re-parse if a parse is already in-flight or debounce-
-            // pending — it will pick up the latest server data when it
-            // completes.  Re-triggering just cancels the current parse
-            // and starts over, causing the cascade seen during workspace
-            // scan (many sysml/status 'end' notifications in quick
-            // succession).
-            if (parseDebounceTimer || activeParseCancel) {
-                outputChannel?.appendLine(`notifyServerParseDone: skipping — parse already in progress`);
-                return;
-            }
-
-            // Skip re-parse if the Model Explorer already has valid data
-            // for this file — avoids a redundant LSP roundtrip when the
-            // initial parse from onDidChangeActiveTextEditor already
-            // succeeded (the common hot-cache case).
-            const stats = modelExplorerProvider.getLastStats();
-            if (stats && stats.totalElements > 0) {
-                outputChannel?.appendLine(`notifyServerParseDone: skipping re-parse — explorer already has ${stats.totalElements} elements`);
-                return;
-            }
-
-            outputChannel?.appendLine(`notifyServerParseDone: re-parsing ${target.fileName.split('/').pop()}`);
-            parseSysMLDocument(target, { skipProgress: true });
-
-            // Also notify the visualizer directly — the server has finished
-            // parsing so sysml/model will return fresh data.  This avoids
-            // waiting for the 300 ms debounce inside parseSysMLDocument.
-            if (VisualizationPanel.currentPanel) {
-                VisualizationPanel.currentPanel.notifyFileChanged(target.uri);
-            }
-        }
-    }, 500);
+    parseOrchestrator.notifyServerParseDone(uri);
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -316,6 +137,46 @@ export function activate(context: vscode.ExtensionContext) {
         treeDataProvider: featureExplorerProvider,
     });
     context.subscriptions.push(featureExplorerTreeView);
+
+    // ─── Parse Orchestrator ────────────────────────────────────────
+    parseOrchestrator = new ParseOrchestrator(
+        {
+            showProgress: (f) => showParseProgress(f),
+            hideProgress: () => hideParseProgress(),
+            loadModelExplorer: (doc, token) => modelExplorerProvider.loadDocument(doc, token),
+            revealInWorkspaceExplorer: (uri) => modelExplorerProvider.revealActiveDocument(uri),
+            isWorkspaceMode: () => modelExplorerProvider.isWorkspaceMode(),
+            getLastStats: () => modelExplorerProvider.getLastStats(),
+            updateMetrics: (stats, uri) => updateModelMetrics(stats, uri),
+            updateServerStats: async () => {
+                const serverStats = await lspModelProvider.getServerStats();
+                if (serverStats) setStatusBarServerStats(serverStats);
+            },
+            pushResolvedTypes: async (uri, token) => {
+                if (!(FeatureInspectorPanel.currentPanel || featureExplorerProvider) || !lspModelProvider) return;
+                const result = await lspModelProvider.getModel(uri, ['resolvedTypes'], token);
+                if (result.resolvedTypes) {
+                    FeatureInspectorPanel.currentPanel?.updateResolvedTypes(result.resolvedTypes, uri);
+                    featureExplorerProvider?.pushResolvedTypes(uri, result.resolvedTypes);
+                }
+            },
+            notifyVisualization: (uri) => VisualizationPanel.currentPanel?.notifyFileChanged(uri),
+            log: (msg) => outputChannel?.appendLine(msg),
+        },
+        {
+            getVisibleSysMLEditors: () =>
+                vscode.window.visibleTextEditors
+                    .filter(e => e.document.languageId === 'sysml' && !e.document.isClosed)
+                    .map(e => ({ uri: e.document.uri.toString(), document: e.document })),
+            getActiveSysMLEditor: () => {
+                const e = vscode.window.activeTextEditor;
+                if (e && e.document.languageId === 'sysml' && !e.document.isClosed) {
+                    return { uri: e.document.uri.toString(), document: e.document };
+                }
+                return undefined;
+            },
+        },
+    );
 
     // Master-detail: when user selects a definition in Model Explorer,
     // populate the Feature Explorer with its resolved type info.
@@ -1052,19 +913,9 @@ export function activate(context: vscode.ExtensionContext) {
                 // Evict from per-file metrics cache
                 deleteCachedMetrics(document.uri.toString());
 
-                // Clear debounce timer so a pending parse doesn't start
-                // after the document is already gone
-                if (parseDebounceTimer) {
-                    globalThis.clearTimeout(parseDebounceTimer);
-                    parseDebounceTimer = undefined;
-                }
-
-                if (activeParseCancel) {
-                    outputChannel.appendLine(`onDidCloseTextDocument: cancelling parse for ${document.fileName.split('/').pop()}`);
-                    activeParseCancel.cancel();
-                    activeParseCancel.dispose();
-                    activeParseCancel = undefined;
-                }
+                // Cancel any pending/in-flight parse for this document
+                outputChannel.appendLine(`onDidCloseTextDocument: cancelling parse for ${document.fileName.split('/').pop()}`);
+                parseOrchestrator.cancelAll();
 
                 // Clear the "Parsing …" status bar immediately — the
                 // server may never send sysml/status end for a closed file.
