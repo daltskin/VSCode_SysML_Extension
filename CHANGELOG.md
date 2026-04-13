@@ -5,6 +5,27 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0]
+
+### Changed
+
+- Updated `sysml-v2-lsp` dependency from 0.10.0 to 0.11.0 — cross-file requirement diagnostics, narrowed expression-operator suppression, keyword set derived from ANTLR lexer at runtime
+
+### Fixed
+
+- Security: patched `brace-expansion` CVE (GHSA-f886-m6hf-6m8v) via npm override
+
+## [0.30.0]
+
+### Added
+
+- **Parse orchestrator test suite** — debounce, cancellation, rapid-edit, and cold/hot-start scenarios (#23)
+
+### Changed
+
+- Updated `sysml-v2-lsp` dependency from 0.9.0 to 0.10.0 — off-main-thread worker parsing, enum value recognition, early-open document queue
+- Release workflow accepts version number parameter; added warnings for failed marketplace/Open VSX publishes
+
 ## [0.29.0]
 
 ### Added
