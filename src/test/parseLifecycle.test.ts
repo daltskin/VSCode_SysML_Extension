@@ -668,7 +668,10 @@ suite('Parse Lifecycle — Edge cases', () => {
         const slowLsp = {
             getModel: async () => {
                 callCount++;
-                await new Promise(r => setTimeout(r, 10));
+                // Each chunk takes 100ms — long enough for the cancel at 50ms
+                // to fire between chunks (CONCURRENCY=4, so chunk boundaries
+                // at ~0ms, ~100ms, ~200ms).
+                await new Promise(r => setTimeout(r, 100));
                 return {
                     version: 1,
                     elements: makeElements(['X']),
@@ -685,8 +688,8 @@ suite('Parse Lifecycle — Edge cases', () => {
             vscode.Uri.parse(`file:///ws/file${i}.sysml`),
         );
 
-        // Cancel after a short delay
-        setTimeout(() => cts.cancel(), 25);
+        // Cancel after 50ms — well before the first chunk (100ms) resolves
+        setTimeout(() => cts.cancel(), 50);
         await provider.loadWorkspaceModel(uris, cts.token);
 
         assert.ok(callCount < 10,

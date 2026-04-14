@@ -57,6 +57,8 @@ const visualizationViews = [
  * {@link ParseOrchestrator}.
  */
 function parseSysMLDocument(document: vscode.TextDocument, options?: { skipProgress?: boolean }): void {
+    // Invalidate the model cache so consumers get fresh data after the next parse
+    lspModelProvider?.invalidateCache(document.uri.toString());
     parseOrchestrator.requestParse(document, options);
 }
 
@@ -948,6 +950,22 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // ── Consolidated file-change notification ──
+    // A single save can trigger onDidChangeTextDocument + onDidSaveTextDocument
+    // + fileSystemWatcher.onDidChange — up to 3 redundant panel refreshes.
+    // This debounced helper coalesces them into one notification per URI.
+    const pendingFileNotifications = new Map<string, ReturnType<typeof setTimeout>>();
+    function scheduleFileNotification(uri: vscode.Uri): void {
+        const key = uri.toString();
+        const existing = pendingFileNotifications.get(key);
+        if (existing) clearTimeout(existing);
+        pendingFileNotifications.set(key, setTimeout(() => {
+            pendingFileNotifications.delete(key);
+            VisualizationPanel.currentPanel?.notifyFileChanged(uri);
+            ModelDashboardPanel.currentPanel?.notifyFileChanged(uri);
+        }, 300));
+    }
+
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument(event => {
             if (event.document.languageId === 'sysml') {
@@ -955,8 +973,8 @@ export function activate(context: vscode.ExtensionContext) {
                 // Language features are handled by the LSP server.
                 parseSysMLDocument(event.document);
 
-                // Keep the model dashboard in sync while it's open.
-                ModelDashboardPanel.currentPanel?.notifyFileChanged(event.document.uri);
+                // Schedule a debounced panel notification
+                scheduleFileNotification(event.document.uri);
             }
         })
     );
@@ -977,24 +995,17 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Trigger a visualization refresh on save — the LSP server may
-    // need a moment to re-parse, so we add a short delay.  This
-    // complements the onDidChangeTextDocument handler above which
-    // covers typing, and the file system watcher below which covers
-    // external changes.
+    // On save — coalesced via scheduleFileNotification
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(document => {
             if (document.languageId === 'sysml') {
-                // Short delay gives the LSP server time to process the save.
-                setTimeout(() => {
-                    VisualizationPanel.currentPanel?.notifyFileChanged(document.uri);
-                    ModelDashboardPanel.currentPanel?.notifyFileChanged(document.uri);
-                }, 500);
+                scheduleFileNotification(document.uri);
             }
         })
     );
 
-    // Watch for file system changes to SysML files
+    // Watch for file system changes to SysML files — all events
+    // feed into the same debounced notification helper.
     const fileSystemWatcher = vscode.workspace.createFileSystemWatcher('**/*.sysml');
 
     context.subscriptions.push(fileSystemWatcher);
@@ -1002,30 +1013,21 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         fileSystemWatcher.onDidChange(uri => {
             outputChannel.appendLine(`SysML file changed: ${uri.fsPath}`);
-            if (VisualizationPanel.currentPanel) {
-                VisualizationPanel.currentPanel.notifyFileChanged(uri);
-            }
-            ModelDashboardPanel.currentPanel?.notifyFileChanged(uri);
+            scheduleFileNotification(uri);
         })
     );
 
     context.subscriptions.push(
         fileSystemWatcher.onDidCreate(uri => {
             outputChannel.appendLine(`SysML file created: ${uri.fsPath}`);
-            if (VisualizationPanel.currentPanel) {
-                VisualizationPanel.currentPanel.notifyFileChanged(uri);
-            }
-            ModelDashboardPanel.currentPanel?.notifyFileChanged(uri);
+            scheduleFileNotification(uri);
         })
     );
 
     context.subscriptions.push(
         fileSystemWatcher.onDidDelete(uri => {
             outputChannel.appendLine(`SysML file deleted: ${uri.fsPath}`);
-            if (VisualizationPanel.currentPanel) {
-                VisualizationPanel.currentPanel.notifyFileChanged(uri);
-            }
-            ModelDashboardPanel.currentPanel?.notifyFileChanged(uri);
+            scheduleFileNotification(uri);
         })
     );
 }

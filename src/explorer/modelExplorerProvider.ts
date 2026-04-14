@@ -180,8 +180,12 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
         let totalBuildTimeMs = 0;
 
         try {
-            for (const uri of fileUris) {
-                if (cancellationToken?.isCancellationRequested) break;
+            // Load files in parallel with bounded concurrency (4 at a time)
+            // to avoid overwhelming the LSP server while still being faster
+            // than sequential loading.
+            const CONCURRENCY = 4;
+            const processFile = async (uri: vscode.Uri) => {
+                if (cancellationToken?.isCancellationRequested) return;
                 try {
                     const result = await this._lspModelProvider.getModel(
                         uri.toString(),
@@ -205,6 +209,13 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
                 } catch {
                     // Skip files that fail to load
                 }
+            };
+
+            // Process in chunks of CONCURRENCY
+            for (let i = 0; i < fileUris.length; i += CONCURRENCY) {
+                if (cancellationToken?.isCancellationRequested) break;
+                const chunk = fileUris.slice(i, i + CONCURRENCY);
+                await Promise.all(chunk.map(processFile));
             }
 
             // Store aggregated stats

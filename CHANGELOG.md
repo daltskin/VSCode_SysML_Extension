@@ -5,14 +5,27 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.31.0]
+## [0.32.0]
 
 ### Changed
 
-- Updated `sysml-v2-lsp` dependency from 0.10.0 to 0.11.0 — cross-file requirement diagnostics, narrowed expression-operator suppression, keyword set derived from ANTLR lexer at runtime
+- Updated `sysml-v2-lsp` dependency from 0.11.0 to 0.12.0
+
+## [0.31.0]
+
+### Added
+
+- **DFA snapshot pre-seeding** — ANTLR parser DFA tables are pre-built at compile time and loaded at startup, eliminating cold-start ATN simulation. Benchmarks show **35–500x faster** per-file parsing and **~120x aggregate throughput** improvement across files of all sizes
+- **DFA self-healing** — if the pre-seeded DFA has incomplete coverage for a construct, the parser automatically clears and retries with a full LL pass, then subsequent parses benefit from the corrected states
+
+### Changed
+
+- Updated `sysml-v2-lsp` dependency from 0.10.0 to 0.11.0 — DFA pre-seeding, worker DFA retry logic, cross-file requirement diagnostics, narrowed expression-operator suppression, keyword set derived from ANTLR lexer at runtime
 
 ### Fixed
 
+- **False parse errors from worker thread** — worker now mirrors the main-thread DFA retry logic; raw worker diagnostics are re-derived through the diagnostics provider to apply grammar-limitation suppression
+- **Flaky cancellation test** — widened timing margins in `loadWorkspaceModel` cancellation test to eliminate race condition
 - Security: patched `brace-expansion` CVE (GHSA-f886-m6hf-6m8v) via npm override
 
 ## [0.30.0]

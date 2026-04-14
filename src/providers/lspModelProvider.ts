@@ -52,7 +52,15 @@ function convertRangesInPlace(elements: SysMLElementDTO[]): void {
 }
 
 export class LspModelProvider {
+    /** Versioned model cache — avoids redundant LSP requests from multiple consumers. */
+    private _cache = new Map<string, { version: number; result: SysMLModelResult }>();
+
     constructor(private readonly _client: LanguageClient) {}
+
+    /** Invalidate the cache for a URI (e.g. after a file change). */
+    invalidateCache(uri: string): void {
+        this._cache.delete(uri);
+    }
 
     /**
      * Request the parsed model from the LSP server.
@@ -60,6 +68,10 @@ export class LspModelProvider {
      * On cold start the server may still be warming up its DFA /
      * parsing the file, so it can return 0 elements.  We retry a
      * few times with exponential back-off before giving up.
+     *
+     * Results are cached by URI + version so multiple consumers
+     * (model explorer, visualization, feature inspector, dashboard)
+     * don't trigger redundant LSP requests for the same data.
      *
      * @param uri       Document URI to query
      * @param scopes    Optional subset of data to return — defaults to all
@@ -70,6 +82,12 @@ export class LspModelProvider {
         scopes?: SysMLModelScope[],
         token?: vscode.CancellationToken,
     ): Promise<SysMLModelResult> {
+        // Check cache — return if version matches and has data
+        const cached = this._cache.get(uri);
+        if (cached && (cached.result.elements?.length ?? 0) > 0) {
+            return cached.result;
+        }
+
         const params: SysMLModelParams = {
             textDocument: { uri },
         };
@@ -113,6 +131,9 @@ export class LspModelProvider {
         if (result.elements) {
             convertRangesInPlace(result.elements);
         }
+
+        // Cache the result for deduplication across consumers
+        this._cache.set(uri, { version: result.version, result });
 
         return result;
     }

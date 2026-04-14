@@ -26,6 +26,8 @@ export class FeatureInspectorPanel {
     private _lspModelProvider: LspModelProvider | undefined;
     private _resolvedTypes: Record<string, ResolvedTypeDTO> = {};
     private _lastDocUri: string | undefined;
+    /** Debounce timer for cursor movement events. */
+    private _cursorDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
     /** Navigation history stack for drill-down / back. */
     private _navStack: ResolvedTypeDTO[] = [];
@@ -48,11 +50,18 @@ export class FeatureInspectorPanel {
             this._disposables,
         );
 
-        // Listen for cursor position changes
+        // Listen for cursor position changes (debounced to avoid
+        // rebuilding the webview on every cursor movement)
         this._disposables.push(
             vscode.window.onDidChangeTextEditorSelection(e => {
                 if (e.textEditor.document.languageId === 'sysml') {
-                    this._onCursorMove(e.textEditor);
+                    if (this._cursorDebounceTimer) {
+                        clearTimeout(this._cursorDebounceTimer);
+                    }
+                    this._cursorDebounceTimer = setTimeout(() => {
+                        this._cursorDebounceTimer = undefined;
+                        this._onCursorMove(e.textEditor);
+                    }, 150);
                 }
             }),
         );
@@ -121,6 +130,9 @@ export class FeatureInspectorPanel {
 
     dispose(): void {
         FeatureInspectorPanel.currentPanel = undefined;
+        if (this._cursorDebounceTimer) {
+            clearTimeout(this._cursorDebounceTimer);
+        }
         this._panel.dispose();
         for (const d of this._disposables) {
             d.dispose();
