@@ -459,7 +459,7 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js",
-    "test:unit": "npm run compile && mocha --ui tdd --require ts-node/register --require src/test/register-vscode-mock.ts 'src/test/**/*.test.ts'",
+    "test:unit": "npm run compile && mocha --ui tdd --require src/test/register-vscode-mock.cjs 'out/test/**/*.test.js'",
     "build:webview-assets": "node ./scripts/copy-webview-assets.js",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
