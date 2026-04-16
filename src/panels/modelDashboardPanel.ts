@@ -250,7 +250,7 @@ export class ModelDashboardPanel {
         let uri: string;
         let fileName: string;
         let diagnosticUri: vscode.Uri;
-        let documentVersion = -1;
+        let documentVersion = -1; // eslint-disable-line no-useless-assignment -- default for fallthrough
 
         if (editor && editor.document.languageId === 'sysml') {
             uri = editor.document.uri.toString();

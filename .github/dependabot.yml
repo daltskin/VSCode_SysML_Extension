@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # npm dependencies
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      # Group all minor + patch production deps into one PR
+      production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      # Group all minor + patch dev deps into one PR
+      dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    # Major updates get individual PRs (breaking changes need review)
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch

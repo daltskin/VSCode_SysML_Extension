@@ -18,8 +18,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": false,
-    "exactOptionalPropertyTypes": false,
-    "downlevelIteration": true
+    "exactOptionalPropertyTypes": false
   },
   "include": [
     "src/**/*"

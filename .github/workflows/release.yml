@@ -33,8 +33,11 @@ jobs:
           node-version: '22.x'
           cache: npm
 
+      - name: Ensure npm LSP dependency
+        run: node -e "const p=require('./package.json'); const v=p.dependencies['sysml-v2-lsp']; if(v.startsWith('file:')) { const m=v.match(/\d+\.\d+\.\d+/); console.log('Switching local LSP to npm@'+m[0]); const fs=require('fs'); p.dependencies['sysml-v2-lsp']=m[0]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n'); } else { console.log('Already using npm: '+v); }"
+
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Lint
         run: npx eslint src/
@@ -59,8 +62,11 @@ jobs:
           node-version: '22.x'
           cache: npm
 
+      - name: Ensure npm LSP dependency
+        run: node -e "const p=require('./package.json'); const v=p.dependencies['sysml-v2-lsp']; if(v.startsWith('file:')) { const m=v.match(/\d+\.\d+\.\d+/); console.log('Switching local LSP to npm@'+m[0]); const fs=require('fs'); p.dependencies['sysml-v2-lsp']=m[0]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n'); } else { console.log('Already using npm: '+v); }"
+
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Get version from tag
         id: version
