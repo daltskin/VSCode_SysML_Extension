@@ -1742,6 +1742,7 @@ export class VisualizationPanel {
         let currentView = 'elk';  // General View as default
         let selectedDiagramIndex = 0; // Track currently selected diagram for multi-diagram views
         let selectedDiagramName = null; // Track selected diagram by name to preserve across updates
+        let selectedViewScope = null; // When a spec view is selected, holds { name, exposeTargets, viewType }
         let activityDebugLabels = false; // Toggle for showing debug labels on forks/joins in Activity view
         const STRUCTURAL_VIEWS = new Set(['elk', 'hierarchy']);
         const MIN_CANVAS_ZOOM = 0.04;
@@ -3602,7 +3603,21 @@ export class VisualizationPanel {
             'constraint': '#F14C4C',    // Red for constraints
             'metadata def': '#D4A5FF',  // Purple for metadata defs
             'metadata': '#D4A5FF',      // Purple for metadata
-            'default': 'var(--vscode-panel-border)'
+            'connection def': '#D7BA7D', // Gold for connection defs
+            'connection': '#D7BA7D',    // Gold for connections
+            'view def': '#569CD6',      // Blue for view defs
+            'view': '#569CD6',          // Blue for views
+            'viewpoint def': '#569CD6', // Blue for viewpoint defs
+            'viewpoint': '#569CD6',     // Blue for viewpoints
+            'rendering def': '#9CDCFE', // Light blue for rendering defs
+            'rendering': '#9CDCFE',     // Light blue for renderings
+            'enum def': '#B5CEA8',      // Green for enum defs
+            'enum': '#B5CEA8',          // Green for enums
+            'flow def': '#CE9178',      // Orange for flow defs
+            'package': '#C8C8C8',       // Light gray for packages
+            'comment': '#6A9955',       // Dim green for comments
+            'doc': '#6A9955',           // Dim green for docs
+            'default': '#C8C8C8'        // Readable light gray fallback
         };
 
         /**
@@ -5704,6 +5719,163 @@ export class VisualizationPanel {
             updateDiagramSelector(activeView);
         }
 
+        // ── View scope helpers (StandardViewDefinitions + expose) ──
+
+        // Map StandardViewDefinition type names to diagram view IDs
+        const VIEW_TYPE_TO_DIAGRAM = {
+            'GeneralView': 'elk',
+            'InterconnectionView': 'ibd',
+            'ActionFlowView': 'activity',
+            'StateTransitionView': 'state',
+            'SequenceView': 'sequence',
+            'BrowserView': 'tree',
+        };
+
+        function mapViewTypeToDiagramView(viewType) {
+            if (!viewType) return null;
+            // Check direct match first
+            if (VIEW_TYPE_TO_DIAGRAM[viewType]) return VIEW_TYPE_TO_DIAGRAM[viewType];
+            // Check if viewType ends with a known StandardViewDefinition name
+            // e.g. "StandardViewDefinitions::InterconnectionView" → "ibd"
+            for (const [key, val] of Object.entries(VIEW_TYPE_TO_DIAGRAM)) {
+                if (viewType.endsWith(key) || viewType.endsWith('::' + key)) return val;
+            }
+            return null;
+        }
+
+        // Find all view/view def elements that have exposeTargets in their attributes
+        function findViewsWithExpose(elements) {
+            const views = [];
+            function search(list) {
+                (list || []).forEach(el => {
+                    const typeLower = (el.type || '').toLowerCase();
+                    const attrs = el.attributes || el.properties || {};
+                    if ((typeLower === 'view' || typeLower === 'view def') && attrs.exposeTargets) {
+                        const targets = String(attrs.exposeTargets).split(',').map(t => t.trim()).filter(Boolean);
+                        if (targets.length > 0) {
+                            // Detect view type from typing relationship or partType attribute
+                            const viewType = attrs.partType || null;
+                            views.push({
+                                name: el.name,
+                                element: el,
+                                exposeTargets: targets,
+                                viewType: viewType
+                            });
+                        }
+                    }
+                    if (el.children && el.children.length > 0) {
+                        search(el.children);
+                    }
+                });
+            }
+            search(elements);
+            return views;
+        }
+
+        // Filter elements by expose target names.
+        // Supports: simple name ("Vehicle"), qualified ("Pkg::Part"),
+        // namespace wildcard ("Pkg::*"), recursive wildcard ("Pkg::**")
+        //
+        // Container promotion: when a definition/package is exposed by
+        // simple name (no wildcard), its children are promoted to top-level
+        // so the renderer shows the internal structure (IBD) rather than
+        // a single opaque node. This matches the SysML v2 spec intent:
+        // "expose MySystem" in an InterconnectionView shows the parts
+        // and connections INSIDE MySystem.
+        function filterElementsByExposeTargets(elements, exposeTargets) {
+            if (!exposeTargets || exposeTargets.length === 0) return elements;
+
+            const matchedElements = [];
+
+            function isWildcard(target) {
+                return target.endsWith('::*') || target.endsWith('::**');
+            }
+
+            function isContainer(typeLower) {
+                return typeLower.endsWith(' def') || typeLower.endsWith('def') ||
+                       typeLower === 'package';
+            }
+
+            function matchesTarget(elementName, parentPath, target) {
+                const qualifiedName = parentPath ? parentPath + '::' + elementName : elementName;
+
+                // Exact name match (simple name or qualified)
+                if (target === elementName || target === qualifiedName) return true;
+
+                // Recursive wildcard: "Pkg::**" matches everything under Pkg
+                if (target.endsWith('::**')) {
+                    const prefix = target.slice(0, -4);
+                    if (qualifiedName.startsWith(prefix + '::') || qualifiedName === prefix) return true;
+                }
+
+                // Namespace wildcard: "Pkg::*" matches direct children of Pkg
+                if (target.endsWith('::*') && !target.endsWith('::**')) {
+                    const prefix = target.slice(0, -3);
+                    if (parentPath === prefix) return true;
+                }
+
+                return false;
+            }
+
+            // Check if this element is a wildcard parent
+            // e.g. target "MySystem::*" and element is "MySystem"
+            function isWildcardParent(elementName, parentPath, target) {
+                if (!isWildcard(target)) return false;
+                const prefix = target.replace(/::\\*{1,2}$/, '');
+                const qualifiedName = parentPath ? parentPath + '::' + elementName : elementName;
+                return elementName === prefix || qualifiedName === prefix;
+            }
+
+            function collectMatching(elementList, parentPath) {
+                (elementList || []).forEach(el => {
+                    const elName = el.name || '';
+                    const typeLower = (el.type || '').toLowerCase();
+                    const hasChildren = el.children && el.children.length > 0;
+
+                    // Check if any target matches this element directly
+                    const directMatch = exposeTargets.some(t => matchesTarget(elName, parentPath, t));
+
+                    // Check if this element is the parent of a wildcard target
+                    const wildcardParent = exposeTargets.some(t => isWildcardParent(elName, parentPath, t));
+
+                    if (wildcardParent && hasChildren) {
+                        // Element is the parent referenced by a wildcard — promote children
+                        el.children.forEach(child => matchedElements.push(child));
+                    } else if (directMatch) {
+                        // Check if matched by a simple name (not wildcard) and is a container
+                        const matchedBySimpleName = exposeTargets.some(t =>
+                            !isWildcard(t) && (t === elName || t === (parentPath ? parentPath + '::' + elName : elName))
+                        );
+
+                        if (isContainer(typeLower) && hasChildren && matchedBySimpleName) {
+                            // Container exposed by simple name → keep as-is
+                            // The renderers will draw this as a framed IBD showing internals
+                            matchedElements.push(el);
+                        } else {
+                            matchedElements.push(el);
+                        }
+                    }
+
+                    // Always recurse to find nested matches
+                    if (hasChildren) {
+                        const childPath = parentPath ? parentPath + '::' + elName : elName;
+                        collectMatching(el.children, childPath);
+                    }
+                });
+            }
+
+            collectMatching(elements, '');
+
+            // Deduplicate (a child might be added both via promotion and direct match)
+            const seen = new Set();
+            return matchedElements.filter(el => {
+                const key = (el.type || '') + '::' + (el.name || '') + '::' + (el.range?.start?.line ?? '');
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+
         // Update diagram selector for multi-diagram views
         function updateDiagramSelector(activeView) {
             const pkgDropdown = document.getElementById('pkg-dropdown');
@@ -5751,7 +5923,23 @@ export class VisualizationPanel {
                     diagrams.push(pkg);
                 });
 
-                labelText = 'Package';
+                // Find spec views with expose targets
+                const elkViewsWithExpose = findViewsWithExpose(elements);
+                if (elkViewsWithExpose.length > 0) {
+                    diagrams.push({ name: '\u2500\u2500 Views \u2500\u2500', element: null, isSeparator: true });
+                    elkViewsWithExpose.forEach(v => {
+                        diagrams.push({
+                            name: '\uD83D\uDC41 ' + v.name,
+                            element: v.element,
+                            isView: true,
+                            exposeTargets: v.exposeTargets,
+                            viewType: v.viewType,
+                            originalName: v.name
+                        });
+                    });
+                }
+
+                labelText = 'Scope';
             } else if (activeView === 'activity') {
                 // Get activity diagrams
                 const preparedData = prepareDataForView(currentData, 'activity');
@@ -5806,7 +5994,7 @@ export class VisualizationPanel {
                 diagrams = currentData?.sequenceDiagrams || [];
                 labelText = 'Sequence';
             } else if (activeView === 'ibd' || activeView === 'usecase' || activeView === 'tree' || activeView === 'graph' || activeView === 'hierarchy') {
-                // For these views, extract top-level packages (same as elk/General View)
+                // For these views, extract top-level packages and spec views with expose targets
                 const elements = currentData?.elements || [];
 
                 const packagesArray = [];
@@ -5837,7 +6025,23 @@ export class VisualizationPanel {
                     diagrams.push(pkg);
                 });
 
-                labelText = 'Package';
+                // Find spec views with expose targets
+                const viewsWithExpose = findViewsWithExpose(elements);
+                if (viewsWithExpose.length > 0) {
+                    diagrams.push({ name: '\u2500\u2500 Views \u2500\u2500', element: null, isSeparator: true });
+                    viewsWithExpose.forEach(v => {
+                        diagrams.push({
+                            name: '\uD83D\uDC41 ' + v.name,
+                            element: v.element,
+                            isView: true,
+                            exposeTargets: v.exposeTargets,
+                            viewType: v.viewType,
+                            originalName: v.name
+                        });
+                    });
+                }
+
+                labelText = 'Scope';
             }
 
             // Show/hide selector based on number of diagrams
@@ -5853,14 +6057,19 @@ export class VisualizationPanel {
 
             // Try to restore selection by name if we have a previously selected diagram
             if (selectedDiagramName) {
-                const matchingIndex = diagrams.findIndex(d => d.name === selectedDiagramName);
+                let matchingIndex = diagrams.findIndex(d => d.name === selectedDiagramName);
+                // Also try matching by originalName for view items
+                if (matchingIndex < 0) {
+                    matchingIndex = diagrams.findIndex(d => d.originalName === selectedDiagramName);
+                }
                 if (matchingIndex >= 0) {
                     selectedDiagramIndex = matchingIndex;
-                    if (pkgLabel) pkgLabel.textContent = selectedDiagramName;
+                    if (pkgLabel) pkgLabel.textContent = diagrams[matchingIndex].originalName || diagrams[matchingIndex].name;
                 } else {
                     // Diagram no longer exists, reset to first
                     selectedDiagramIndex = 0;
                     selectedDiagramName = diagrams[0]?.name || null;
+                    selectedViewScope = null;
                 }
             } else {
                 // No previous selection, initialize with first diagram
@@ -5870,18 +6079,42 @@ export class VisualizationPanel {
             // Populate dropdown menu
             pkgMenu.innerHTML = '';
             diagrams.forEach((d, idx) => {
+                // Render separator items as non-interactive labels
+                if (d.isSeparator) {
+                    const sep = document.createElement('div');
+                    sep.style.cssText = 'padding:4px 10px 2px;font-size:10px;font-weight:600;color:var(--vscode-descriptionForeground,#888);text-transform:uppercase;letter-spacing:0.5px;pointer-events:none;border-top:1px solid var(--vscode-menu-separatorBackground,#444);margin-top:4px;';
+                    sep.textContent = d.name;
+                    pkgMenu.appendChild(sep);
+                    return;
+                }
                 const item = document.createElement('button');
                 item.className = 'view-dropdown-item';
                 item.textContent = d.name || 'Diagram ' + (idx + 1);
                 if (idx === selectedDiagramIndex) item.classList.add('active');
                 item.addEventListener('click', function() {
                     selectedDiagramIndex = idx;
-                    selectedDiagramName = d.name;
+                    selectedDiagramName = d.originalName || d.name;
+                    // Track view scope for expose-based filtering
+                    if (d.isView && d.exposeTargets) {
+                        selectedViewScope = {
+                            name: d.originalName || d.name,
+                            exposeTargets: d.exposeTargets,
+                            viewType: d.viewType || null
+                        };
+                        // Auto-switch to the mapped diagram view if the view type maps to one
+                        const mappedView = mapViewTypeToDiagramView(d.viewType);
+                        if (mappedView && mappedView !== currentView) {
+                            currentView = mappedView;
+                            updateActiveViewButton(currentView);
+                        }
+                    } else {
+                        selectedViewScope = null;
+                    }
                     // Update active state
                     pkgMenu.querySelectorAll('.view-dropdown-item').forEach(i => i.classList.remove('active'));
                     item.classList.add('active');
                     // Update label
-                    if (pkgLabel) pkgLabel.textContent = d.name;
+                    if (pkgLabel) pkgLabel.textContent = d.originalName || d.name;
                     // Close menu
                     pkgMenu.classList.remove('show');
                     // Re-render
@@ -6029,8 +6262,15 @@ export class VisualizationPanel {
             let baseData = filteredData || currentData;
 
             // Apply package filter for views that support it (excluding elk which handles it internally)
-            // Index 0 = "All Packages", Index 1+ = specific packages
-            if (selectedDiagramIndex > 0 &&
+            // Index 0 = "All Packages", Index 1+ = specific packages or views
+            if (selectedViewScope && selectedViewScope.exposeTargets) {
+                // View scope: filter elements by expose targets
+                const allElements = baseData?.elements || [];
+                const filtered = filterElementsByExposeTargets(allElements, selectedViewScope.exposeTargets);
+                if (filtered.length > 0) {
+                    baseData = { ...baseData, elements: filtered };
+                }
+            } else if (selectedDiagramIndex > 0 &&
                 (view === 'ibd' || view === 'usecase' || view === 'tree' || view === 'graph' || view === 'hierarchy')) {
 
                 const elements = baseData?.elements || [];
@@ -8332,8 +8572,8 @@ export class VisualizationPanel {
                 // Use provided data (which may be filtered) or fall back to currentData
                 var elementsData = (data && data.elements) ? data.elements : (currentData ? currentData.elements : null);
 
-                // Apply package filter if a specific package is selected
-                if (selectedDiagramIndex > 0 && elementsData) {
+                // Apply package filter if a specific package is selected (skip if view scope active)
+                if (selectedDiagramIndex > 0 && elementsData && !selectedViewScope) {
                     // Find the selected package (same logic as updateDiagramSelector)
                     const packagesArray = [];
                     const seenPackages = new Set();
@@ -8915,6 +9155,72 @@ export class VisualizationPanel {
                             .style('stroke-width', '2px')
                             .style('opacity', 0.5);
                     });
+                }
+
+                // Draw boundary frame for container exposed by simple name (General View)
+                if (selectedViewScope && selectedViewScope.exposeTargets && nodePositions.size > 0) {
+                    var frameContainer = null;
+                    var elData = (data && data.elements) ? data.elements : (currentData ? currentData.elements : []);
+                    (elData || []).forEach(function(el) {
+                        if (frameContainer) return;
+                        var tl = (el.type || '').toLowerCase();
+                        var isCont = (tl.endsWith(' def') || tl.endsWith('def') || tl === 'package');
+                        if (isCont && el.children && el.children.length > 0) {
+                            var matched = selectedViewScope.exposeTargets.some(function(t) {
+                                return !t.endsWith('::*') && !t.endsWith('::**') && t === el.name;
+                            });
+                            if (matched) frameContainer = el;
+                        }
+                    });
+
+                    if (frameContainer) {
+                        var fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity;
+                        nodePositions.forEach(function(pos) {
+                            fMinX = Math.min(fMinX, pos.x);
+                            fMinY = Math.min(fMinY, pos.y);
+                            fMaxX = Math.max(fMaxX, pos.x + pos.width);
+                            fMaxY = Math.max(fMaxY, pos.y + pos.height);
+                        });
+
+                        var fPad = 30;
+                        var fHeaderH = 36;
+                        var fX = fMinX - fPad;
+                        var fY = fMinY - fPad - fHeaderH;
+                        var fW = (fMaxX - fMinX) + 2 * fPad;
+                        var fH = (fMaxY - fMinY) + 2 * fPad + fHeaderH;
+                        var fColor = getTypeColor(frameContainer.type);
+
+                        var frameG = g.insert('g', ':first-child').attr('class', 'elk-frame');
+
+                        frameG.append('rect')
+                            .attr('x', fX).attr('y', fY)
+                            .attr('width', fW).attr('height', fH)
+                            .attr('rx', 6)
+                            .style('fill', 'none')
+                            .style('stroke', fColor)
+                            .style('stroke-width', '2px')
+                            .style('stroke-dasharray', '8,4');
+
+                        frameG.append('rect')
+                            .attr('x', fX).attr('y', fY)
+                            .attr('width', fW).attr('height', fHeaderH)
+                            .attr('rx', 6)
+                            .style('fill', 'var(--vscode-button-secondaryBackground)')
+                            .style('opacity', 0.5);
+
+                        frameG.append('text')
+                            .attr('x', fX + fPad).attr('y', fY + 14)
+                            .text('\\u00AB' + (frameContainer.type || 'part def') + '\\u00BB')
+                            .style('font-size', '10px')
+                            .style('fill', fColor);
+
+                        frameG.append('text')
+                            .attr('x', fX + fPad).attr('y', fY + 28)
+                            .text(frameContainer.name)
+                            .style('font-size', '12px')
+                            .style('font-weight', 'bold')
+                            .style('fill', 'var(--vscode-editor-foreground)');
+                    }
                 }
 
                 // Draw nodes
@@ -11267,6 +11573,82 @@ export class VisualizationPanel {
 
             // Initial connector drawing
             drawIbdConnectors();
+
+            // Draw boundary frame if a container was exposed by simple name
+            // (selectedViewScope set + elements contain a single container with children)
+            if (selectedViewScope && selectedViewScope.exposeTargets) {
+                const frameContainer = (data?.elements || []).find(el => {
+                    const tl = (el.type || '').toLowerCase();
+                    return (tl.endsWith(' def') || tl.endsWith('def') || tl === 'package') &&
+                           el.children && el.children.length > 0 &&
+                           selectedViewScope.exposeTargets.some(t =>
+                               !t.endsWith('::*') && !t.endsWith('::**') &&
+                               (t === el.name)
+                           );
+                });
+
+                if (frameContainer && partPositions.size > 0) {
+                    // Compute bounds from part positions
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                    partPositions.forEach((pos, key) => {
+                        if (key !== pos.part.name) return;
+                        minX = Math.min(minX, pos.x);
+                        minY = Math.min(minY, pos.y);
+                        maxX = Math.max(maxX, pos.x + partWidth);
+                        maxY = Math.max(maxY, pos.y + (pos.height || 80));
+                    });
+
+                    const framePad = 30;
+                    const frameHeaderH = 36;
+                    const frameX = minX - framePad;
+                    const frameY = minY - framePad - frameHeaderH;
+                    const frameW = (maxX - minX) + 2 * framePad;
+                    const frameH = (maxY - minY) + 2 * framePad + frameHeaderH;
+                    const frameColor = getTypeColor(frameContainer.type);
+
+                    const frameG = g.insert('g', ':first-child').attr('class', 'ibd-frame');
+
+                    // Outer boundary rect
+                    frameG.append('rect')
+                        .attr('x', frameX)
+                        .attr('y', frameY)
+                        .attr('width', frameW)
+                        .attr('height', frameH)
+                        .attr('rx', 6)
+                        .style('fill', 'none')
+                        .style('stroke', frameColor)
+                        .style('stroke-width', '2px')
+                        .style('stroke-dasharray', '8,4');
+
+                    // Header background
+                    frameG.append('rect')
+                        .attr('x', frameX)
+                        .attr('y', frameY)
+                        .attr('width', frameW)
+                        .attr('height', frameHeaderH)
+                        .attr('rx', 6)
+                        .style('fill', 'var(--vscode-button-secondaryBackground)')
+                        .style('opacity', 0.5);
+
+                    // Stereotype
+                    const stereo = frameContainer.type || 'part def';
+                    frameG.append('text')
+                        .attr('x', frameX + framePad)
+                        .attr('y', frameY + 14)
+                        .text('\\u00AB' + stereo + '\\u00BB')
+                        .style('font-size', '10px')
+                        .style('fill', frameColor);
+
+                    // Name
+                    frameG.append('text')
+                        .attr('x', frameX + framePad)
+                        .attr('y', frameY + 28)
+                        .text(frameContainer.name)
+                        .style('font-size', '12px')
+                        .style('font-weight', 'bold')
+                        .style('fill', 'var(--vscode-editor-foreground)');
+                }
+            }
 
             // Draw parts
             const partGroup = g.append('g').attr('class', 'ibd-parts');
