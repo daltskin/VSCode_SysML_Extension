@@ -5,6 +5,14 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0]
+
+### Fixed
+
+- **DFA snapshot coverage** — expanded warmup text with prefix metadata (`#Safety`, `#Security`), nested `action def` inside `part def`, `then state` succession shorthand, and nested subviews; regenerated DFA snapshot eliminating false parse errors for these constructs
+- **False `invalid-constraint-body` warning in viewpoints** — `require constraint { doc /* ... */ }` inside `viewpoint` bodies no longer flagged as invalid
+- **`view-showcase.sysml` syntax** — corrected `entry state idle` to `state idle` in `OperatingStates` state def
+
 ## [0.34.0]
 
 ### Added

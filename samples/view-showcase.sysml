@@ -60,7 +60,7 @@ package ViewShowcase {
   }
 
   state def OperatingStates {
-    entry state idle;
+    state idle;
     then state active;
     then state fault;
   }
