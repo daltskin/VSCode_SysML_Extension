@@ -5,6 +5,30 @@ All notable changes to the SysML v2.0 Language Support extension will be documen
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.0]
+
+### Added
+
+- **SysML v2 View/Viewpoint support** — views with `expose`, `filter`, and `render` directives now drive the visualizer dropdown and diagram selection
+- **Boolean filter expressions** — `filter` directives support `or`, `and`, `not`, and parenthesised grouping (e.g. `filter @PartUsage or @PortUsage`)
+- **Textual notation renderer** — `render asTextualNotation` displays scoped elements as monospace SysML text with coloured keywords and click-to-navigate
+- **Subview hierarchy** — nested view usages shown with `↳` indent in the dropdown; `parentView` tracked through the element tree
+- **View definition inheritance** — view usages inherit `filter`, `render`, and `expose` from their view definition type
+- **Package-level filter extraction** — `filter` directives inside `package` bodies are collected alongside view-body filters
+- **Transitive port type hierarchy** — port compatibility checks walk specialisation chains and detect common ancestors before flagging warnings
+- **Viewpoint satisfaction diagnostic** — `view-no-scope` info hint when a view usage has no `expose` or `filter`
+- **`view-showcase.sysml` sample** — 17 view usages demonstrating all supported view/filter/render scenarios
+- **View filter contract tests** — 45 new extension tests covering boolean expressions, metaclass resolution, metadata matching, subview tracking, and render mappings
+- **LSP test coverage** — 13 new tests for transitive type hierarchy, viewpoint diagnostics, and symbol table view/filter/expose/rendering extraction
+
+### Fixed
+
+- **Multi-filter AND semantics** — multiple `filter` directives now correctly combine with AND; previously the fast path used set union (OR)
+
+### Removed
+
+- Dead code: unused `_lastUpdateTime` field and unreferenced `findElementInParent()` method
+
 ## [0.33.0]
 
 ### Added

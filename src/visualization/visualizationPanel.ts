@@ -11,7 +11,6 @@ export class VisualizationPanel {
     private _isDisposed: boolean = false;
     private _currentView: string = 'elk'; // Store current view state - default to General View
     private _isNavigating: boolean = false; // Flag to prevent view reset during navigation
-    private _lastUpdateTime: number = 0; // Prevent rapid successive updates
     private _fileChangeDebounceTimer: ReturnType<typeof setTimeout> | undefined; // Debounce file change notifications
     private _lastContentHash: string = ''; // Cache content hash to skip unchanged updates
     private _pendingUpdate: ReturnType<typeof setTimeout> | undefined; // Coalesce rapid updates
@@ -565,20 +564,6 @@ export class VisualizationPanel {
         return undefined;
     }
 
-    /**
-     * Find an element within a specific parent context.
-     * This is used when the same element name exists in multiple places (e.g., transmitStatus in different action defs).
-     */
-    private findElementInParent(elementName: string, parentName: string, elements: SysMLElement[]): SysMLElement | undefined {
-        // First, find the parent element
-        const parent = this.findElementRecursive(parentName, elements);
-        if (parent && parent.children) {
-            // Search for the element within the parent's children
-            return this.findElementRecursive(elementName, parent.children);
-        }
-        return undefined;
-    }
-
     private async renameElement(oldName: string, newName: string) {
         // Validate new name
         if (!newName || newName === oldName) {
@@ -775,7 +760,7 @@ export class VisualizationPanel {
                     return;
                 }
                 this.updateVisualization(true);
-            }, 400);
+            }, 150);
         }
     }
 
@@ -927,6 +912,8 @@ export class VisualizationPanel {
             top: calc(100% + 4px);
             left: 0;
             min-width: 180px;
+            max-height: 80vh;
+            overflow-y: auto;
             background: var(--vscode-menu-background, var(--vscode-dropdown-background));
             border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
             border-radius: 4px;
@@ -1582,8 +1569,6 @@ export class VisualizationPanel {
                     <button class="view-dropdown-item" data-view="package"><span class="icon">▤</span> Package</button>
                     <button class="view-dropdown-item" data-view="graph"><span class="icon">●</span> Graph</button>
                     <button class="view-dropdown-item" data-view="hierarchy"><span class="icon">■</span> Hierarchy</button>
-                    <div style="border-top: 1px solid var(--vscode-panel-border); margin: 3px 0;"></div>
-                    <button class="view-dropdown-item" data-view="dashboard"><span class="icon">📊</span> Model Dashboard</button>
                 </div>
             </div>
             <span style="color: var(--vscode-panel-border);">|</span>
@@ -1592,6 +1577,7 @@ export class VisualizationPanel {
             <button id="layout-direction-btn" class="action-btn" title="Toggle layout direction">→ LR</button>
             <button id="category-headers-btn" class="action-btn active" title="Toggle category headers" style="background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-background);">☰ Grouped</button>
             <button id="minimap-toolbar-btn" class="action-btn" title="Toggle minimap">⊡ Map</button>
+            <button id="dashboard-btn" class="action-btn" title="Open Model Dashboard">📊 Dashboard</button>
             <button id="legend-btn" class="action-btn" title="Show diagram legend">🔑 Legend</button>
             <button id="ee-egg" title="What's this?">🥚</button>
             <button id="about-btn" class="action-btn" title="About this extension">ℹ️ About</button>
@@ -1791,7 +1777,9 @@ export class VisualizationPanel {
             activity: { label: '▶ Action Flow View' },
             state: { label: '⌘ State Transition View' },
             usecase: { label: '◎ Case View' },
-            package: { label: '▤ Package View' }
+            package: { label: '▤ Package View' },
+            table: { label: '▦ Table View' },
+            textual: { label: '≡ Textual View' }
         };
         // Legacy pillar view variables (kept for compatibility with old functions)
         const SYSML_PILLARS = [];
@@ -3765,6 +3753,7 @@ export class VisualizationPanel {
                     }
 
                     updateActiveViewButton(currentView); // Highlight current view
+                    updateViewDropdownWithSpecViews(); // Add spec views from SysML file
                     try {
                         renderVisualization(currentView);
                     } catch (e) {
@@ -5593,8 +5582,11 @@ export class VisualizationPanel {
             const proceedWithRender = () => {
                 currentView = view;
 
-                // Reset diagram selection when switching views
+                // Reset diagram selection and view scope when switching views
+                // The main view dropdown takes precedence over scope/package selections
                 selectedDiagramIndex = 0;
+                selectedViewScope = null;
+                selectedDiagramName = null;
 
                 // Notify the panel that the view has changed
                 vscode.postMessage({
@@ -5654,6 +5646,103 @@ export class VisualizationPanel {
             }, 220);
         }
 
+        // Icon mapping for StandardViewDefinition types
+        const SPEC_VIEW_ICONS = {
+            'GeneralView': '◆',
+            'InterconnectionView': '▦',
+            'ActionFlowView': '▶',
+            'StateTransitionView': '⌘',
+            'SequenceView': '⇄',
+            'BrowserView': '▲',
+        };
+        // Icon mapping for render directives
+        const RENDER_ICONS = {
+            'asElementTable': '▦',
+            'asTreeDiagram': '▲',
+            'asInterconnectionDiagram': '▦',
+            'asTextualNotation': '≡',
+        };
+
+        function getSpecViewIcon(viewType, viewRendering) {
+            // Try rendering icon first
+            if (viewRendering) {
+                for (const [key, icon] of Object.entries(RENDER_ICONS)) {
+                    if (viewRendering.endsWith(key) || viewRendering.endsWith('::' + key)) return icon;
+                }
+            }
+            // Then view type icon
+            if (viewType) {
+                for (const [key, icon] of Object.entries(SPEC_VIEW_ICONS)) {
+                    if (viewType.endsWith(key) || viewType.endsWith('::' + key)) return icon;
+                }
+            }
+            return '👁';
+        }
+
+        // Dynamically add/update spec views (from SysML file) in the main View dropdown
+        function updateViewDropdownWithSpecViews() {
+            const menu = document.getElementById('view-dropdown-menu');
+            if (!menu || !currentData) return;
+
+            // Remove previously injected spec view items
+            menu.querySelectorAll('.spec-view-item, .spec-view-separator').forEach(el => el.remove());
+
+            const elements = currentData.elements || [];
+            const specViews = findViewsWithExpose(elements);
+            if (specViews.length === 0) return;
+
+            // Add separator
+            const sep = document.createElement('div');
+            sep.className = 'spec-view-separator';
+            sep.style.cssText = 'border-top:1px solid var(--vscode-panel-border);margin:3px 0;';
+            menu.appendChild(sep);
+
+            // Add label
+            const label = document.createElement('div');
+            label.className = 'spec-view-separator';
+            label.style.cssText = 'padding:2px 10px;font-size:9px;font-weight:600;color:var(--vscode-descriptionForeground,#888);text-transform:uppercase;letter-spacing:0.5px;pointer-events:none;';
+            label.textContent = 'SysML Views';
+            menu.appendChild(label);
+
+            // Add each spec view as a button
+            specViews.forEach(v => {
+                const icon = getSpecViewIcon(v.viewType, v.viewRendering);
+                const btn = document.createElement('button');
+                btn.className = 'view-dropdown-item spec-view-item';
+                btn.setAttribute('data-spec-view', v.name);
+                // Indent subviews to show nesting
+                const indent = v.parentView ? '\u00A0\u00A0\u00A0\u21B3 ' : '';
+                btn.innerHTML = indent + '<span class="icon">' + icon + '</span> ' + v.name;
+                btn.addEventListener('click', function() {
+                    // Close the dropdown
+                    menu.classList.remove('show');
+
+                    // Set view scope
+                    selectedViewScope = {
+                        name: v.name,
+                        exposeTargets: v.exposeTargets || [],
+                        viewFilters: v.viewFilters || [],
+                        viewRendering: v.viewRendering || null,
+                        viewType: v.viewType || null
+                    };
+
+                    // Determine which diagram view to use
+                    const mappedFromRendering = mapRenderingToDiagramView(v.viewRendering);
+                    const mappedFromType = mapViewTypeToDiagramView(v.viewType);
+                    currentView = mappedFromRendering || mappedFromType || 'elk';
+
+                    // Reset package dropdown
+                    selectedDiagramIndex = 0;
+                    selectedDiagramName = null;
+
+                    // Update UI and render
+                    updateActiveViewButton(currentView);
+                    renderVisualization(currentView);
+                });
+                menu.appendChild(btn);
+            });
+        }
+
         function updateActiveViewButton(activeView) {
             const pillarButton = document.getElementById('sysml-btn');
             if (pillarButton) {
@@ -5677,10 +5766,11 @@ export class VisualizationPanel {
                 layoutDirBtn.style.display = showLayoutBtn ? 'inline-flex' : 'none';
             }
 
-            // Show/hide category headers button for General View only
+            // Show/hide category headers button for General View only (hide for spec views)
             const categoryHeadersBtn = document.getElementById('category-headers-btn');
             if (categoryHeadersBtn) {
-                categoryHeadersBtn.style.display = activeView === 'elk' ? 'inline-flex' : 'none';
+                const showGroupBtn = activeView === 'elk' && !selectedViewScope;
+                categoryHeadersBtn.style.display = showGroupBtn ? 'inline-flex' : 'none';
                 categoryHeadersBtn.textContent = showCategoryHeaders ? '☰ Grouped' : '☷ Flat';
                 if (showCategoryHeaders) {
                     categoryHeadersBtn.classList.add('active');
@@ -5698,7 +5788,12 @@ export class VisualizationPanel {
             const dropdownButton = document.getElementById('view-dropdown-btn');
             const dropdownConfig = VIEW_OPTIONS[activeView];
             if (dropdownButton) {
-                if (dropdownConfig) {
+                if (selectedViewScope) {
+                    // Show spec view name in the dropdown button
+                    const icon = getSpecViewIcon(selectedViewScope.viewType, selectedViewScope.viewRendering);
+                    dropdownButton.classList.add('view-btn-active');
+                    dropdownButton.innerHTML = '<span style="font-size: 9px; margin-right: 2px;">▼</span><span>' + icon + ' ' + selectedViewScope.name + '</span>';
+                } else if (dropdownConfig) {
                     dropdownButton.classList.add('view-btn-active');
                     dropdownButton.innerHTML = '<span style="font-size: 9px; margin-right: 2px;">▼</span><span>' + dropdownConfig.label + '</span>';
                 } else {
@@ -5707,9 +5802,16 @@ export class VisualizationPanel {
                 }
             }
 
-            document.querySelectorAll('.view-dropdown-item').forEach(item => {
-                const isMatch = item.getAttribute('data-view') === activeView;
-                item.classList.toggle('active', isMatch);
+            document.querySelectorAll('#view-dropdown-menu .view-dropdown-item').forEach(item => {
+                if (item.hasAttribute('data-spec-view')) {
+                    // Spec view items: highlight only if selectedViewScope matches
+                    const isMatch = selectedViewScope && item.getAttribute('data-spec-view') === selectedViewScope.name;
+                    item.classList.toggle('active', !!isMatch);
+                } else {
+                    // Standard view items: highlight by data-view, but not if a spec view is active
+                    const isMatch = !selectedViewScope && item.getAttribute('data-view') === activeView;
+                    item.classList.toggle('active', isMatch);
+                }
             });
 
             // Show/hide state layout button based on view
@@ -5731,44 +5833,247 @@ export class VisualizationPanel {
             'BrowserView': 'tree',
         };
 
+        // Map Views::rendering names to diagram view IDs
+        const VIEW_RENDERING_TO_DIAGRAM = {
+            'asTreeDiagram': 'tree',
+            'asInterconnectionDiagram': 'ibd',
+            'asTextualNotation': 'textual',
+            'asElementTable': 'table',
+        };
+
+        // Map SysML metaclass filter names to element type strings
+        const METACLASS_TO_TYPES = {
+            'PartUsage': ['part'],
+            'PartDefinition': ['part def'],
+            'PortUsage': ['port'],
+            'PortDefinition': ['port def'],
+            'ActionUsage': ['action'],
+            'ActionDefinition': ['action def'],
+            'StateUsage': ['state'],
+            'StateDefinition': ['state def'],
+            'RequirementUsage': ['requirement'],
+            'RequirementDefinition': ['requirement def'],
+            'ConstraintUsage': ['constraint'],
+            'ConstraintDefinition': ['constraint def'],
+            'UseCaseUsage': ['use case'],
+            'UseCaseDefinition': ['use case def'],
+            'AttributeUsage': ['attribute'],
+            'AttributeDefinition': ['attribute def'],
+            'ItemUsage': ['item'],
+            'ItemDefinition': ['item def'],
+            'ConnectionUsage': ['connection'],
+            'ConnectionDefinition': ['connection def'],
+            'InterfaceUsage': ['interface'],
+            'InterfaceDefinition': ['interface def'],
+            'AllocationUsage': ['allocation'],
+            'AllocationDefinition': ['allocation def'],
+            'ViewUsage': ['view'],
+            'ViewDefinition': ['view def'],
+            'EnumerationDefinition': ['enum def'],
+            'EnumerationUsage': ['enum'],
+            'Package': ['package'],
+        };
+
         function mapViewTypeToDiagramView(viewType) {
             if (!viewType) return null;
-            // Check direct match first
             if (VIEW_TYPE_TO_DIAGRAM[viewType]) return VIEW_TYPE_TO_DIAGRAM[viewType];
-            // Check if viewType ends with a known StandardViewDefinition name
-            // e.g. "StandardViewDefinitions::InterconnectionView" → "ibd"
             for (const [key, val] of Object.entries(VIEW_TYPE_TO_DIAGRAM)) {
                 if (viewType.endsWith(key) || viewType.endsWith('::' + key)) return val;
             }
             return null;
         }
 
-        // Find all view/view def elements that have exposeTargets in their attributes
+        function mapRenderingToDiagramView(rendering) {
+            if (!rendering) return null;
+            if (VIEW_RENDERING_TO_DIAGRAM[rendering]) return VIEW_RENDERING_TO_DIAGRAM[rendering];
+            for (const [key, val] of Object.entries(VIEW_RENDERING_TO_DIAGRAM)) {
+                if (rendering.endsWith(key) || rendering.endsWith('::' + key)) return val;
+            }
+            return null;
+        }
+
+        // Resolve metaclass filter to a set of element type strings
+        function resolveMetaclassFilter(filterExpr) {
+            if (!filterExpr) return null;
+            // filterExpr is e.g. "@ SysML::PartUsage" or "@SysML::PartUsage"
+            const cleaned = filterExpr.replace(/^@\\s*/, '').trim();
+            // Try direct lookup
+            if (METACLASS_TO_TYPES[cleaned]) return METACLASS_TO_TYPES[cleaned];
+            // Try stripping namespace prefix (e.g. "SysML::PartUsage" → "PartUsage")
+            const lastPart = cleaned.split('::').pop();
+            if (lastPart && METACLASS_TO_TYPES[lastPart]) return METACLASS_TO_TYPES[lastPart];
+            return null;
+        }
+
+        // Check if an element has a specific metadata annotation
+        function elementHasMetadata(el, metadataName) {
+            const attrs = el.attributes || el.properties || {};
+            const annotations = String(attrs.metadataAnnotations || '').split(',').map(s => s.trim()).filter(Boolean);
+            return annotations.some(a => a.toLowerCase() === metadataName.toLowerCase());
+        }
+
+        // Check if an element matches a single filter token (@ metaclass or metadata)
+        function elementMatchesSingleFilter(el, token) {
+            const cleaned = token.replace(/^@/, '').trim();
+            // Check metaclass match
+            const metaclassTypes = resolveMetaclassFilter(token);
+            if (metaclassTypes) {
+                const typeLower = (el.type || '').toLowerCase();
+                return metaclassTypes.includes(typeLower);
+            }
+            // Check metadata annotation match
+            return elementHasMetadata(el, cleaned);
+        }
+
+        // Evaluate a compound filter expression with boolean operators
+        // Supports: @Type, @Metadata, "or", "and", "not", parentheses
+        // Ignores: (as Type).attribute (metadata access — treated as truthy metadata check)
+        function evaluateFilterExpression(el, expr) {
+            if (!expr) return true;
+            const trimmed = expr.trim();
+
+            // Handle "not" prefix
+            if (trimmed.startsWith('not ')) {
+                return !evaluateFilterExpression(el, trimmed.slice(4));
+            }
+
+            // Split on " or " (lowest precedence)
+            const orParts = splitOnOperator(trimmed, ' or ');
+            if (orParts.length > 1) {
+                return orParts.some(part => evaluateFilterExpression(el, part));
+            }
+
+            // Split on " and " (higher precedence)
+            const andParts = splitOnOperator(trimmed, ' and ');
+            if (andParts.length > 1) {
+                return andParts.every(part => evaluateFilterExpression(el, part));
+            }
+
+            // Handle (as Type).attribute — treat as metadata type check
+            const castMatch = trimmed.match(/^\\(as\\s+(\\w+)\\)\\.\\w+/);
+            if (castMatch) {
+                return elementHasMetadata(el, castMatch[1]);
+            }
+
+            // Handle parenthesized expression
+            if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+                return evaluateFilterExpression(el, trimmed.slice(1, -1));
+            }
+
+            // Single token: @Metaclass or @Metadata
+            return elementMatchesSingleFilter(el, trimmed);
+        }
+
+        // Split a string on an operator, respecting parentheses
+        function splitOnOperator(str, op) {
+            const parts = [];
+            let depth = 0;
+            let last = 0;
+            for (let i = 0; i <= str.length - op.length; i++) {
+                if (str[i] === '(') depth++;
+                else if (str[i] === ')') depth--;
+                else if (depth === 0 && str.substring(i, i + op.length) === op) {
+                    parts.push(str.substring(last, i).trim());
+                    last = i + op.length;
+                    i += op.length - 1;
+                }
+            }
+            parts.push(str.substring(last).trim());
+            return parts.filter(Boolean);
+        }
+
+        // Filter elements by metaclass type or metadata annotations
+        // Supports boolean filter expressions: @Type, "or", "and", "not"
+        function filterElementsByMetaclass(elements, filterExprs) {
+            if (!filterExprs || filterExprs.length === 0) return elements;
+
+            // Combine all filter expressions with AND (multiple filter directives are conjunctive)
+            const combinedExpr = filterExprs.join(' and ');
+
+            // First try simple metaclass-only path (fast path for single metaclass filter)
+            const allSimple = filterExprs.length === 1 && /^@[\\w:]+$/.test(filterExprs[0].trim());
+            if (allSimple) {
+                const allowedTypes = new Set();
+                const types = resolveMetaclassFilter(filterExprs[0]);
+                if (types) types.forEach(t => allowedTypes.add(t));
+                if (allowedTypes.size > 0) {
+                    const matched = [];
+                    function collectSimple(list) {
+                        (list || []).forEach(el => {
+                            const typeLower = (el.type || '').toLowerCase();
+                            if (allowedTypes.has(typeLower)) matched.push(el);
+                            if (el.children && el.children.length > 0) collectSimple(el.children);
+                        });
+                    }
+                    collectSimple(elements);
+                    return matched;
+                }
+            }
+
+            // Complex path: evaluate boolean expression per element
+            const matched = [];
+            function collect(list) {
+                (list || []).forEach(el => {
+                    if (evaluateFilterExpression(el, combinedExpr)) {
+                        matched.push(el);
+                    }
+                    if (el.children && el.children.length > 0) {
+                        collect(el.children);
+                    }
+                });
+            }
+            collect(elements);
+            return matched;
+        }
+
+        // Find all view/view def elements that have expose targets, filters, or rendering
         function findViewsWithExpose(elements) {
             const views = [];
-            function search(list) {
+            function search(list, parentViewName) {
                 (list || []).forEach(el => {
                     const typeLower = (el.type || '').toLowerCase();
                     const attrs = el.attributes || el.properties || {};
-                    if ((typeLower === 'view' || typeLower === 'view def') && attrs.exposeTargets) {
-                        const targets = String(attrs.exposeTargets).split(',').map(t => t.trim()).filter(Boolean);
-                        if (targets.length > 0) {
-                            // Detect view type from typing relationship or partType attribute
+                    if (typeLower === 'view' || typeLower === 'view def') {
+                        // Only show view usages in the dropdown, not view definitions
+                        // View defs are templates — they define filters/rendering but aren't directly renderable
+                        const isViewDef = typeLower === 'view def';
+                        const hasExpose = !!attrs.exposeTargets;
+                        const hasFilter = !!attrs.viewFilters;
+                        const hasRendering = !!attrs.viewRendering;
+
+                        if ((hasExpose || hasFilter) && !isViewDef) {
+                            const targets = hasExpose
+                                ? String(attrs.exposeTargets).split(',').map(t => t.trim()).filter(Boolean)
+                                : [];
+                            const filters = hasFilter
+                                ? String(attrs.viewFilters).split(',').map(t => t.trim()).filter(Boolean)
+                                : [];
+                            const rendering = hasRendering ? String(attrs.viewRendering) : null;
                             const viewType = attrs.partType || null;
+
                             views.push({
                                 name: el.name,
                                 element: el,
                                 exposeTargets: targets,
-                                viewType: viewType
+                                viewFilters: filters,
+                                viewRendering: rendering,
+                                viewType: viewType,
+                                parentView: parentViewName || null
                             });
+
+                            // Recurse into children to find subviews
+                            if (el.children && el.children.length > 0) {
+                                search(el.children, el.name);
+                            }
+                            return; // Don't double-recurse
                         }
                     }
                     if (el.children && el.children.length > 0) {
-                        search(el.children);
+                        search(el.children, parentViewName);
                     }
                 });
             }
-            search(elements);
+            search(elements, null);
             return views;
         }
 
@@ -5923,23 +6228,7 @@ export class VisualizationPanel {
                     diagrams.push(pkg);
                 });
 
-                // Find spec views with expose targets
-                const elkViewsWithExpose = findViewsWithExpose(elements);
-                if (elkViewsWithExpose.length > 0) {
-                    diagrams.push({ name: '\u2500\u2500 Views \u2500\u2500', element: null, isSeparator: true });
-                    elkViewsWithExpose.forEach(v => {
-                        diagrams.push({
-                            name: '\uD83D\uDC41 ' + v.name,
-                            element: v.element,
-                            isView: true,
-                            exposeTargets: v.exposeTargets,
-                            viewType: v.viewType,
-                            originalName: v.name
-                        });
-                    });
-                }
-
-                labelText = 'Scope';
+                labelText = 'Package';
             } else if (activeView === 'activity') {
                 // Get activity diagrams
                 const preparedData = prepareDataForView(currentData, 'activity');
@@ -6025,23 +6314,7 @@ export class VisualizationPanel {
                     diagrams.push(pkg);
                 });
 
-                // Find spec views with expose targets
-                const viewsWithExpose = findViewsWithExpose(elements);
-                if (viewsWithExpose.length > 0) {
-                    diagrams.push({ name: '\u2500\u2500 Views \u2500\u2500', element: null, isSeparator: true });
-                    viewsWithExpose.forEach(v => {
-                        diagrams.push({
-                            name: '\uD83D\uDC41 ' + v.name,
-                            element: v.element,
-                            isView: true,
-                            exposeTargets: v.exposeTargets,
-                            viewType: v.viewType,
-                            originalName: v.name
-                        });
-                    });
-                }
-
-                labelText = 'Scope';
+                labelText = 'Package';
             }
 
             // Show/hide selector based on number of diagrams
@@ -6094,22 +6367,6 @@ export class VisualizationPanel {
                 item.addEventListener('click', function() {
                     selectedDiagramIndex = idx;
                     selectedDiagramName = d.originalName || d.name;
-                    // Track view scope for expose-based filtering
-                    if (d.isView && d.exposeTargets) {
-                        selectedViewScope = {
-                            name: d.originalName || d.name,
-                            exposeTargets: d.exposeTargets,
-                            viewType: d.viewType || null
-                        };
-                        // Auto-switch to the mapped diagram view if the view type maps to one
-                        const mappedView = mapViewTypeToDiagramView(d.viewType);
-                        if (mappedView && mappedView !== currentView) {
-                            currentView = mappedView;
-                            updateActiveViewButton(currentView);
-                        }
-                    } else {
-                        selectedViewScope = null;
-                    }
                     // Update active state
                     pkgMenu.querySelectorAll('.view-dropdown-item').forEach(i => i.classList.remove('active'));
                     item.classList.add('active');
@@ -6263,12 +6520,29 @@ export class VisualizationPanel {
 
             // Apply package filter for views that support it (excluding elk which handles it internally)
             // Index 0 = "All Packages", Index 1+ = specific packages or views
-            if (selectedViewScope && selectedViewScope.exposeTargets) {
-                // View scope: filter elements by expose targets
-                const allElements = baseData?.elements || [];
-                const filtered = filterElementsByExposeTargets(allElements, selectedViewScope.exposeTargets);
-                if (filtered.length > 0) {
-                    baseData = { ...baseData, elements: filtered };
+            if (selectedViewScope && (selectedViewScope.exposeTargets?.length > 0 || selectedViewScope.viewFilters?.length > 0)) {
+                let scopedElements = baseData?.elements || [];
+
+                // Apply expose targets first (name-based scoping)
+                if (selectedViewScope.exposeTargets && selectedViewScope.exposeTargets.length > 0) {
+                    const filtered = filterElementsByExposeTargets(scopedElements, selectedViewScope.exposeTargets);
+                    if (filtered.length > 0) scopedElements = filtered;
+                }
+
+                // Apply metaclass filters (type-based filtering from view def)
+                if (selectedViewScope.viewFilters && selectedViewScope.viewFilters.length > 0) {
+                    const filtered = filterElementsByMetaclass(scopedElements, selectedViewScope.viewFilters);
+                    if (filtered.length > 0) scopedElements = filtered;
+                }
+
+                baseData = { ...baseData, elements: scopedElements };
+
+                // If rendering maps to table view, switch to it
+                if (selectedViewScope.viewRendering) {
+                    const renderView = mapRenderingToDiagramView(selectedViewScope.viewRendering);
+                    if (renderView && renderView !== view) {
+                        view = renderView;
+                    }
                 }
             } else if (selectedDiagramIndex > 0 &&
                 (view === 'ibd' || view === 'usecase' || view === 'tree' || view === 'graph' || view === 'hierarchy')) {
@@ -6492,6 +6766,10 @@ export class VisualizationPanel {
                     renderSequenceView(width, height, dataToRender);
                 } else if (view === 'ibd') {
                     renderIbdView(width, height, dataToRender);
+                } else if (view === 'table') {
+                    renderTableView(width, height, dataToRender);
+                } else if (view === 'textual') {
+                    renderTextualView(width, height, dataToRender);
                 } else if (view === 'package') {
                     renderPackageView(width, height, dataToRender);
                 } else if (view === 'activity') {
@@ -9063,8 +9341,9 @@ export class VisualizationPanel {
                 var orderedNodeData = [];
                 var categoryStartPositions = new Map();
                 var currentY = padding;
-                var groupSpacing = showCategoryHeaders ? 40 : 0; // Extra space between category groups (only if headers shown)
-                var categoryLabelHeight = showCategoryHeaders ? 25 : 0; // Height for category label (only if headers shown)
+                var effectiveShowHeaders = showCategoryHeaders && !selectedViewScope;
+                var groupSpacing = effectiveShowHeaders ? 40 : 0; // Extra space between category groups (only if headers shown)
+                var categoryLabelHeight = effectiveShowHeaders ? 25 : 0; // Height for category label (only if headers shown)
 
                 categoryOrder.forEach(function(catId) {
                     var group = groupedNodes[catId];
@@ -9126,8 +9405,8 @@ export class VisualizationPanel {
                     .attr('d', 'M0,-4L10,0L0,4')
                     .style('fill', 'var(--vscode-charts-blue)');
 
-                // Draw category headers (only if enabled)
-                if (showCategoryHeaders) {
+                // Draw category headers (only if enabled and not in spec view scope)
+                if (effectiveShowHeaders) {
                     var headerGroup = g.append('g').attr('class', 'category-headers');
                     categoryStartPositions.forEach(function(info, catId) {
                         var category = GENERAL_VIEW_CATEGORIES.find(function(c) { return c.id === catId; });
@@ -10876,6 +11155,246 @@ export class VisualizationPanel {
         window.zoomToFit = zoomToFit;
         window.clearSelection = clearSelection;
         window.filterElements = filterElements;
+
+        // Table View Renderer — renders elements as an HTML-like table using SVG
+        // Used by Views::asElementTable rendering directive
+        function renderTableView(width, height, data = currentData) {
+            const elements = data?.elements || [];
+            // Flatten all elements recursively
+            const allElements = [];
+            function flatten(list) {
+                (list || []).forEach(el => {
+                    if (el && el.name && el.type) allElements.push(el);
+                    if (el.children && el.children.length > 0) flatten(el.children);
+                });
+            }
+            flatten(elements);
+
+            if (allElements.length === 0) {
+                renderPlaceholderView(width, height, 'Table View',
+                    'No elements to display in table format.', data);
+                return;
+            }
+
+            const rowHeight = 28;
+            const headerHeight = 32;
+            const colWidths = [50, 200, 120, 200, 150]; // #, Name, Type, Typed By, Multiplicity
+            const colHeaders = ['#', 'Name', 'Type', 'Typed By', 'Multiplicity'];
+            const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+            const tableHeight = headerHeight + allElements.length * rowHeight;
+            const startX = Math.max(20, (width - tableWidth) / 2);
+            const startY = 20;
+
+            // Title
+            if (selectedViewScope && selectedViewScope.name) {
+                g.append('text')
+                    .attr('x', startX)
+                    .attr('y', startY)
+                    .text(selectedViewScope.name)
+                    .style('font-size', '14px')
+                    .style('font-weight', 'bold')
+                    .style('fill', 'var(--vscode-editor-foreground)');
+            }
+
+            const tableY = startY + (selectedViewScope ? 20 : 0);
+
+            // Header row
+            const headerG = g.append('g').attr('class', 'table-header');
+            headerG.append('rect')
+                .attr('x', startX)
+                .attr('y', tableY)
+                .attr('width', tableWidth)
+                .attr('height', headerHeight)
+                .attr('rx', 4)
+                .style('fill', 'var(--vscode-button-secondaryBackground)')
+                .style('stroke', 'var(--vscode-panel-border)')
+                .style('stroke-width', '1px');
+
+            let colX = startX;
+            colHeaders.forEach((header, i) => {
+                headerG.append('text')
+                    .attr('x', colX + 8)
+                    .attr('y', tableY + 20)
+                    .text(header)
+                    .style('font-size', '11px')
+                    .style('font-weight', 'bold')
+                    .style('fill', 'var(--vscode-editor-foreground)');
+                // Column separator
+                if (i < colHeaders.length - 1) {
+                    headerG.append('line')
+                        .attr('x1', colX + colWidths[i])
+                        .attr('y1', tableY + 4)
+                        .attr('x2', colX + colWidths[i])
+                        .attr('y2', tableY + headerHeight - 4)
+                        .style('stroke', 'var(--vscode-panel-border)')
+                        .style('stroke-width', '1px')
+                        .style('opacity', 0.5);
+                }
+                colX += colWidths[i];
+            });
+
+            // Data rows
+            const rowsG = g.append('g').attr('class', 'table-rows');
+            allElements.forEach((el, idx) => {
+                const rowY = tableY + headerHeight + idx * rowHeight;
+                const isEven = idx % 2 === 0;
+                const typeColor = getTypeColor(el.type);
+
+                // Row background
+                rowsG.append('rect')
+                    .attr('x', startX)
+                    .attr('y', rowY)
+                    .attr('width', tableWidth)
+                    .attr('height', rowHeight)
+                    .style('fill', isEven ? 'var(--vscode-editor-background)' : 'var(--vscode-button-secondaryBackground)')
+                    .style('stroke', 'var(--vscode-panel-border)')
+                    .style('stroke-width', '0.5px')
+                    .style('cursor', 'pointer')
+                    .on('click', function() {
+                        vscode.postMessage({ command: 'jumpToElement', elementName: el.name });
+                    });
+
+                // Get typed-by info
+                const attrs = el.attributes || el.properties || {};
+                const typedBy = attrs.partType || attrs.portType || attrs.type || '';
+                const multiplicity = attrs.multiplicity || '';
+
+                // Row data
+                const rowData = [
+                    String(idx + 1),
+                    el.name,
+                    el.type,
+                    typedBy,
+                    multiplicity
+                ];
+
+                colX = startX;
+                rowData.forEach((cell, i) => {
+                    const displayText = String(cell).length > 28 ? String(cell).substring(0, 26) + '..' : String(cell);
+                    rowsG.append('text')
+                        .attr('x', colX + 8)
+                        .attr('y', rowY + 18)
+                        .text(displayText)
+                        .style('font-size', '11px')
+                        .style('fill', i === 2 ? typeColor : 'var(--vscode-editor-foreground)');
+                    // Column separator
+                    if (i < rowData.length - 1) {
+                        rowsG.append('line')
+                            .attr('x1', colX + colWidths[i])
+                            .attr('y1', rowY)
+                            .attr('x2', colX + colWidths[i])
+                            .attr('y2', rowY + rowHeight)
+                            .style('stroke', 'var(--vscode-panel-border)')
+                            .style('stroke-width', '0.5px')
+                            .style('opacity', 0.3);
+                    }
+                    colX += colWidths[i];
+                });
+            });
+
+            // Bottom border
+            rowsG.append('rect')
+                .attr('x', startX)
+                .attr('y', tableY)
+                .attr('width', tableWidth)
+                .attr('height', headerHeight + allElements.length * rowHeight)
+                .attr('rx', 4)
+                .style('fill', 'none')
+                .style('stroke', 'var(--vscode-panel-border)')
+                .style('stroke-width', '1px');
+
+            // Status
+            var statusText = document.getElementById('status-text');
+            if (statusText) {
+                statusText.textContent = allElements.length + ' element' + (allElements.length !== 1 ? 's' : '') + ' in table';
+            }
+            hideLoading();
+        }
+
+        // Textual Notation View Renderer — renders SysML textual syntax
+        // Used by Views::asTextualNotation rendering directive
+        function renderTextualView(width, height, data = currentData) {
+            const elements = data?.elements || [];
+            if (elements.length === 0) {
+                renderPlaceholderView(width, height, 'Textual Notation',
+                    'No elements to display.', data);
+                return;
+            }
+
+            const lineHeight = 16;
+            const indent = 20;
+            const startX = 30;
+            let y = 30;
+
+            // Title
+            if (selectedViewScope && selectedViewScope.name) {
+                g.append('text').attr('x', startX).attr('y', y)
+                    .text('// ' + selectedViewScope.name)
+                    .style('font-family', 'monospace').style('font-size', '13px')
+                    .style('fill', 'var(--vscode-descriptionForeground)');
+                y += lineHeight + 8;
+            }
+
+            function renderElement(el, depth) {
+                const px = startX + depth * indent;
+                const typeLower = (el.type || '').toLowerCase();
+                const typeColor = getTypeColor(el.type);
+                const attrs = el.attributes || el.properties || {};
+                const typedBy = attrs.partType || attrs.portType || '';
+                const mult = attrs.multiplicity || '';
+                const direction = attrs.direction || '';
+
+                // Build SysML textual line
+                let keyword = el.type || 'element';
+                let line = '';
+                if (direction) line += direction + ' ';
+                line += keyword + ' ' + (el.name || 'unnamed');
+                if (typedBy) line += ' : ' + typedBy;
+                if (mult) line += ' [' + mult + ']';
+
+                const hasChildren = el.children && el.children.length > 0;
+                if (!hasChildren) line += ';';
+                else line += ' {';
+
+                // Keyword in color
+                const keywordWidth = keyword.length * 7.5;
+                g.append('text').attr('x', px).attr('y', y)
+                    .text(keyword)
+                    .style('font-family', 'monospace').style('font-size', '12px')
+                    .style('fill', typeColor).style('cursor', 'pointer')
+                    .on('click', function() {
+                        vscode.postMessage({ command: 'jumpToElement', elementName: el.name });
+                    });
+
+                // Rest of line
+                const rest = line.substring(keyword.length);
+                g.append('text').attr('x', px + keywordWidth).attr('y', y)
+                    .text(rest)
+                    .style('font-family', 'monospace').style('font-size', '12px')
+                    .style('fill', 'var(--vscode-editor-foreground)');
+
+                y += lineHeight;
+
+                // Children
+                if (hasChildren) {
+                    el.children.forEach(child => renderElement(child, depth + 1));
+                    g.append('text').attr('x', px).attr('y', y)
+                        .text('}')
+                        .style('font-family', 'monospace').style('font-size', '12px')
+                        .style('fill', 'var(--vscode-editor-foreground)');
+                    y += lineHeight;
+                }
+            }
+
+            elements.forEach(el => renderElement(el, 0));
+
+            // Status
+            var statusText = document.getElementById('status-text');
+            if (statusText) {
+                statusText.textContent = 'Textual notation';
+            }
+            hideLoading();
+        }
 
         // IBD/Interconnection View Renderer - Compact version
         function renderIbdView(width, height, data = currentData) {
@@ -14956,7 +15475,7 @@ export class VisualizationPanel {
                     viewDropdownMenu.classList.remove('show');
                 }
                 if (selectedView === 'dashboard') {
-                    // Open the Model Dashboard panel via VS Code command
+                    // Legacy — dashboard moved to toolbar button
                     vscode.postMessage({ command: 'executeCommand', args: ['sysml.showModelDashboard'] });
                 } else if (selectedView) {
                     changeView(selectedView);
@@ -14966,6 +15485,14 @@ export class VisualizationPanel {
 
         // Set initial active view button
         updateActiveViewButton(currentView);
+
+        // Dashboard toolbar button
+        const dashboardToolbarBtn = document.getElementById('dashboard-btn');
+        if (dashboardToolbarBtn) {
+            dashboardToolbarBtn.addEventListener('click', () => {
+                vscode.postMessage({ command: 'executeCommand', args: ['sysml.showModelDashboard'] });
+            });
+        }
 
         // Add event listeners for action buttons
         document.getElementById('fit-btn').addEventListener('click', zoomToFit);

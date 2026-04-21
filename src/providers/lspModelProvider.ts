@@ -95,9 +95,9 @@ export class LspModelProvider {
             params.scope = scopes;
         }
 
-        // Retry with exponential back-off when the server hasn't
+        // Retry with short back-off when the server hasn't
         // finished parsing yet (returns 0 elements).
-        const retryDelays = [500, 1500, 4000]; // ms
+        const retryDelays = [100, 250, 500]; // ms
         let result: SysMLModelResult;
 
         for (let attempt = 0; ; attempt++) {

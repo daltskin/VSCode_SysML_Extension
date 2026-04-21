@@ -77,9 +77,9 @@ export class ParseOrchestrator {
     /** Debounce delay in ms — overridable for tests. */
     debounceMs = 300;
     /** `notifyServerParseDone` debounce in ms. */
-    parseDoneDebounceMs = 500;
+    parseDoneDebounceMs = 300;
     /** Cooldown window in ms after a re-parse from parseDone. */
-    parseDoneCooldownMs = 3000;
+    parseDoneCooldownMs = 1500;
 
     constructor(
         private readonly cb: ParseOrchestratorCallbacks,

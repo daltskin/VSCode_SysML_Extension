@@ -2,7 +2,7 @@
   "name": "sysml-v2-support",
   "displayName": "SysML v2.0 Language Support",
   "description": "Complete SysML v2.0 support with visualiser, model explorer, model dashboard, feature inspector, including syntax highlighting, formatting, validation, navigation, and interactive views",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "publisher": "JamieD",
   "license": "MIT",
   "icon": "icon.png",
@@ -500,7 +500,7 @@
   },
   "dependencies": {
     "elkjs": "^0.11.0",
-    "sysml-v2-lsp": "0.14.0",
+    "sysml-v2-lsp": "0.15.0",
     "vscode-languageclient": "^9.0.1"
   },
   "overrides": {

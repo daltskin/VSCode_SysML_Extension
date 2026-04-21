@@ -134,8 +134,8 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const source = fs.readFileSync(panelPath, 'utf-8');
 
         assert.ok(
-            source.includes('data-view="dashboard"'),
-            'Should have dashboard view dropdown item',
+            source.includes('id="dashboard-btn"'),
+            'Should have dashboard toolbar button',
         );
         assert.ok(
             source.includes('sysml.showModelDashboard'),
