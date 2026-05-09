@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Upgraded `sysml-v2-lsp` from 0.17.0 to 0.18.0** — brings enhanced symbol handling with specialization names and updated dependencies
 - Refactored `ci.yml` and `release.yml` to use the composite setup action, eliminating repeated boilerplate
 - Updated `RELEASE_CHECKLIST.md` to reference the new prepare-release workflow
 - Removed manual `version:*` and `release:*` npm scripts (superseded by prepare-release workflow)
