@@ -9097,6 +9097,61 @@ export class VisualizationPanel {
                 var vSpacing = 30;
                 var maxTextWidth = nodeWidth - 16;
 
+                // Port labels are drawn OUTSIDE container boundaries (left & right
+                // edges) at 8px font. Ports alternate left/right starting with left,
+                // so for a node with ports [p0,p1,p2,p3], left-side labels are [p0,p2]
+                // and right-side labels are [p1,p3]. Compute the worst-case left and
+                // right label widths so we can guarantee adjacent containers in the
+                // same row never overlap each other's port labels.
+                function _collectPortNames(el) {
+                    var names = [];
+                    if (el && el.children) {
+                        el.children.forEach(function(c) {
+                            if (!c || !c.name) return;
+                            var t = (c.type || '').toLowerCase();
+                            if (t === 'port' || t.includes('port')) names.push(c.name);
+                        });
+                    }
+                    if (el && el.ports) {
+                        el.ports.forEach(function(p) {
+                            var n = typeof p === 'string' ? p : (p && p.name);
+                            if (n && names.indexOf(n) === -1) names.push(n);
+                        });
+                    }
+                    return names;
+                }
+                // 8px font width estimate (px per char).
+                var PORT_CHAR_PX = 6;
+                var PORT_ICON_GAP_PX = 14; // port icon (~10px) + small breathing room
+                var maxLeftLabelPx = 0;
+                var maxRightLabelPx = 0;
+                var anyPorts = false;
+                topLevelElements.forEach(function(el) {
+                    var names = _collectPortNames(el);
+                    if (names.length === 0) return;
+                    anyPorts = true;
+                    names.forEach(function(n, idx) {
+                        var w = n.length * PORT_CHAR_PX + PORT_ICON_GAP_PX;
+                        if (idx % 2 === 0) {
+                            if (w > maxLeftLabelPx) maxLeftLabelPx = w;
+                        } else {
+                            if (w > maxRightLabelPx) maxRightLabelPx = w;
+                        }
+                    });
+                });
+                if (anyPorts) {
+                    // Gap between two adjacent columns must hold:
+                    //   right-label of column N + left-label of column N+1 + margin
+                    var requiredGap = maxRightLabelPx + maxLeftLabelPx + 16;
+                    hSpacing = Math.max(hSpacing, requiredGap);
+                    // Also pad first column from svg edge so leftmost left-labels fit.
+                    padding = Math.max(padding, maxLeftLabelPx + 8);
+                }
+                // No row staggering — it made the layout look uneven. Adjacent rows
+                // separate by vSpacing, and port columns are short so they don't
+                // typically reach the row below.
+                var rowStaggerPx = 0;
+
                 // Helper to truncate text to fit width
                 function truncateText(text, maxChars) {
                     if (!text) return '';
@@ -9373,8 +9428,12 @@ export class VisualizationPanel {
                             y += groupRowHeights[r] + vSpacing;
                         }
 
+                        // Stagger every other row horizontally so port labels of
+                        // vertically adjacent containers don't sit on the same x band.
+                        var xStagger = (row % 2 === 1) ? rowStaggerPx : 0;
+
                         nodePositions.set(nd.el.name, {
-                            x: padding + col * (nodeWidth + hSpacing),
+                            x: padding + xStagger + col * (nodeWidth + hSpacing),
                             y: y,
                             width: nodeWidth,
                             height: nd.height,
@@ -9824,12 +9883,23 @@ export class VisualizationPanel {
                             .style('stroke', 'var(--vscode-editor-background)')
                             .style('stroke-width', '1px');
 
-                        // Port label - positioned outside node to the left
+                        // Port label - positioned outside node to the left.
+                        // Full name is shown; layout reserves enough hSpacing to fit.
+                        var leftLabelText = port.name;
+                        var leftLabelW = leftLabelText.length * PORT_CHAR_PX + 4;
+                        nodeG.append('rect')
+                            .attr('class', 'port-label-bg')
+                            .attr('x', -portSize - 3 - leftLabelW)
+                            .attr('y', py - 6)
+                            .attr('width', leftLabelW)
+                            .attr('height', 12)
+                            .style('fill', 'var(--vscode-editor-background)')
+                            .style('opacity', 0.85);
                         nodeG.append('text')
                             .attr('x', -portSize - 3)
                             .attr('y', py + 3)
                             .attr('text-anchor', 'end')
-                            .text(port.name)
+                            .text(leftLabelText)
                             .style('font-size', '8px')
                             .style('fill', '#C586C0');
 
@@ -9858,12 +9928,23 @@ export class VisualizationPanel {
                             .style('stroke', 'var(--vscode-editor-background)')
                             .style('stroke-width', '1px');
 
-                        // Port label - positioned outside node to the right
+                        // Port label - positioned outside node to the right.
+                        // Full name is shown; layout reserves enough hSpacing to fit.
+                        var rightLabelText = port.name;
+                        var rightLabelW = rightLabelText.length * PORT_CHAR_PX + 4;
+                        nodeG.append('rect')
+                            .attr('class', 'port-label-bg')
+                            .attr('x', pos.width + portSize + 3)
+                            .attr('y', py - 6)
+                            .attr('width', rightLabelW)
+                            .attr('height', 12)
+                            .style('fill', 'var(--vscode-editor-background)')
+                            .style('opacity', 0.85);
                         nodeG.append('text')
                             .attr('x', pos.width + portSize + 3)
                             .attr('y', py + 3)
                             .attr('text-anchor', 'start')
-                            .text(port.name)
+                            .text(rightLabelText)
                             .style('font-size', '8px')
                             .style('fill', '#C586C0');
 

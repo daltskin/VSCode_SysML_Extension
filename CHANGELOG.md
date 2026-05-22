@@ -2,10 +2,11 @@
 
 ## [Unreleased]
 
-All notable changes to the SysML v2.0 Language Support extension will be documented in this file.
+### Fixed
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+- **General View — port label overlap between adjacent containers** — when parts expose ports, port name labels are drawn outside the container on the left and right edges. With the previous fixed 30px column spacing, long port names would overlap the neighbouring container. The General View layout now measures each port name's rendered width (per side, matching the alternating left/right placement), and widens column spacing and left-edge padding just enough that no label can collide with an adjacent container.
+
+- **Upgraded `sysml-v2-lsp` from 0.18.0 to 0.19.0** — inline with the latest 2026 04 OMG release
 
 ## [0.37.0]
 
