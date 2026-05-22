@@ -1576,6 +1576,7 @@ export class VisualizationPanel {
             <button id="reset-btn" class="action-btn" title="Reset zoom">↻ Reset</button>
             <button id="layout-direction-btn" class="action-btn" title="Toggle layout direction">→ LR</button>
             <button id="category-headers-btn" class="action-btn active" title="Toggle category headers" style="background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-background);">☰ Grouped</button>
+            <button id="layout-mode-btn" class="action-btn active" title="Toggle Grid vs. connection-driven layout" style="background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-background);">▦ Grid</button>
             <button id="minimap-toolbar-btn" class="action-btn" title="Toggle minimap">⊡ Map</button>
             <button id="dashboard-btn" class="action-btn" title="Open Model Dashboard">📊 Dashboard</button>
             <button id="legend-btn" class="action-btn" title="Show diagram legend">🔑 Legend</button>
@@ -1766,6 +1767,7 @@ export class VisualizationPanel {
         let isRendering = false;
         let showMetadata = false;
         let showCategoryHeaders = true; // Show category headers in General View
+        let useConnectionLayout = false; // Grid (default) vs. ELK connection-driven layout in General View
         const sysmlElementLookup = new Map();
         const VIEW_OPTIONS = {
             tree: { label: '▲ Tree View' },
@@ -5769,7 +5771,8 @@ export class VisualizationPanel {
             // Show/hide category headers button for General View only (hide for spec views)
             const categoryHeadersBtn = document.getElementById('category-headers-btn');
             if (categoryHeadersBtn) {
-                const showGroupBtn = activeView === 'elk' && !selectedViewScope;
+                // Grouping is meaningful only in Grid mode; hide when Connection layout active.
+                const showGroupBtn = activeView === 'elk' && !selectedViewScope && !useConnectionLayout;
                 categoryHeadersBtn.style.display = showGroupBtn ? 'inline-flex' : 'none';
                 categoryHeadersBtn.textContent = showCategoryHeaders ? '☰ Grouped' : '☷ Flat';
                 if (showCategoryHeaders) {
@@ -5783,6 +5786,19 @@ export class VisualizationPanel {
                     categoryHeadersBtn.style.color = '';
                     categoryHeadersBtn.style.borderColor = '';
                 }
+            }
+
+            // Show/hide layout-mode button for General View only
+            const layoutModeBtn = document.getElementById('layout-mode-btn');
+            if (layoutModeBtn) {
+                const showLayoutModeBtn = (activeView === 'elk' || activeView === 'ibd') && !selectedViewScope;
+                layoutModeBtn.style.display = showLayoutModeBtn ? 'inline-flex' : 'none';
+                layoutModeBtn.textContent = useConnectionLayout ? '⇄ Connection' : '▦ Grid';
+                // Always render as 'active' so the button has a solid background — text indicates mode.
+                layoutModeBtn.classList.add('active');
+                layoutModeBtn.style.background = 'var(--vscode-button-background)';
+                layoutModeBtn.style.color = 'var(--vscode-button-foreground)';
+                layoutModeBtn.style.borderColor = 'var(--vscode-button-background)';
             }
 
             const dropdownButton = document.getElementById('view-dropdown-btn');
@@ -6437,6 +6453,19 @@ export class VisualizationPanel {
             renderVisualization(currentView);
         }
 
+        function toggleLayoutMode() {
+            useConnectionLayout = !useConnectionLayout;
+            const btn = document.getElementById('layout-mode-btn');
+            if (btn) {
+                btn.textContent = useConnectionLayout ? '⇄ Connection' : '▦ Grid';
+            }
+            // Grouping is hidden in Connection mode — refresh the active-view UI then re-render.
+            updateActiveViewButton(currentView);
+            if (currentView === 'elk' || currentView === 'ibd') {
+                renderVisualization(currentView);
+            }
+        }
+
         function toggleCategoryHeaders() {
             showCategoryHeaders = !showCategoryHeaders;
             // Update button text and active styling
@@ -6734,8 +6763,11 @@ export class VisualizationPanel {
             });
 
             // Handle async and sync rendering
-            if (view === 'elk') {
-                renderElkTreeView(width, height, dataToRender).then(() => {
+            if (view === 'elk' || view === 'ibd') {
+                const renderPromise = (view === 'elk')
+                    ? renderElkTreeView(width, height, dataToRender)
+                    : renderIbdView(width, height, dataToRender);
+                renderPromise.then(() => {
                     // If zoom was previously modified, restore it; otherwise zoom to fit
                     if (shouldPreserveZoom) {
                         restoreZoom();
@@ -6750,7 +6782,7 @@ export class VisualizationPanel {
                         hideLoading(); // Hide loading indicator
                     }, 300);
                 }).catch((error) => {
-                    console.error('[General View] Render error:', error);
+                    console.error('[' + view + '] Render error:', error);
                     isRendering = false; // Reset flag on error too
                     hideLoading(); // Hide loading indicator on error
                 });
@@ -6764,8 +6796,6 @@ export class VisualizationPanel {
                     renderHierarchyView(width, height, dataToRender);
                 } else if (view === 'sequence') {
                     renderSequenceView(width, height, dataToRender);
-                } else if (view === 'ibd') {
-                    renderIbdView(width, height, dataToRender);
                 } else if (view === 'table') {
                     renderTableView(width, height, dataToRender);
                 } else if (view === 'textual') {
@@ -9396,7 +9426,9 @@ export class VisualizationPanel {
                 var orderedNodeData = [];
                 var categoryStartPositions = new Map();
                 var currentY = padding;
-                var effectiveShowHeaders = showCategoryHeaders && !selectedViewScope;
+                // In Connection mode the grid/category model no longer maps to where
+                // nodes will sit, so category headers are suppressed.
+                var effectiveShowHeaders = showCategoryHeaders && !selectedViewScope && !useConnectionLayout;
                 var groupSpacing = effectiveShowHeaders ? 40 : 0; // Extra space between category groups (only if headers shown)
                 var categoryLabelHeight = effectiveShowHeaders ? 25 : 0; // Height for category label (only if headers shown)
 
@@ -9448,6 +9480,96 @@ export class VisualizationPanel {
                     groupRowHeights.forEach(function(h) { totalGroupHeight += h + vSpacing; });
                     currentY += totalGroupHeight + groupSpacing;
                 });
+
+                // === Connection-driven layout (optional) ===
+                // When useConnectionLayout is enabled, overwrite the grid x/y with
+                // positions computed by ELK so related parts cluster together. Node
+                // widths/heights and port placement logic are preserved.
+                if (useConnectionLayout && typeof ELK === 'function' && nodePositions.size > 0) {
+                    // Collect inter-element relationships (same source data the edge
+                    // drawer uses), filtered to top-level nodes only.
+                    var elkConns = [];
+                    var seenElkEdge = {};
+                    function _collectRelsForLayout(elements) {
+                        if (!elements) return;
+                        elements.forEach(function(el) {
+                            if (el && el.relationships) {
+                                el.relationships.forEach(function(rel) {
+                                    var tgt = rel.target || rel.relatedElement;
+                                    if (!tgt) return;
+                                    if (nodePositions.has(el.name) && nodePositions.has(tgt) && el.name !== tgt) {
+                                        var k = el.name + '->' + tgt;
+                                        if (seenElkEdge[k]) return;
+                                        seenElkEdge[k] = true;
+                                        elkConns.push({ source: el.name, target: tgt });
+                                    }
+                                });
+                            }
+                            if (el && el.children) _collectRelsForLayout(el.children);
+                        });
+                    }
+                    _collectRelsForLayout(elementsData);
+                    if (partToDefLinks && partToDefLinks.length) {
+                        partToDefLinks.forEach(function(link) {
+                            if (nodePositions.has(link.source) && nodePositions.has(link.target) && link.source !== link.target) {
+                                var k = link.source + '->' + link.target;
+                                if (seenElkEdge[k]) return;
+                                seenElkEdge[k] = true;
+                                elkConns.push({ source: link.source, target: link.target });
+                            }
+                        });
+                    }
+
+                    // Reserve extra width per node for outside-the-box port labels
+                    // so ELK leaves enough gap between neighbours.
+                    var sideBudgetPx = anyPorts ? (maxLeftLabelPx + maxRightLabelPx) : 0;
+                    var elkChildren = [];
+                    nodePositions.forEach(function(pos, name) {
+                        elkChildren.push({
+                            id: name,
+                            width: pos.width + sideBudgetPx,
+                            height: pos.height
+                        });
+                    });
+                    var elkEdges = elkConns.map(function(c, i) {
+                        return { id: 'e' + i, sources: [c.source], targets: [c.target] };
+                    });
+
+                    var elkGraph = {
+                        id: 'root',
+                        layoutOptions: {
+                            'elk.algorithm': 'layered',
+                            'elk.direction': 'DOWN',
+                            'elk.spacing.nodeNode': String(Math.max(40, hSpacing)),
+                            'elk.layered.spacing.nodeNodeBetweenLayers': String(Math.max(60, vSpacing + 30)),
+                            'elk.edgeRouting': 'ORTHOGONAL',
+                            'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+                            'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+                            'elk.padding': '[top=' + padding + ',left=' + padding + ',bottom=' + padding + ',right=' + padding + ']'
+                        },
+                        children: elkChildren,
+                        edges: elkEdges
+                    };
+
+                    try {
+                        var elkInstance = new ELK();
+                        var elkResult = await elkInstance.layout(elkGraph);
+                        if (elkResult && elkResult.children) {
+                            // Inset by the left-side port-label budget so the node box
+                            // (not its label band) sits where ELK placed it.
+                            var leftBudget = anyPorts ? maxLeftLabelPx : 0;
+                            elkResult.children.forEach(function(child) {
+                                var pos = nodePositions.get(child.id);
+                                if (pos && typeof child.x === 'number' && typeof child.y === 'number') {
+                                    pos.x = child.x + leftBudget;
+                                    pos.y = child.y;
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.error('[General View] ELK layout failed, falling back to grid', e);
+                    }
+                }
 
                 // Arrow marker
                 var defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs');
@@ -11478,7 +11600,7 @@ export class VisualizationPanel {
         }
 
         // IBD/Interconnection View Renderer - Compact version
-        function renderIbdView(width, height, data = currentData) {
+        async function renderIbdView(width, height, data = currentData) {
             if (!data || !data.parts || data.parts.length === 0) {
                 renderPlaceholderView(width, height, 'Interconnection View',
                     'No parts or internal structure found to display.\\n\\nThis view shows internal block diagrams with parts, ports, and connectors.',
@@ -11626,6 +11748,97 @@ export class VisualizationPanel {
                     partPositions.set(part.qualifiedName, posData);
                 }
             });
+
+            // === Connection-driven layout (optional) ===
+            // When useConnectionLayout is enabled, overwrite the grid x/y with
+            // positions computed by ELK so connected parts cluster. Part sizes,
+            // ports, and connector drawing stay untouched \u2014 they all read live
+            // from partPositions.
+            if (useConnectionLayout && typeof ELK === 'function' && partPositions.size > 0) {
+                // Build a deduped set of unique parts (partPositions has multiple
+                // keys per part: name, id, qualifiedName).
+                const uniqueParts = new Map(); // key: posData identity, val: { part, height }
+                partPositions.forEach((pos) => {
+                    if (pos && pos.part && !uniqueParts.has(pos.part)) {
+                        uniqueParts.set(pos.part, pos);
+                    }
+                });
+
+                // Resolve a connector endpoint id to its owning part.
+                const findPartForId = (qualifiedName) => {
+                    if (!qualifiedName) return null;
+                    if (partPositions.has(qualifiedName)) return partPositions.get(qualifiedName).part;
+                    const segs = qualifiedName.split('.');
+                    for (let i = segs.length - 1; i >= 1; i--) {
+                        const pp = partPositions.get(segs.slice(0, i).join('.'));
+                        if (pp) return pp.part;
+                    }
+                    for (let i = segs.length - 1; i >= 0; i--) {
+                        const pp = partPositions.get(segs[i]);
+                        if (pp) return pp.part;
+                    }
+                    return null;
+                };
+
+                const elkEdges = [];
+                const seenEdge = new Set();
+                connectors.forEach((conn, i) => {
+                    const sP = findPartForId(conn.sourceId);
+                    const tP = findPartForId(conn.targetId);
+                    if (!sP || !tP || sP === tP) return;
+                    const k = sP.name + '->' + tP.name;
+                    if (seenEdge.has(k)) return;
+                    seenEdge.add(k);
+                    elkEdges.push({ id: 'e' + i, sources: [sP.name], targets: [tP.name] });
+                });
+
+                // Port labels sit outside parts; reserve enough horizontal padding
+                // so ELK leaves room between neighbours for them.
+                const sideBudget = 90;
+                const elkChildren = [];
+                uniqueParts.forEach((pos, part) => {
+                    elkChildren.push({
+                        id: part.name,
+                        width: partWidth + sideBudget * 2,
+                        height: pos.height || 80
+                    });
+                });
+
+                const elkGraph = {
+                    id: 'root',
+                    layoutOptions: {
+                        'elk.algorithm': 'layered',
+                        'elk.direction': isHorizontal ? 'RIGHT' : 'DOWN',
+                        'elk.spacing.nodeNode': String(Math.max(60, horizontalSpacing)),
+                        'elk.layered.spacing.nodeNodeBetweenLayers': String(Math.max(80, verticalSpacing + 40)),
+                        'elk.edgeRouting': 'ORTHOGONAL',
+                        'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+                        'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+                        'elk.padding': '[top=' + padding + ',left=' + padding + ',bottom=' + padding + ',right=' + padding + ']'
+                    },
+                    children: elkChildren,
+                    edges: elkEdges
+                };
+
+                try {
+                    const elkInstance = new ELK();
+                    const elkResult = await elkInstance.layout(elkGraph);
+                    if (elkResult && elkResult.children) {
+                        // Inset by the per-side budget so the part box (not its
+                        // label band) lands where ELK placed it.
+                        elkResult.children.forEach((child) => {
+                            uniqueParts.forEach((pos, part) => {
+                                if (part.name === child.id && typeof child.x === 'number' && typeof child.y === 'number') {
+                                    pos.x = child.x + sideBudget;
+                                    pos.y = child.y;
+                                }
+                            });
+                        });
+                    }
+                } catch (e) {
+                    console.error('[IBD] ELK layout failed, falling back to grid', e);
+                }
+            }
 
             // Helper to find part position by qualified name (e.g., camera.optics.outgoingLight -> camera.optics)
             const findPartPos = (qualifiedName) => {
@@ -15580,6 +15793,7 @@ export class VisualizationPanel {
         document.getElementById('reset-btn').addEventListener('click', resetZoom);
         document.getElementById('layout-direction-btn').addEventListener('click', toggleLayoutDirection);
         document.getElementById('category-headers-btn').addEventListener('click', toggleCategoryHeaders);
+        document.getElementById('layout-mode-btn').addEventListener('click', toggleLayoutMode);
         document.getElementById('clear-filter-btn').addEventListener('click', clearSelection);
         const filterInputEl = document.getElementById('element-filter');
         if (filterInputEl) {

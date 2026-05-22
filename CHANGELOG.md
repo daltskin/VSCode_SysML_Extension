@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Grid / Connection layout toggle for General and Interconnection Views** — new `▦ Grid` / `⇄ Connection` toolbar button switches the General View and Interconnection (IBD) View between the existing declaration-order grid layout and a connection-driven ELK layered layout. In Connection mode, related parts cluster together and edges/connectors route around boxes instead of crossing them. Falls back silently to the grid layout if ELK cannot lay out the graph.
+
 ### Fixed
 
 - **General View — port label overlap between adjacent containers** — when parts expose ports, port name labels are drawn outside the container on the left and right edges. With the previous fixed 30px column spacing, long port names would overlap the neighbouring container. The General View layout now measures each port name's rendered width (per side, matching the alternating left/right placement), and widens column spacing and left-edge padding just enough that no label can collide with an adjacent container.
