@@ -82,10 +82,35 @@ export class LspModelProvider {
         scopes?: SysMLModelScope[],
         token?: vscode.CancellationToken,
     ): Promise<SysMLModelResult> {
-        // Check cache — return if version matches and has data
+        // Map scope names to the result field that holds their data.
+        // Cache is only honoured when every requested scope is already
+        // present in the cached result — otherwise an earlier call with
+        // a narrower scope (e.g. `['elements']` from the explorer) would
+        // mask a later call that needs additional sections like
+        // `sequenceDiagrams` or `activityDiagrams`.
+        const scopeFieldMap: Record<string, keyof SysMLModelResult> = {
+            elements: 'elements',
+            relationships: 'relationships',
+            sequenceDiagrams: 'sequenceDiagrams',
+            activityDiagrams: 'activityDiagrams',
+            resolvedTypes: 'resolvedTypes',
+            diagnostics: 'diagnostics',
+            stats: 'stats',
+        };
+        const requestedScopes: SysMLModelScope[] = scopes && scopes.length > 0
+            ? scopes
+            : ['elements', 'relationships', 'sequenceDiagrams', 'activityDiagrams', 'resolvedTypes', 'diagnostics'];
+
+        // Check cache — must have elements AND every requested scope present.
         const cached = this._cache.get(uri);
         if (cached && (cached.result.elements?.length ?? 0) > 0) {
-            return cached.result;
+            const cacheCoversAllScopes = requestedScopes.every(s => {
+                const field = scopeFieldMap[s];
+                return field !== undefined && cached.result[field] !== undefined;
+            });
+            if (cacheCoversAllScopes) {
+                return cached.result;
+            }
         }
 
         const params: SysMLModelParams = {

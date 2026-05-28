@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sequence View — arrows not rendering for `part def` containers** ([#44](https://github.com/daltskin/VSCode_SysML_Extension/issues/44)) — sequence diagrams declared inside a `part def` (with `event occurrence` participants and `message` statements) now render their messages as arrows. Two-part fix:
+  - Downstream LSP (`sysml-v2-lsp` 0.19.0) — new extraction pass walks `part def` / `item def` / other container symbols for `flow`/`message` statements and emits them as sequence diagrams, complementing the existing `action def` / `action usage` passes.
+  - Extension — `LspModelProvider` cache is now scope-aware. Previously a cached result from an earlier narrow-scope call (e.g. `['elements']` from the Model Explorer) would satisfy a later call requesting `sequenceDiagrams`, returning an empty/missing field and triggering the in-extension fallback synthesis (which produced participants but no messages). The cache now only returns an entry when every requested scope is present in the cached result.
+
 ## [0.38.0]
 
 ### Added
