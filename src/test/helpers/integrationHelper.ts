@@ -9,8 +9,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-/* global Thenable */
-
 /** Whether the LSP has successfully returned document symbols at least once. */
 let _lspWarmedUp = false;
 

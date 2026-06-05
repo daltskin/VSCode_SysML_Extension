@@ -24,7 +24,7 @@ module.exports = [
       parserOptions: {
         ecmaVersion: 2020,
         sourceType: 'module',
-        project: './tsconfig.json'
+        project: ['./tsconfig.json', './tsconfig.web.json']
       },
       ecmaVersion: 2020,
       globals: {
@@ -67,13 +67,13 @@ module.exports = [
     }
   },
   {
-    files: ['src/test/**/*.ts'],
+    files: ['src/test/**/*.ts', 'src/web/test/**/*.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
         ecmaVersion: 2020,
         sourceType: 'module',
-        project: './tsconfig.json'
+        project: ['./tsconfig.json', './tsconfig.web.json']
       },
       ecmaVersion: 2020,
       globals: {
@@ -95,7 +95,10 @@ module.exports = [
         suiteTeardown: 'readonly',
         AbortController: 'readonly',
         AbortSignal: 'readonly',
-        DOMException: 'readonly'
+        DOMException: 'readonly',
+        Thenable: 'readonly',
+        Worker: 'readonly',
+        globalThis: 'readonly'
       }
     },
     plugins: {
