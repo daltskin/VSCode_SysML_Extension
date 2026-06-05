@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Web extension support (vscode.dev / github.dev)** — the extension now runs as a true browser web extension in addition to desktop, with no server-side container required:
+  - `browser` entry point (`dist/web/extension.js`) added alongside the desktop `main` entry, so the same `.vsix` activates in both hosts.
+  - Platform-split LSP client factory — `createClient.ts` (desktop, Node child process over IPC) and `createClient.browser.ts` (web, language server in a **Web Worker** via `vscode-languageclient/browser`). `client.ts` now programs against the platform-neutral `BaseLanguageClient`.
+  - SysML standard library is bundled into the browser server worker (no Node.js or filesystem), served on demand via a `sysml-stdlib:` content provider.
+  - Node-only features (e.g. the MCP server) are guarded to the desktop host.
+- **`esbuild.web.mjs` web bundler** — builds the browser extension bundle, swaps in the browser client factory, and copies the `sysml-v2-lsp` browser server worker to `dist/web/sysmlServer.js`. A `--tests` flag bundles the browser test suite.
+- **Browser integration tests** — real-browser tests under `src/web/test/` run in the actual web extension host via [`@vscode/test-web`](https://github.com/microsoft/vscode-test-web), verifying activation and the Web Worker language server (document symbols, hover).
+- **New npm scripts** — `build:web`, `watch:web`, `run:web`, and `test:web` for building, serving, and testing the web build.
+- **New Makefile targets** — `make web` builds and serves the web extension locally like vscode.dev (with `WEB_PORT` override), and `make test-web` runs the headless browser integration tests.
+
+### Changed
+
+- `vscode:prepublish` now builds both the desktop (`tsc`) and web (`esbuild`) bundles so published packages work in both hosts.
+- Documented browser/vscode.dev support and the dual-build architecture in `README.md` and `ARCHITECTURE.md`.
+
 ## [0.39.0]
 
 ### Fixed

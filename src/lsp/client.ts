@@ -9,16 +9,15 @@
 
 import * as vscode from 'vscode';
 import {
-    LanguageClient,
+    BaseLanguageClient,
     LanguageClientOptions,
     ProgressToken,
-    ServerOptions,
-    TransportKind,
     WorkDoneProgressBegin,
-} from 'vscode-languageclient/node';
+} from 'vscode-languageclient';
 import type { SysMLStatusParams } from '../providers/sysmlModelTypes';
+import { createLanguageClient } from './createClient';
 
-let client: LanguageClient | undefined;
+let client: BaseLanguageClient | undefined;
 
 // ── WorkDoneProgress timeout protection ──────────────────────────
 // The LSP server creates a WorkDoneProgress token (begin → … → end)
@@ -31,43 +30,18 @@ let activeParsingToken: ProgressToken | undefined;
 let parsingTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
 /**
- * Resolve the absolute path to the sysml-v2-lsp server module.
- * Uses the package's exported `serverPath` which points to
- * `dist/server/server.mjs` inside node_modules.
- */
-function resolveServerPath(): string {
-    const { serverPath } = require('sysml-v2-lsp');
-    return serverPath as string;
-}
-
-/**
  * Start the SysML v2 language server and return the running client.
  */
 export function startLanguageClient(
     context: vscode.ExtensionContext,
     outputChannel: vscode.OutputChannel
-): LanguageClient {
-    const serverModule = resolveServerPath();
-    outputChannel.appendLine(`Starting SysML v2 language server: ${serverModule}`);
-
-    const serverOptions: ServerOptions = {
-        run: {
-            module: serverModule,
-            transport: TransportKind.ipc,
-        },
-        debug: {
-            module: serverModule,
-            transport: TransportKind.ipc,
-            options: {
-                execArgv: ['--nolazy', '--inspect=6009'],
-            },
-        },
-    };
-
+): BaseLanguageClient {
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
-            { scheme: 'file', language: 'sysml' },
-            { scheme: 'untitled', language: 'sysml' },
+            // Match the SysML language regardless of URI scheme so the
+            // client works for local files (desktop) and virtual file
+            // systems on the web (e.g. vscode-vfs:// on vscode.dev).
+            { language: 'sysml' },
         ],
         synchronize: {
             fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{sysml,kerml}'),
@@ -136,11 +110,27 @@ export function startLanguageClient(
         },
     };
 
-    client = new LanguageClient(
-        'sysmlLanguageServer',
-        'SysML v2 Language Server',
-        serverOptions,
-        clientOptions
+    client = createLanguageClient(context, clientOptions, outputChannel);
+
+    // ─── Standard-library content provider ─────────────────────────
+    // On the web the standard library lives only in memory inside the
+    // server's Web Worker (no filesystem), so Go-to-Definition targets
+    // use `sysml-stdlib:` URIs. This provider fetches their content
+    // from the server on demand. Harmless on desktop (where the server
+    // resolves library files to real `file:` URIs instead).
+    context.subscriptions.push(
+        vscode.workspace.registerTextDocumentContentProvider('sysml-stdlib', {
+            provideTextDocumentContent: async (uri): Promise<string> => {
+                if (!client) {
+                    return '';
+                }
+                const content = await client.sendRequest<string | null>(
+                    'sysml/libraryContent',
+                    { uri: uri.toString() },
+                );
+                return content ?? `// Standard library file not found: ${uri.toString()}`;
+            },
+        }),
     );
 
     // Register the sysml/status notification handler BEFORE start()
@@ -178,7 +168,8 @@ export function startLanguageClient(
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.restartServer', async () => {
             if (client) {
-                await client.restart();
+                await client.stop();
+                await client.start();
                 outputChannel.appendLine('Language server restarted');
                 vscode.window.showInformationMessage('SysML Language Server restarted.');
             }
@@ -218,6 +209,6 @@ export function stopLanguageClient(): PromiseLike<void> | undefined {
 /**
  * Get the current language client instance (may be undefined if not started).
  */
-export function getLanguageClient(): LanguageClient | undefined {
+export function getLanguageClient(): BaseLanguageClient | undefined {
     return client;
 }

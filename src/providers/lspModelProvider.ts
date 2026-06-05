@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { LanguageClient } from 'vscode-languageclient/node';
+import { BaseLanguageClient } from 'vscode-languageclient';
 import {
     PositionDTO,
     RangeDTO,
@@ -55,7 +55,7 @@ export class LspModelProvider {
     /** Versioned model cache — avoids redundant LSP requests from multiple consumers. */
     private _cache = new Map<string, { version: number; result: SysMLModelResult }>();
 
-    constructor(private readonly _client: LanguageClient) {}
+    constructor(private readonly _client: BaseLanguageClient) {}
 
     /** Invalidate the cache for a URI (e.g. after a file change). */
     invalidateCache(uri: string): void {

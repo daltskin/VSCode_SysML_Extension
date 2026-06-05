@@ -156,6 +156,26 @@ npm install && npm run compile && npm test
 
 Note for when packaged as a VSIX, the extension registers its MCP server from the extension install path at activation time. A workspace `.vscode/mcp.json` is only a local development override (for example, to pin Copilot chat to a specific local server build).
 
+### Running in the browser (vscode.dev)
+
+The extension also runs as a **web extension** in browser-based VS Code such as
+[vscode.dev](https://vscode.dev) and [github.dev](https://github.dev). In the
+web build the language server runs as a **Web Worker** (via
+`vscode-languageclient/browser`) with the SysML standard library bundled in, so
+there is no Node.js dependency. The desktop build is unchanged and still runs
+the server as a Node module over IPC.
+
+```bash
+make web        # build the web bundle and serve it locally like vscode.dev
+make test-web   # run the web integration tests in a headless browser host
+```
+
+`make web` serves on port `3000` by default (override with `WEB_PORT`, e.g.
+`make web WEB_PORT=3111`) and opens the `samples/` folder as the workspace.
+Under the hood these wrap [`@vscode/test-web`](https://github.com/microsoft/vscode-test-web)
+and the `npm run build:web` / `npm run test:web` scripts. The MCP server is
+desktop-only and is automatically skipped in the web host.
+
 ## License
 
 MIT

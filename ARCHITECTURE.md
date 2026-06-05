@@ -60,11 +60,14 @@ A VS Code extension providing SysML v2.0 language support with interactive visua
 
 ### 1. LSP Client (`src/lsp/`)
 
-- Starts the **sysml-v2-lsp** language server as a child process (IPC transport)
+- Starts the **sysml-v2-lsp** language server and provides all language intelligence: diagnostics, completions, hover, go-to-definition, references, rename, formatting, code actions, semantic tokens, CodeLens, inlay hints, type/call hierarchy, document symbols, folding ranges, selection ranges, workspace symbols
 - The server module is shipped as the `sysml-v2-lsp` npm dependency
-- Provides all language intelligence: diagnostics, completions, hover, go-to-definition, references, rename, formatting, code actions, semantic tokens, CodeLens, inlay hints, type/call hierarchy, document symbols, folding ranges, selection ranges, workspace symbols
 - Custom `sysml/model` request returns parsed model data for visualization and explorer
 - Supports `sysml.restartServer` command for development
+- **Dual-platform transport** — the concrete client is selected at build time by a platform-specific factory so the same feature code runs on desktop and web:
+  - `createClient.ts` (desktop) — launches the server as a **Node.js child process** over IPC using `vscode-languageclient/node`
+  - `createClient.browser.ts` (web) — launches the server as a **Web Worker** using `vscode-languageclient/browser`, with the SysML standard library bundled into the worker (no Node.js, no filesystem). A `sysml-stdlib:` content provider serves library files on demand via a `sysml/libraryContent` request
+  - `client.ts` programs against the platform-neutral `BaseLanguageClient`; esbuild swaps `createClient` for `createClient.browser` in the web bundle
 
 ### 2. LSP Model Provider (`src/providers/`)
 
@@ -131,8 +134,10 @@ A VS Code extension providing SysML v2.0 language support with interactive visua
 src/
 ├── extension.ts          # Entry point, command registration
 ├── lsp/
-│   ├── client.ts         # LSP client (starts sysml-v2-lsp server)
-│   └── server-launcher.cjs # Server process entry point
+│   ├── client.ts                # Platform-neutral LSP client wiring
+│   ├── createClient.ts          # Desktop factory (Node child process, IPC)
+│   ├── createClient.browser.ts  # Web factory (Web Worker, bundled stdlib)
+│   └── server-launcher.cjs      # Desktop server process entry point
 ├── providers/
 │   ├── lspModelProvider.ts  # sysml/model request handler
 │   └── sysmlModelTypes.ts   # Shared model type definitions
@@ -144,14 +149,29 @@ src/
 │   └── modelDashboardPanel.ts   # Dashboard webview panel
 ├── types/
 │   └── sysml-v2-lsp.d.ts       # Type declarations for LSP package
+├── web/
+│   └── test/suite/             # Browser integration tests (@vscode/test-web)
 └── test/
     └── *.test.ts                # Unit and integration tests
 ```
 
+## Build Targets
+
+The extension ships two builds from a single codebase:
+
+| Target  | Entry (`package.json`)             | Built by          | Output      | Server runtime                |
+| ------- | ---------------------------------- | ----------------- | ----------- | ----------------------------- |
+| Desktop | `main: ./out/extension.js`         | `tsc -p ./`       | `out/`      | Node.js child process         |
+| Web     | `browser: ./dist/web/extension.js` | `esbuild.web.mjs` | `dist/web/` | Web Worker (`sysmlServer.js`) |
+
+- `esbuild.web.mjs` bundles `src/extension.ts` to `dist/web/extension.js`, swaps the LSP client factory for its browser variant, and copies the `sysml-v2-lsp` browser server bundle to `dist/web/sysmlServer.js`. A `--tests` flag additionally bundles the browser test suite.
+- `vscode:prepublish` runs both builds so the `.vsix` works as a desktop **and** web extension (vscode.dev / github.dev).
+- The MCP server and other Node-only features are guarded to the desktop host.
+
 ## Extension Activation
 
 1. Triggered by `onLanguage:sysml` or command invocation
-2. Starts the **sysml-v2-lsp** language server via IPC (handles all language features)
+2. Starts the **sysml-v2-lsp** language server — as a Node child process (desktop) or a Web Worker (web) — handling all language features
 3. Registers Model Explorer tree view, visualization commands, and dashboard
 4. Sets up file watchers and document change handlers for model updates
 

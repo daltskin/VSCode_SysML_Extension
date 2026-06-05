@@ -13,6 +13,8 @@
   "engines": {
     "vscode": "^1.118.0"
   },
+  "main": "./out/extension.js",
+  "browser": "./dist/web/extension.js",
   "categories": [
     "Programming Languages",
     "Formatters",
@@ -47,7 +49,6 @@
     "onCommand:sysml.showSysRunner",
     "onCommand:sysml.visualizePackage"
   ],
-  "main": "./out/extension.js",
   "contributes": {
     "languages": [
       {
@@ -454,9 +455,13 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile && npm run build:webview-assets",
+    "vscode:prepublish": "npm run compile && npm run build:web -- --production && npm run build:webview-assets",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "build:web": "node ./esbuild.web.mjs",
+    "watch:web": "node ./esbuild.web.mjs --watch",
+    "run:web": "npm run build:web && npm run build:webview-assets && vscode-test-web --browserType=chromium --extensionDevelopmentPath=. .",
+    "test:web": "node ./esbuild.web.mjs --tests && npm run build:webview-assets && vscode-test-web --browserType=chromium --headless --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js",
     "test:unit": "npm run compile && mocha --ui tdd --require src/test/register-vscode-mock.cjs 'out/test/**/*.test.js'",
@@ -479,12 +484,14 @@
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.58.2",
     "@vscode/test-electron": "^2.4.1",
+    "@vscode/test-web": "^0.0.80",
     "@vscode/vsce": "^3.9.1",
     "c8": "^11.0.0",
     "cytoscape": "^3.33.3",
     "cytoscape-elk": "^2.3.0",
     "cytoscape-svg": "^0.4.0",
     "d3": "^7.9.0",
+    "esbuild": "^0.28.0",
     "eslint": "^10.3.0",
     "glob": "^13.0.0",
     "mocha": "^11.0.0",
@@ -494,7 +501,7 @@
   },
   "dependencies": {
     "elkjs": "^0.11.0",
-    "sysml-v2-lsp": "0.20.0",
+    "sysml-v2-lsp": "^0.21.0",
     "vscode-languageclient": "^9.0.1"
   },
   "overrides": {

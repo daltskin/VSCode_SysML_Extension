@@ -32,6 +32,7 @@ temp/**
 assets/**
 Makefile
 eslint.config.js
+esbuild.web.mjs
 ARCHITECTURE.md
 ROADMAP.md
 CHANGELOG.md
@@ -49,6 +50,9 @@ node_modules/@typescript-eslint/**
 node_modules/eslint/**
 node_modules/mocha/**
 node_modules/@vscode/test-electron/**
+node_modules/@vscode/test-web/**
+node_modules/esbuild/**
+node_modules/@esbuild/**
 node_modules/glob/**
 node_modules/c8/**
 node_modules/vitest/**

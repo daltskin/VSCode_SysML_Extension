@@ -1,5 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { FeatureExplorerProvider } from './explorer/featureExplorerProvider';
 import { ModelExplorerProvider, ModelTreeItem } from './explorer/modelExplorerProvider';
@@ -73,6 +71,46 @@ export function notifyServerParseDone(uri?: string): void {
     parseOrchestrator.notifyServerParseDone(uri);
 }
 
+/**
+ * Register the SysML MCP (Model Context Protocol) stdio server.
+ *
+ * Desktop-only: spawns the bundled Node `mcpServer.js` so Copilot /
+ * agent mode can discover SysML tools. Uses only `vscode` APIs (no
+ * Node `fs`/`path`) so the extension bundle stays web-compatible.
+ */
+async function registerMcpServer(
+    context: vscode.ExtensionContext,
+    outputChannel: vscode.OutputChannel,
+): Promise<void> {
+    const mcpServerUri = vscode.Uri.joinPath(
+        context.extensionUri,
+        'node_modules', 'sysml-v2-lsp', 'dist', 'server', 'mcpServer.js',
+    );
+
+    try {
+        await vscode.workspace.fs.stat(mcpServerUri);
+    } catch {
+        outputChannel.appendLine(`Warning: MCP server not found at ${mcpServerUri.fsPath}`);
+        return;
+    }
+
+    const emitter = new vscode.EventEmitter<void>();
+    context.subscriptions.push(emitter);
+    context.subscriptions.push(
+        vscode.lm.registerMcpServerDefinitionProvider('sysml-v2-mcp', {
+            onDidChangeMcpServerDefinitions: emitter.event,
+            provideMcpServerDefinitions: async () => [
+                new vscode.McpStdioServerDefinition(
+                    'SysML v2 Model Context',
+                    'node',
+                    [mcpServerUri.fsPath],
+                ),
+            ],
+        }),
+    );
+    outputChannel.appendLine(`MCP server registered: ${mcpServerUri.fsPath}`);
+}
+
 export function activate(context: vscode.ExtensionContext) {
     // Create dedicated output channel for logging
     outputChannel = vscode.window.createOutputChannel('SysML');
@@ -82,31 +120,13 @@ export function activate(context: vscode.ExtensionContext) {
     outputChannel.show(true);  // Auto-show so the user can see LSP status
 
     // ─── MCP Server (register FIRST — independent of LSP) ─────────
-    // The MCP server is a standalone stdio process that doesn't need
-    // the LSP client.  Register it early so Copilot / agent mode can
-    // discover SysML tools even before a .sysml file is opened.
-    const mcpServerPath = path.join(
-        context.extensionPath, 'node_modules', 'sysml-v2-lsp',
-        'dist', 'server', 'mcpServer.js'
-    );
-    if (fs.existsSync(mcpServerPath)) {
-        const emitter = new vscode.EventEmitter<void>();
-        context.subscriptions.push(emitter);
-        context.subscriptions.push(
-            vscode.lm.registerMcpServerDefinitionProvider('sysml-v2-mcp', {
-                onDidChangeMcpServerDefinitions: emitter.event,
-                provideMcpServerDefinitions: async () => [
-                    new vscode.McpStdioServerDefinition(
-                        'SysML v2 Model Context',
-                        'node',
-                        [mcpServerPath]
-                    )
-                ],
-            })
-        );
-        outputChannel.appendLine(`MCP server registered: ${mcpServerPath}`);
+    // The MCP server is a standalone Node stdio process, so it is only
+    // available in the desktop extension host. On the web (vscode.dev)
+    // there is no Node runtime to spawn it, so registration is skipped.
+    if (vscode.env.uiKind === vscode.UIKind.Desktop) {
+        void registerMcpServer(context, outputChannel);
     } else {
-        outputChannel.appendLine(`Warning: MCP server not found at ${mcpServerPath}`);
+        outputChannel.appendLine('MCP server skipped (not supported in web extension host)');
     }
 
     // ─── LSP Client ────────────────────────────────────────────────

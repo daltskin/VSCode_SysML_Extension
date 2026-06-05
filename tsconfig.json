@@ -26,6 +26,8 @@
   "exclude": [
     "node_modules",
     ".vscode-test",
-    "out"
+    "out",
+    "src/**/*.browser.ts",
+    "src/web/**"
   ]
 }

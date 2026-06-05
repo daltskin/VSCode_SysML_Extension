@@ -55,3 +55,19 @@ jobs:
 
       - name: Integration Tests (Extension Host)
         run: xvfb-run -a npm test
+
+  web-build:
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Build web bundle
+        run: npm run build:web
+
+      - name: Web Integration Tests (Browser Host)
+        run: xvfb-run -a npm run test:web
+

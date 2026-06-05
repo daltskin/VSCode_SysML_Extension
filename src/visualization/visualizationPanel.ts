@@ -1,4 +1,3 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { LspModelProvider, toVscodeRange } from '../providers/lspModelProvider';
 import type { SysMLElementDTO } from '../providers/sysmlModelTypes';
@@ -660,15 +659,15 @@ export class VisualizationPanel {
         //   4. First workspace folder
         let defaultFolder: vscode.Uri | undefined;
         if (this._document?.uri?.scheme === 'file' && this._document.uri.fsPath) {
-            defaultFolder = vscode.Uri.file(path.dirname(this._document.uri.fsPath));
+            defaultFolder = vscode.Uri.joinPath(this._document.uri, '..');
         }
         if (!defaultFolder && this._fileUris.length > 0) {
-            defaultFolder = vscode.Uri.file(path.dirname(this._fileUris[0].fsPath));
+            defaultFolder = vscode.Uri.joinPath(this._fileUris[0], '..');
         }
         if (!defaultFolder) {
             const activeEditor = vscode.window.activeTextEditor;
             if (activeEditor?.document.uri.scheme === 'file') {
-                defaultFolder = vscode.Uri.file(path.dirname(activeEditor.document.uri.fsPath));
+                defaultFolder = vscode.Uri.joinPath(activeEditor.document.uri, '..');
             }
         }
         if (!defaultFolder && vscode.workspace.workspaceFolders?.length) {

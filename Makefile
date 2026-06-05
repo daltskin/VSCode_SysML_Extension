@@ -34,19 +34,37 @@ help:
 	@echo "  $(GREEN)test-integration$(NC) - Run full integration tests (requires VS Code)"
 	@echo "  $(GREEN)test-integration-parallel$(NC) - Run integration tests in 2 parallel shards"
 	@echo "  $(GREEN)test-syntax$(NC)    - Test syntax and compilation (no VS Code required)"
+	@echo "  $(GREEN)test-web$(NC)       - Run web integration tests in a headless browser host"
 	@echo "  $(GREEN)install-test-deps$(NC) - Install system dependencies for testing"
 	@echo "  $(GREEN)lint$(NC)           - Run linting"
 	@echo "  $(GREEN)lint-fix$(NC)       - Fix linting issues automatically"
 	@echo "  $(GREEN)coverage$(NC)       - Generate coverage report"
 	@echo "  $(GREEN)package$(NC)        - Create VSIX package"
+	@echo "  $(GREEN)update-deps$(NC)    - Update dependencies (within semver) and run a security audit"
 	@echo "  $(GREEN)clean$(NC)          - Clean build artifacts"
 	@echo "  $(GREEN)clean-all$(NC)      - Clean + deterministic reinstall + refresh local file deps"
 	@echo "  $(GREEN)dev$(NC)            - Start development environment"
+	@echo "  $(GREEN)web$(NC)            - Build & serve the web (browser) extension like vscode.dev"
 	@echo "  $(GREEN)debug$(NC)          - Prepare for debugging (then press F5 in VS Code)"
 	@echo "  $(GREEN)debug-watch$(NC)    - Launch watch mode for debugging with auto-recompile"
 	@echo "  $(GREEN)prepublish$(NC)     - Prepare for publishing"
 	@echo "  $(GREEN)info$(NC)           - Show project information"
 	@echo "  $(GREEN)help$(NC)           - Show this help message"
+
+# Update dependencies (within the semver ranges in package.json) and run a
+# security audit. Local file: dependencies (e.g. the sysml-v2-lsp tarball) are
+# left untouched by npm update. Audit is non-fatal so the report always prints;
+# review the output and run `npm audit fix` manually when appropriate.
+.PHONY: update-deps
+update-deps: $(NODE_MODULES)
+	@echo "$(YELLOW)Checking for outdated dependencies...$(NC)"
+	@npm outdated || true
+	@echo "$(YELLOW)Updating dependencies within semver ranges...$(NC)"
+	npm update
+	@echo "$(YELLOW)Running security audit...$(NC)"
+	@npm audit || true
+	@echo "$(GREEN)Dependency update complete. Review the audit output above.$(NC)"
+	@echo "$(BLUE)Tip: run 'npm audit fix' to apply safe fixes, or 'npm audit fix --force' for breaking ones.$(NC)"
 
 # Install dependencies
 .PHONY: install
@@ -219,7 +237,27 @@ debug-watch: install
 	@echo "$(YELLOW)Press Ctrl+C to stop watch mode$(NC)"
 	@wait
 
+# Run the web (browser) build in a local @vscode/test-web host. This serves
+# the SAME experience as vscode.dev: a browser extension host with the LSP
+# running as a Web Worker. Use WEB_PORT to override the default port.
+WEB_PORT ?= 3000
+.PHONY: web
+web: $(NODE_MODULES)
+	@echo "$(YELLOW)Building and serving the web extension on port $(WEB_PORT)...$(NC)"
+	npm run build:web
+	npm run build:webview-assets
+	@echo "$(BLUE)Open http://localhost:$(WEB_PORT) — the samples/ folder is the default workspace$(NC)"
+	@echo "$(YELLOW)Press Ctrl+C to stop$(NC)"
+	npx vscode-test-web --browserType=chromium --port=$(WEB_PORT) \
+		--extensionDevelopmentPath=. samples
 
+# Run the web integration tests headlessly in a real browser extension host
+# (the same runtime vscode.dev uses). Proves activation + browser LSP worker.
+.PHONY: test-web
+test-web: $(NODE_MODULES)
+	@echo "$(YELLOW)Running web integration tests (headless chromium)...$(NC)"
+	npm run test:web
+	@echo "$(GREEN)Web integration tests completed!$(NC)"
 
 # Clean build artifacts
 .PHONY: clean
