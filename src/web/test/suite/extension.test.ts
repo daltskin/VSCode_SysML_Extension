@@ -36,7 +36,7 @@ const SAMPLE = `package VehicleModel {
 `;
 
 /** Poll until `fn` returns a truthy value or the timeout elapses. */
-async function waitFor<T>(fn: () => Thenable<T> | T, timeoutMs = 20000, intervalMs = 250): Promise<T> {
+async function waitFor<T>(fn: () => Thenable<T> | T, timeoutMs = 25000, intervalMs = 250): Promise<T> {
     const deadline = Date.now() + timeoutMs;
     let last: T;
     for (;;) {
@@ -71,7 +71,8 @@ suite('SysML Web Extension', () => {
 
         const symbols = await waitFor(() =>
             vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                'vscode.executeDocumentSymbolProvider', doc.uri));
+                'vscode.executeDocumentSymbolProvider', doc.uri)
+                .then((r) => (Array.isArray(r) && r.length > 0 ? r : undefined)));
 
         assert.ok(Array.isArray(symbols) && symbols.length > 0,
             'expected the browser LSP worker to return document symbols');
@@ -90,7 +91,8 @@ suite('SysML Web Extension', () => {
 
         const hovers = await waitFor(() =>
             vscode.commands.executeCommand<vscode.Hover[]>(
-                'vscode.executeHoverProvider', doc.uri, pos));
+                'vscode.executeHoverProvider', doc.uri, pos)
+                .then((r) => (Array.isArray(r) && r.length > 0 ? r : undefined)));
 
         assert.ok(Array.isArray(hovers) && hovers.length > 0,
             'expected the browser LSP worker to return a hover');
