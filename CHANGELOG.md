@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Upgraded `vscode-languageclient` 9 → 10** — adopted the new LSP client API. `LanguageClientOptions.outputChannel`/`traceOutputChannel` now require a `LogOutputChannel`, so the shared `SysML` channel is created with `{ log: true }` and typed accordingly across `extension.ts` and the LSP client factories.
+- **Bumped `sysml-v2-lsp` 0.21.0 → 0.22.0**, picking up two browser fixes:
+  - The browser server no longer attempts to spawn a `worker_threads` parse worker (unavailable in a Web Worker); parsing runs inline, removing a misleading worker-failure log.
+  - Go-to-Definition into bundled `sysml-stdlib:` documents now resolves regardless of URI authority/percent-encoding variations.
+
+### Fixed
+
+- Restored explicit `tsconfig` `types` (`node`, `vscode`, `mocha`) so Node/VS Code/Mocha globals resolve under TypeScript 6, fixing the post-upgrade compile errors and unit test failures.
+- **`make web` runs headless** — the target now passes `--browser` (with a `WEB_BROWSER` override, default `none`) so the web extension can be served in CI/headless environments without launching a browser.
+
 ## [0.40.0]
 
 ### Added

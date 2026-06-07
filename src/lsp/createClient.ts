@@ -28,7 +28,7 @@ function resolveServerPath(): string {
 export function createLanguageClient(
     _context: vscode.ExtensionContext,
     clientOptions: LanguageClientOptions,
-    outputChannel: vscode.OutputChannel,
+    outputChannel: vscode.LogOutputChannel,
 ): BaseLanguageClient {
     const serverModule = resolveServerPath();
     outputChannel.appendLine(`Starting SysML v2 language server: ${serverModule}`);

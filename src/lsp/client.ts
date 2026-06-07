@@ -34,7 +34,7 @@ let parsingTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
  */
 export function startLanguageClient(
     context: vscode.ExtensionContext,
-    outputChannel: vscode.OutputChannel
+    outputChannel: vscode.LogOutputChannel
 ): BaseLanguageClient {
     const clientOptions: LanguageClientOptions = {
         documentSelector: [

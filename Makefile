@@ -240,7 +240,13 @@ debug-watch: install
 # Run the web (browser) build in a local @vscode/test-web host. This serves
 # the SAME experience as vscode.dev: a browser extension host with the LSP
 # running as a Web Worker. Use WEB_PORT to override the default port.
+#
+# WEB_BROWSER controls how the host opens:
+#   none     (default) — serve only; open the printed URL yourself. Works in
+#                        headless/remote/SSH/container envs with no display.
+#   chromium|firefox|webkit — auto-launch that browser (needs a display/X server).
 WEB_PORT ?= 3000
+WEB_BROWSER ?= none
 .PHONY: web
 web: $(NODE_MODULES)
 	@echo "$(YELLOW)Building and serving the web extension on port $(WEB_PORT)...$(NC)"
@@ -248,7 +254,7 @@ web: $(NODE_MODULES)
 	npm run build:webview-assets
 	@echo "$(BLUE)Open http://localhost:$(WEB_PORT) — the samples/ folder is the default workspace$(NC)"
 	@echo "$(YELLOW)Press Ctrl+C to stop$(NC)"
-	npx vscode-test-web --browserType=chromium --port=$(WEB_PORT) \
+	npx vscode-test-web --browser=$(WEB_BROWSER) --port=$(WEB_PORT) \
 		--extensionDevelopmentPath=. samples
 
 # Run the web integration tests headlessly in a real browser extension host

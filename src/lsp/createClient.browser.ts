@@ -21,7 +21,7 @@ const CLIENT_NAME = 'SysML v2 Language Server';
 export function createLanguageClient(
     context: vscode.ExtensionContext,
     clientOptions: LanguageClientOptions,
-    outputChannel: vscode.OutputChannel,
+    outputChannel: vscode.LogOutputChannel,
 ): BaseLanguageClient {
     const serverUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'web', 'sysmlServer.js');
     outputChannel.appendLine(`Starting SysML v2 language server (Web Worker): ${serverUri.toString(true)}`);

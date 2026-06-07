@@ -27,7 +27,7 @@ export { hideModelMetrics, hideParseProgress, showMetricsLoading, showParseProgr
 
 let modelExplorerProvider: ModelExplorerProvider;
 let featureExplorerProvider: FeatureExplorerProvider;
-let outputChannel: vscode.OutputChannel;
+let outputChannel: vscode.LogOutputChannel;
 let lspModelProvider: LspModelProvider;
 let parseOrchestrator: ParseOrchestrator;
 
@@ -80,7 +80,7 @@ export function notifyServerParseDone(uri?: string): void {
  */
 async function registerMcpServer(
     context: vscode.ExtensionContext,
-    outputChannel: vscode.OutputChannel,
+    outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
     const mcpServerUri = vscode.Uri.joinPath(
         context.extensionUri,
@@ -113,7 +113,7 @@ async function registerMcpServer(
 
 export function activate(context: vscode.ExtensionContext) {
     // Create dedicated output channel for logging
-    outputChannel = vscode.window.createOutputChannel('SysML');
+    outputChannel = vscode.window.createOutputChannel('SysML', { log: true });
     context.subscriptions.push(outputChannel);
 
     outputChannel.appendLine('SysML v2.0 extension is now active');

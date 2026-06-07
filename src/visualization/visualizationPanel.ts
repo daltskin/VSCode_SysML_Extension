@@ -3187,12 +3187,90 @@ export class VisualizationPanel {
                         }
                     });
 
-                    // Find requirements and their stakeholder relationships
-                    const requirements = allElements.filter(el => {
+                    // Find requirements connected to the displayed use cases / actors.
+                    // A model may contain many requirements that have nothing to do with
+                    // any use case (e.g. detailed engineering requirements nested inside
+                    // parts or satisfy blocks). Including all of them floods the use case
+                    // view with disconnected requirement nodes and specialization arrows,
+                    // drowning out the actual actors and use cases. Scope to the connected
+                    // requirement sub-graph instead.
+                    const allRequirementElements = allElements.filter(el => {
                         if (!el.type) return false;
-                        const typeLower = el.type.toLowerCase();
-                        return typeLower.includes('requirement');
+                        return el.type.toLowerCase().includes('requirement');
                     });
+
+                    const reqByName = new Map();
+                    allRequirementElements.forEach(r => { if (r.name) reqByName.set(r.name, r); });
+
+                    const displayedNames = new Set();
+                    useCases.forEach(uc => displayedNames.add(uc.name));
+                    actors.forEach(a => displayedNames.add(a.name));
+
+                    // Build requirement-to-requirement edges so a connected requirement
+                    // pulls in its containment parents/children and specialization def/usage.
+                    const reqContainChildren = new Map(); // name -> [childNames]
+                    const reqContainParents = new Map();  // name -> [parentNames]
+                    const reqSpecOut = new Map();          // usageName -> [defNames]
+                    const reqSpecIn = new Map();           // defName -> [usageNames]
+                    const addReqEdge = (map, k, v) => { if (!map.has(k)) map.set(k, []); map.get(k).push(v); };
+                    allRequirementElements.forEach(req => {
+                        (req.children || []).forEach(child => {
+                            const ct = (child.type || '').toLowerCase().trim();
+                            if (ct.includes('requirement') && child.name && reqByName.has(child.name)) {
+                                addReqEdge(reqContainChildren, req.name, child.name);
+                                addReqEdge(reqContainParents, child.name, req.name);
+                            }
+                        });
+                        const reqTyping = (req.typing || '').replace(/^[:~>]+/, '').trim().replace(/^['"]|['"]$/g, '');
+                        if (reqTyping && reqByName.has(reqTyping) && reqTyping !== req.name) {
+                            addReqEdge(reqSpecOut, req.name, reqTyping);
+                            addReqEdge(reqSpecIn, reqTyping, req.name);
+                        }
+                    });
+
+                    // Seed requirements that are genuinely tied to the use case view.
+                    const reqSeeds = new Set();
+                    allRequirementElements.forEach(req => {
+                        // (a) requirement carries a stakeholder — belongs in a use-case/stakeholder view
+                        const hasStakeholder = (req.children || []).some(
+                            c => (c.type || '').toLowerCase().trim() === 'stakeholder');
+                        if (hasStakeholder) reqSeeds.add(req.name);
+                    });
+                    // (b) requirement is the target of a satisfy/verify from a displayed actor/use case
+                    relationships.forEach(rel => {
+                        if ((rel.type === 'satisfy' || rel.type === 'verify') &&
+                            displayedNames.has(rel.source) && reqByName.has(rel.target)) {
+                            reqSeeds.add(rel.target);
+                        }
+                    });
+                    // (c) requirement referenced by a use case objective's require
+                    useCases.forEach(uc => {
+                        (uc.children || []).forEach(child => {
+                            if ((child.type || '').toLowerCase() === 'objective') {
+                                (child.children || []).forEach(gc => {
+                                    const name = gc.typing || gc.name;
+                                    if (name && reqByName.has(name)) reqSeeds.add(name);
+                                });
+                            }
+                        });
+                    });
+
+                    // Transitive closure over containment (both directions) and
+                    // specialization (both directions) so connected clusters stay intact.
+                    const connectedReqs = new Set();
+                    const reqStack = Array.from(reqSeeds);
+                    while (reqStack.length > 0) {
+                        const n = reqStack.pop();
+                        if (connectedReqs.has(n)) continue;
+                        connectedReqs.add(n);
+                        [reqContainChildren, reqContainParents, reqSpecOut, reqSpecIn].forEach(map => {
+                            (map.get(n) || []).forEach(next => {
+                                if (!connectedReqs.has(next)) reqStack.push(next);
+                            });
+                        });
+                    }
+
+                    const requirements = allRequirementElements.filter(r => connectedReqs.has(r.name));
 
                     // Build requirement-to-stakeholder relationships
                     const requirementRelationships = [];
