@@ -491,7 +491,7 @@
     "cytoscape-elk": "^2.3.0",
     "cytoscape-svg": "^0.4.0",
     "d3": "^7.9.0",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "eslint": "^10.3.0",
     "glob": "^13.0.0",
     "mocha": "^11.0.0",
