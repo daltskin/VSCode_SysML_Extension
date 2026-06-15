@@ -483,7 +483,7 @@
     "@types/vscode": "^1.118.0",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.58.2",
-    "@vscode/test-electron": "^2.4.1",
+    "@vscode/test-electron": "^3.0.0",
     "@vscode/test-web": "^0.0.80",
     "@vscode/vsce": "^3.9.1",
     "c8": "^11.0.0",
