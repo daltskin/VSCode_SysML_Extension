@@ -182,3 +182,155 @@ suite('Visualization Panel Test Suite', () => {
         assert.ok(true, 'Multiple files visualized without error');
     });
 });
+
+suite('State Transition Extraction', () => {
+    const { VisualizationPanel } = require('../visualization/visualizationPanel');
+
+    test('extracts named multi-line transitions (issue #60)', () => {
+        const src = `package TrafficLight {
+    state def SignalStateMachine {
+        entry; then Red;
+        state Red;
+        transition red_to_green
+            first Red
+            accept Timer
+            then Green;
+        state Green;
+    }
+}`;
+        const trans = VisualizationPanel.extractTransitionRelationships(src);
+        assert.strictEqual(trans.length, 1);
+        assert.deepStrictEqual(trans[0], {
+            type: 'transition',
+            source: 'Red',
+            target: 'Green',
+            name: 'Timer',
+        });
+    });
+
+    test('extracts inline transitions without a name', () => {
+        const src = `state def M {
+        state idle;
+        state driving;
+        transition first idle then driving;
+        transition first driving then idle;
+    }`;
+        const trans = VisualizationPanel.extractTransitionRelationships(src);
+        assert.strictEqual(trans.length, 2);
+        assert.strictEqual(trans[0].source, 'idle');
+        assert.strictEqual(trans[0].target, 'driving');
+        assert.strictEqual(trans[0].name, '');
+        assert.strictEqual(trans[1].source, 'driving');
+        assert.strictEqual(trans[1].target, 'idle');
+    });
+
+    test('handles qualified and quoted state references', () => {
+        const src = `transition first A::B accept Sig then 'My State';`;
+        const trans = VisualizationPanel.extractTransitionRelationships(src);
+        assert.strictEqual(trans.length, 1);
+        assert.strictEqual(trans[0].source, 'A::B');
+        assert.strictEqual(trans[0].target, 'My State');
+        assert.strictEqual(trans[0].name, 'Sig');
+    });
+
+    test('ignores transition keywords inside comments', () => {
+        const src = `// transition first ghost then phantom;
+    /* transition first x then y; */
+    transition first real1 then real2;`;
+        const trans = VisualizationPanel.extractTransitionRelationships(src);
+        assert.strictEqual(trans.length, 1);
+        assert.strictEqual(trans[0].source, 'real1');
+        assert.strictEqual(trans[0].target, 'real2');
+    });
+
+    test('returns empty array when there are no transitions', () => {
+        const trans = VisualizationPanel.extractTransitionRelationships('part def Engine;');
+        assert.deepStrictEqual(trans, []);
+    });
+
+    test('extracts both transitions including an undeclared target', () => {
+        const src = `package TrafficLight {
+    state def SignalStateMachine {
+        entry; then Red;
+        state Red;
+        transition red_to_green
+            first Red
+            accept Timer
+            then Green;
+        state Green;
+        transition green_to_yellow
+            first Green
+            accept Caution
+            then Yellow;
+        state Flashing;
+    }
+}`;
+        const trans = VisualizationPanel.extractTransitionRelationships(src);
+        assert.strictEqual(trans.length, 2);
+        // Second transition targets Yellow, which is never declared as a
+        // `state` — it must still be extracted so the view can synthesize it.
+        assert.deepStrictEqual(trans[1], {
+            type: 'transition',
+            source: 'Green',
+            target: 'Yellow',
+            name: 'Caution',
+        });
+    });
+
+    test('extracts the initial (entry) transition as an initial pseudostate', () => {
+        const src = `state def M {
+        entry; then Initialization;
+        state Initialization;
+    }`;
+        const initial = VisualizationPanel.extractInitialTransitions(src);
+        assert.strictEqual(initial.length, 1);
+        assert.strictEqual(initial[0].source, VisualizationPanel.INITIAL_PSEUDOSTATE);
+        assert.strictEqual(initial[0].target, 'Initialization');
+    });
+
+    test('extracts entry transition written without a semicolon', () => {
+        const initial = VisualizationPanel.extractInitialTransitions('state def M { entry then idle; }');
+        assert.strictEqual(initial.length, 1);
+        assert.strictEqual(initial[0].target, 'idle');
+    });
+
+    test('returns no initial transition when there is no entry point', () => {
+        const initial = VisualizationPanel.extractInitialTransitions('transition first a then b;');
+        assert.deepStrictEqual(initial, []);
+    });
+
+    test('extracts then-succession chains between states', () => {
+        const src = `state def OperatingStates {
+        state idle;
+        then state active;
+        then state fault;
+    }`;
+        const succ = VisualizationPanel.extractSuccessionTransitions(src);
+        assert.strictEqual(succ.length, 2);
+        assert.deepStrictEqual(succ[0], { type: 'transition', source: 'idle', target: 'active', name: '' });
+        assert.deepStrictEqual(succ[1], { type: 'transition', source: 'active', target: 'fault', name: '' });
+    });
+
+    test('ignores action-flow successions (then action …)', () => {
+        const src = `action def Run {
+        first start;
+        then action initialize;
+        then action monitor;
+        then done;
+    }`;
+        assert.deepStrictEqual(VisualizationPanel.extractSuccessionTransitions(src), []);
+    });
+
+    test('does not treat entry or explicit transitions as successions', () => {
+        const src = `state def M {
+        entry; then idle;
+        state idle;
+        transition first idle then busy;
+        state busy;
+    }`;
+        // entry→idle is an initial transition, idle→busy is an explicit
+        // transition — neither should appear as a plain succession here.
+        assert.deepStrictEqual(VisualizationPanel.extractSuccessionTransitions(src), []);
+    });
+});
+

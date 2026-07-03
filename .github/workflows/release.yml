@@ -32,7 +32,7 @@ jobs:
             echo "REF=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ steps.ref.outputs.REF }}
 
@@ -65,7 +65,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ steps.tag.outputs.TAG }}
 

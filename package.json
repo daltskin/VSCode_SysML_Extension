@@ -11,7 +11,7 @@
     "url": "https://github.com/daltskin/VSCode_SysML_Extension.git"
   },
   "engines": {
-    "vscode": "^1.118.0"
+    "vscode": "^1.125.0"
   },
   "main": "./out/extension.js",
   "browser": "./dist/web/extension.js",
@@ -479,20 +479,20 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.6.0",
-    "@types/vscode": "^1.118.0",
-    "@typescript-eslint/eslint-plugin": "^8.59.1",
-    "@typescript-eslint/parser": "^8.58.2",
-    "@vscode/test-electron": "^2.4.1",
-    "@vscode/test-web": "^0.0.80",
-    "@vscode/vsce": "^3.9.1",
+    "@types/node": "^26.1.0",
+    "@types/vscode": "^1.125.0",
+    "@typescript-eslint/eslint-plugin": "^8.62.1",
+    "@typescript-eslint/parser": "^8.62.1",
+    "@vscode/test-electron": "^3.0.0",
+    "@vscode/test-web": "^0.0.81",
+    "@vscode/vsce": "^3.9.2",
     "c8": "^11.0.0",
     "cytoscape": "^3.33.3",
     "cytoscape-elk": "^2.3.0",
     "cytoscape-svg": "^0.4.0",
     "d3": "^7.9.0",
     "esbuild": "^0.28.1",
-    "eslint": "^10.3.0",
+    "eslint": "^10.6.0",
     "glob": "^13.0.0",
     "mocha": "^11.0.0",
     "rimraf": "^6.0.1",
@@ -501,8 +501,8 @@
   },
   "dependencies": {
     "elkjs": "^0.11.0",
-    "sysml-v2-lsp": "^0.22.0",
-    "vscode-languageclient": "10.0.0"
+    "sysml-v2-lsp": "^0.23.0",
+    "vscode-languageclient": "^10.1.0"
   },
   "overrides": {
     "brace-expansion": "^5.0.5",

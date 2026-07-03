@@ -296,6 +296,44 @@ export class VisualizationPanel {
                 if (result.activityDiagrams) { allActivityDiagrams.push(...(result.activityDiagrams as unknown[])); }
             }
 
+            // The LSP emits `transition` elements but does not populate their
+            // source/target (the `first … then …` targets), so the State
+            // Transition View never receives any edges.  Recover the
+            // transitions directly from the document text and inject them as
+            // `transition` relationships that the webview's state view
+            // already knows how to render.  De-duplicate against anything the
+            // LSP may provide in future so we never double-draw an edge.
+            const existingTransitionKeys = new Set(
+                allRelationships
+                    .map(r => r as { type?: string; source?: string; target?: string })
+                    .filter(r => String(r.type ?? '').toLowerCase().includes('transition'))
+                    .map(r => `${r.source}->${r.target}`),
+            );
+            const texts = await Promise.all(urisToQuery.map(uri => this._getTextForUri(uri)));
+            for (const text of texts) {
+                for (const rel of VisualizationPanel.extractTransitionRelationships(text)) {
+                    const key = `${rel.source}->${rel.target}`;
+                    if (!existingTransitionKeys.has(key)) {
+                        existingTransitionKeys.add(key);
+                        allRelationships.push(rel);
+                    }
+                }
+                for (const rel of VisualizationPanel.extractInitialTransitions(text)) {
+                    const key = `${rel.source}->${rel.target}`;
+                    if (!existingTransitionKeys.has(key)) {
+                        existingTransitionKeys.add(key);
+                        allRelationships.push(rel);
+                    }
+                }
+                for (const rel of VisualizationPanel.extractSuccessionTransitions(text)) {
+                    const key = `${rel.source}->${rel.target}`;
+                    if (!existingTransitionKeys.has(key)) {
+                        existingTransitionKeys.add(key);
+                        allRelationships.push(rel);
+                    }
+                }
+            }
+
             // SysML v2 allows the same package to be declared across multiple
             // files — their members merge into a single namespace.  Coalesce
             // same-named package DTOs so the webview sees one unified tree.
@@ -323,6 +361,203 @@ export class VisualizationPanel {
             // webview doesn't stay stuck on "Parsing SysML model...".
             this.postMessageSafe({ command: 'hideLoading' });
         }
+    }
+
+    /**
+     * Return the text for a queried URI.  Uses the already-open primary
+     * document when possible, otherwise opens the document on demand
+     * (folder-level visualization queries multiple files).
+     */
+    private async _getTextForUri(uriStr: string): Promise<string> {
+        if (uriStr === this._document.uri.toString()) {
+            return this._document.getText();
+        }
+        try {
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(uriStr));
+            return doc.getText();
+        } catch {
+            return '';
+        }
+    }
+
+    /**
+     * Extract state-machine transitions from raw SysML source.
+     *
+     * The LSP recognises `transition` elements but does not currently expose
+     * their `first … [accept …] then …` source/target, so the State
+     * Transition View has no edges to draw.  This lightweight scanner
+     * recovers those edges directly from the text, supporting both the
+     * inline form (`transition first S then T;`) and the named/multi-line
+     * form (`transition name first S accept Trig then T;`).  The optional
+     * `accept` trigger becomes the transition label.
+     */
+    public static extractTransitionRelationships(
+        text: string,
+    ): { type: string; source: string; target: string; name: string }[] {
+        // Strip comments so keywords inside them are never matched.
+        const cleaned = text
+            .replace(/\/\/[^\n]*/g, ' ')
+            .replace(/\/\*[\s\S]*?\*\//g, ' ');
+
+        // A reference is either a single-quoted name (may contain spaces) or
+        // a plain/qualified/dotted identifier.
+        const ref = "('[^']*'|[A-Za-z_][\\w.:]*)";
+        const firstRe = new RegExp(`\\bfirst\\s+${ref}`);
+        const thenRe = new RegExp(`\\bthen\\s+${ref}`);
+        const acceptRe = new RegExp(`\\baccept\\s+${ref}`);
+
+        const stripQuotes = (s: string): string =>
+            s.startsWith("'") && s.endsWith("'") ? s.slice(1, -1) : s;
+
+        const out: { type: string; source: string; target: string; name: string }[] = [];
+        // Each transition declaration runs from the `transition` keyword to
+        // the terminating semicolon.
+        const transitionRe = /\btransition\b([\s\S]*?);/g;
+        let m: RegExpExecArray | null;
+        while ((m = transitionRe.exec(cleaned)) !== null) {
+            const body = m[1];
+            const first = firstRe.exec(body);
+            const then = thenRe.exec(body);
+            if (first && then) {
+                const accept = acceptRe.exec(body);
+                out.push({
+                    type: 'transition',
+                    source: stripQuotes(first[1]),
+                    target: stripQuotes(then[1]),
+                    name: accept ? stripQuotes(accept[1]) : '',
+                });
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Sentinel name used as the `source` of an initial transition so the
+     * State Transition View can render it as an initial pseudostate
+     * (`[*] → firstState`).  Kept unlikely to collide with a real name.
+     */
+    public static readonly INITIAL_PSEUDOSTATE = '__sysml_initial__';
+
+    /**
+     * Extract initial (entry) transitions from raw SysML source.
+     *
+     * A state machine's entry point is written as `entry; then FirstState;`
+     * (or `entry then FirstState`).  The LSP does not surface this as an
+     * edge, so we recover it and represent it as a transition from the
+     * initial pseudostate to the first state — mirroring `[*] --> First`
+     * in a UML/Mermaid state diagram.
+     */
+    public static extractInitialTransitions(
+        text: string,
+    ): { type: string; source: string; target: string; name: string }[] {
+        const cleaned = text
+            .replace(/\/\/[^\n]*/g, ' ')
+            .replace(/\/\*[\s\S]*?\*\//g, ' ');
+
+        const ref = "('[^']*'|[A-Za-z_][\\w.:]*)";
+        const stripQuotes = (s: string): string =>
+            s.startsWith("'") && s.endsWith("'") ? s.slice(1, -1) : s;
+
+        const out: { type: string; source: string; target: string; name: string }[] = [];
+        // `entry` optionally followed by an entry action up to its `;`, then
+        // the `then <target>` succession that names the first state.
+        const entryRe = new RegExp(`\\bentry\\b(?:[^;]*;)?\\s*then\\s+${ref}`, 'g');
+        let m: RegExpExecArray | null;
+        while ((m = entryRe.exec(cleaned)) !== null) {
+            out.push({
+                type: 'transition',
+                source: VisualizationPanel.INITIAL_PSEUDOSTATE,
+                target: stripQuotes(m[1]),
+                name: '',
+            });
+        }
+        return out;
+    }
+
+    /**
+     * Extract `then`-succession transitions between states.
+     *
+     * SysML lets successions be written as a chain of state declarations
+     * joined by `then` (e.g. `state idle; then state active; then state
+     * fault;`), which imply the transitions idle → active → fault.  These
+     * carry no `transition` keyword, so they are missed by
+     * {@link extractTransitionRelationships}.  Only successions whose
+     * endpoints are both declared states are emitted, so action-flow
+     * successions (`then action …`) and other `then` uses are ignored.
+     * Explicit `transition` statements and `entry` initial transitions are
+     * skipped here (handled by the other extractors).
+     */
+    public static extractSuccessionTransitions(
+        text: string,
+    ): { type: string; source: string; target: string; name: string }[] {
+        const cleaned = text
+            .replace(/\/\/[^\n]*/g, ' ')
+            .replace(/\/\*[\s\S]*?\*\//g, ' ');
+
+        const ref = "('[^']*'|[A-Za-z_][\\w.:]*)";
+        const stripQuotes = (s: string): string =>
+            s.startsWith("'") && s.endsWith("'") ? s.slice(1, -1) : s;
+        const simple = (name: string): string => {
+            const right = name.split('::').pop() ?? name;
+            return right.split('.').pop() ?? right;
+        };
+
+        // Pass 1 — collect the names of declared states.
+        const declared = new Set<string>();
+        const declRe = new RegExp(`\\bstate\\s+(?!def\\b)${ref}|\\bthen\\s+state\\s+${ref}`, 'g');
+        let dm: RegExpExecArray | null;
+        while ((dm = declRe.exec(cleaned)) !== null) {
+            const nm = stripQuotes(dm[1] ?? dm[2] ?? '');
+            if (nm) { declared.add(simple(nm)); }
+        }
+        if (declared.size === 0) { return []; }
+
+        // Pass 2 — walk tokens, tracking the current source state per brace
+        // scope, and emit an edge for each `then` between two declared states.
+        const out: { type: string; source: string; target: string; name: string }[] = [];
+        const tokenRe = new RegExp(
+            `(\\{)|(\\})|\\btransition\\b|\\bentry\\b|\\bfirst\\s+${ref}`
+            + `|\\bthen\\s+(?:state\\s+)?${ref}|\\bstate\\s+(?!def\\b)${ref}`,
+            'g',
+        );
+        const stack: (string | null)[] = [];
+        let current: string | null = null;
+        let pendingFirst: string | null = null;
+        let entryInitial = false;
+
+        let m: RegExpExecArray | null;
+        while ((m = tokenRe.exec(cleaned)) !== null) {
+            const tok = m[0];
+            if (m[1]) { stack.push(current); current = null; pendingFirst = null; continue; }
+            if (m[2]) { current = stack.pop() ?? null; pendingFirst = null; continue; }
+            if (/^transition\b/.test(tok)) {
+                // Skip the whole transition statement (handled elsewhere).
+                const semi = cleaned.indexOf(';', tokenRe.lastIndex);
+                tokenRe.lastIndex = semi === -1 ? cleaned.length : semi + 1;
+                pendingFirst = null;
+                continue;
+            }
+            if (/^entry\b/.test(tok)) { entryInitial = true; pendingFirst = null; continue; }
+            if (m[3] !== undefined) { pendingFirst = simple(stripQuotes(m[3])); continue; }
+            if (m[4] !== undefined) {
+                const target = simple(stripQuotes(m[4]));
+                const source = pendingFirst ?? current;
+                if (entryInitial) {
+                    // Initial transition — handled by extractInitialTransitions.
+                    entryInitial = false;
+                } else if (source && declared.has(source) && declared.has(target)) {
+                    out.push({ type: 'transition', source, target, name: '' });
+                }
+                current = target;
+                pendingFirst = null;
+                continue;
+            }
+            if (m[5] !== undefined) {
+                current = simple(stripQuotes(m[5]));
+                pendingFirst = null;
+            }
+        }
+        return out;
     }
 
     /**
@@ -1760,7 +1995,8 @@ export class VisualizationPanel {
         let sysmlMode = 'hierarchy';
         let layoutDirection = 'horizontal'; // Universal layout direction: 'horizontal', 'vertical', or 'auto'
         let activityLayoutDirection = 'vertical'; // Activity diagrams default to top-down
-        let stateLayoutOrientation = 'horizontal'; // Layout direction: 'horizontal', 'vertical', or 'force'
+        let stateLayoutDirection = 'vertical'; // State diagrams default to top-down
+        let stateLayoutOrientation = 'vertical'; // Layout direction: 'horizontal', 'vertical', or 'force'
         let usecaseLayoutOrientation = 'horizontal'; // Use case layout: 'horizontal', 'vertical', or 'force'
         let filteredData = null; // Active filter state shared across views
         let isRendering = false;
@@ -6495,8 +6731,10 @@ export class VisualizationPanel {
         function updateLayoutDirectionButton(activeView) {
             const layoutBtn = document.getElementById('layout-direction-btn');
             if (layoutBtn) {
-                // Use activity-specific direction for activity view
-                const effectiveDirection = activeView === 'activity' ? activityLayoutDirection : layoutDirection;
+                // Use view-specific direction for activity and state views
+                const effectiveDirection = activeView === 'activity' ? activityLayoutDirection
+                    : activeView === 'state' ? stateLayoutDirection
+                    : layoutDirection;
                 const icon = LAYOUT_DIRECTION_ICONS[effectiveDirection] || '→';
                 const label = LAYOUT_DIRECTION_LABELS[effectiveDirection] || 'Left → Right';
                 layoutBtn.textContent = icon + ' ' + label;
@@ -6507,7 +6745,7 @@ export class VisualizationPanel {
                 layoutBtn.title = 'Switch to ' + nextLabel;
 
                 // Sync with view-specific orientations for backwards compatibility
-                stateLayoutOrientation = layoutDirection === 'auto' ? 'force' : layoutDirection;
+                stateLayoutOrientation = stateLayoutDirection === 'auto' ? 'force' : stateLayoutDirection;
                 usecaseLayoutOrientation = layoutDirection === 'auto' ? 'force' : layoutDirection;
             }
         }
@@ -6519,9 +6757,11 @@ export class VisualizationPanel {
         }
 
         function toggleLayoutDirection() {
-            // Use activity-specific direction for activity view
+            // Use view-specific direction for activity and state views
             if (currentView === 'activity') {
                 activityLayoutDirection = getNextLayoutDirection(activityLayoutDirection);
+            } else if (currentView === 'state') {
+                stateLayoutDirection = getNextLayoutDirection(stateLayoutDirection);
             } else {
                 layoutDirection = getNextLayoutDirection(layoutDirection);
             }
@@ -6582,8 +6822,8 @@ export class VisualizationPanel {
         }
 
         function toggleStateLayout() {
-            layoutDirection = getNextLayoutDirection(layoutDirection);
-            stateLayoutOrientation = layoutDirection === 'auto' ? 'force' : layoutDirection;
+            stateLayoutDirection = getNextLayoutDirection(stateLayoutDirection);
+            stateLayoutOrientation = stateLayoutDirection === 'auto' ? 'force' : stateLayoutDirection;
             updateLayoutDirectionButton(currentView);
             // Re-render the state view
             if (currentView === 'state') {
@@ -13815,6 +14055,44 @@ export class VisualizationPanel {
                 return dotParts[dotParts.length - 1] || rightMostColon;
             };
 
+            // Synthesize nodes for transition endpoints referenced by
+            // 'first'/'then' (or the initial 'entry; then …') that were never
+            // declared with an explicit 'state'.  Valid SysML v2 lets a
+            // transition name a target state defined only by the transition,
+            // and the initial pseudostate has no declaration at all — without
+            // this, those transitions would be silently dropped.
+            const INITIAL_PSEUDOSTATE = '__sysml_initial__';
+            const transitionsForNodes = selectedMachine.transitions || transitions;
+            const declaredStateNames = new Set();
+            stateUsages.forEach(s => {
+                const nm = String(s.name || '');
+                if (nm) {
+                    declaredStateNames.add(nm);
+                    declaredStateNames.add(getSimpleStateName(nm));
+                }
+            });
+            transitionsForNodes.forEach(t => {
+                [t.source, t.target].forEach(ref => {
+                    const raw = String(ref || '').trim();
+                    if (!raw) {
+                        return;
+                    }
+                    if (raw === INITIAL_PSEUDOSTATE) {
+                        if (!stateUsages.some(s => s.id === INITIAL_PSEUDOSTATE)) {
+                            stateUsages.push({ id: INITIAL_PSEUDOSTATE, name: '', type: 'initial' });
+                        }
+                        return;
+                    }
+                    const simple = getSimpleStateName(raw);
+                    if (!simple || declaredStateNames.has(raw) || declaredStateNames.has(simple)) {
+                        return;
+                    }
+                    declaredStateNames.add(raw);
+                    declaredStateNames.add(simple);
+                    stateUsages.push({ name: simple, type: 'state' });
+                });
+            });
+
             const stateKeys = new Set(stateUsages.map(s => getStateKey(s)));
             const stateNameToKey = new Map();
             stateUsages.forEach(s => {
@@ -13868,11 +14146,15 @@ export class VisualizationPanel {
             const levels = new Map(); // stateKey -> level
             const visited = new Set();
 
-            // Find root states (no incoming or initial states)
+            // Find root states that drive the flow layout: the initial
+            // pseudostate, or a state with no incoming transition that still
+            // leads somewhere.  Fully isolated states (no transitions at all)
+            // are NOT roots — otherwise they float at the top of the diagram.
             const roots = stateUsages.filter(s => {
                 const key = getStateKey(s);
                 const inc = incoming.get(key) || [];
-                return inc.length === 0 || initialStates.includes(s);
+                const out = outgoing.get(key) || [];
+                return initialStates.includes(s) || (inc.length === 0 && out.length > 0);
             });
 
             // BFS to assign levels
@@ -13900,11 +14182,14 @@ export class VisualizationPanel {
                 });
             }
 
-            // Add any unvisited states
+            // Place any states not reached by the flow (isolated states) on a
+            // single level below the connected flow so they sit at the bottom
+            // instead of floating at the top.
+            const bottomLevel = Math.max(...Array.from(levels.values()), 0) + 1;
             stateUsages.forEach(s => {
                 const key = getStateKey(s);
                 if (!visited.has(key)) {
-                    levels.set(key, Math.max(...Array.from(levels.values()), 0) + 1);
+                    levels.set(key, bottomLevel);
                 }
             });
 
@@ -14109,10 +14394,24 @@ export class VisualizationPanel {
                     }
                 }
 
+                // The initial pseudostate is drawn as a small circle centred in
+                // its cell rather than a full-size box.  Anchor the edge on the
+                // circle's edge so there is no visible gap between the start
+                // circle and the entry arrow.
+                if (sourceKey === INITIAL_PSEUDOSTATE) {
+                    const cx = sx + stateWidth / 2;
+                    const cy = sy + stateHeight / 2;
+                    const r = 15;
+                    const vx = endX - cx;
+                    const vy = endY - cy;
+                    const len = Math.sqrt(vx * vx + vy * vy) || 1;
+                    startX = cx + (vx / len) * r;
+                    startY = cy + (vy / len) * r;
+                }
+
                 // Curved path with control points
                 const midX = (startX + endX) / 2;
                 const midY = (startY + endY) / 2;
-
                 // Add slight curve to avoid overlap
                 const curveOffset = offset * 0.5;
                 const controlX = midX + curveOffset;

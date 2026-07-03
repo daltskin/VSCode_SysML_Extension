@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **State Transition View now renders transition edges** ([#60](https://github.com/daltskin/VSCode_SysML_Extension/issues/60)) — transition source/target (and the `accept` trigger as edge label) are recovered from the SysML source, covering inline and named/multi-line forms plus `then`-succession chains (`state idle; then state active;`). Undeclared transition targets are synthesized as nodes, and the `entry; then …` transition renders as an initial pseudostate (`[*] → firstState`).
+- **State Transition View layout** — defaults to top-down flow, the initial pseudostate arrow connects flush to the start circle, and isolated states sit at the bottom.
+
+### Changed
+
+- **Raised minimum VS Code version to 1.125.0** — `engines.vscode` and `@types/vscode` bumped in lock-step.
+- **Updated npm dependencies and resolved 2 high-severity advisories** (`form-data` → 4.0.6, `undici` → 7.28.0, via `@vscode/vsce`); `npm audit` now clean. Clears Dependabot PRs #52, #54, #55, #58, #59.
+- **Bumped `actions/checkout` v6 → v7** in CI/release workflows (Dependabot PR #56).
+
 ## [0.41.0]
 
 ### Changed

@@ -2,7 +2,8 @@
   "name": "SysML v2 Extension",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
   "features": {},
-  "postCreateCommand": "npm install --ignore-scripts",
+  "remoteUser": "node",
+  "postCreateCommand": "sudo chown -R node:node /workspaces/VSCode_SysML_Extension && npm install --ignore-scripts",
   "customizations": {
     "vscode": {
       "extensions": [
