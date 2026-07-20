@@ -500,7 +500,7 @@
     "typescript": "^6.0.2"
   },
   "dependencies": {
-    "elkjs": "^0.11.0",
+    "elkjs": "^0.12.0",
     "sysml-v2-lsp": "^0.23.0",
     "vscode-languageclient": "^10.1.0"
   },
