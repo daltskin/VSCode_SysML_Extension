@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`join` control node now renders as a synchronization bar, not a diamond** ([#62](https://github.com/daltskin/VSCode_SysML_Extension/issues/62)) — in the Action Flow view, `join` nodes were incorrectly drawn as decision/merge diamonds. The root cause was upstream: the language server did not emit control nodes as typed elements, so the extension fell back to name-based guessing that grouped `join` with `merge`. The Action Flow builder now uses the authoritative `fork`/`join`/`merge`/`decide` types provided by the language server, and the name-based synthesis fallback (used only for undeclared flow endpoints) no longer collapses `join` into `merge`.
+
+### Changed
+
+- **Bumped `sysml-v2-lsp`** to pick up first-class SysML v2 control-node kinds (`ForkNode`/`JoinNode`/`MergeNode`/`DecisionNode`) and the latest OMG SysML v2 ANTLR grammar.
+- **Updated npm dependencies and resolved all high-severity advisories** — `npm audit` is now clean (fixed `brace-expansion`, `fast-uri`, `js-yaml`, `linkify-it`), and `eslint`/`typescript-eslint`/`cytoscape`/`mocha`/`rimraf`/`glob` and others updated within range.
+
+### Added
+
+- **Action Flow view contract tests** — `src/test/actionFlowContract.test.ts` locks in correct control-node shape mapping (fork/join → bar, merge/decide → diamond) and the synthesis-fallback classification to guard against regressions of issue #62.
+
 ## [0.42.0]
 
 ### Fixed

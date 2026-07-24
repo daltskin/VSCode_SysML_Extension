@@ -2823,7 +2823,14 @@ export class VisualizationPanel {
                                     }
                                 });
 
-                                // Add synthesized control nodes for any flow endpoints not in actions
+                                // Add synthesized control nodes for any flow endpoints not in actions.
+                                //
+                                // NOTE: The sysml-v2-lsp server now emits fork/join/merge/decide
+                                // as first-class actions with authoritative type/kind
+                                // (ForkNode/JoinNode/MergeNode/DecisionNode), so declared control
+                                // nodes already arrive correctly typed above. This block only
+                                // synthesizes implicit control nodes that appear solely as flow
+                                // endpoints (never declared), where we must infer the type.
                                 flowNodeNames.forEach(nodeName => {
                                     if (!actionIds.has(nodeName)) {
                                         // Determine node type from flow patterns:
@@ -2837,17 +2844,22 @@ export class VisualizationPanel {
                                         let nodeType = 'action';
                                         let nodeKind = 'action';
 
-                                        if (nameLower.includes('merge') || nameLower.includes('join') || nameLower.endsWith('check')) {
-                                            nodeType = 'merge';
-                                            nodeKind = 'merge';
-                                        } else if (nameLower.includes('fork')) {
+                                        if (nameLower.includes('fork')) {
+                                            // Fork → synchronization bar
                                             nodeType = 'fork';
                                             nodeKind = 'fork';
+                                        } else if (nameLower.includes('join')) {
+                                            // Join → synchronization bar (NOT a merge diamond — issue #62)
+                                            nodeType = 'join';
+                                            nodeKind = 'join';
+                                        } else if (nameLower.includes('merge') || nameLower.endsWith('check')) {
+                                            nodeType = 'merge';
+                                            nodeKind = 'merge';
                                         } else if (nameLower.includes('decision') || nameLower.includes('decide')) {
                                             nodeType = 'decision';
                                             nodeKind = 'decision';
                                         } else if (incoming > 1) {
-                                            // Multiple incoming flows → likely a merge/join
+                                            // Multiple incoming flows with no name hint → assume merge
                                             nodeType = 'merge';
                                             nodeKind = 'merge';
                                         } else if (outgoing > 1) {

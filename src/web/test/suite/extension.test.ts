@@ -60,9 +60,9 @@ suite('SysML Web Extension', () => {
 
     test('activates the extension', async () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
-        assert.ok(ext, `extension ${EXTENSION_ID} not found`);
-        await ext!.activate();
-        assert.strictEqual(ext!.isActive, true, 'extension failed to activate');
+        if (!ext) { assert.fail(`extension ${EXTENSION_ID} not found`); }
+        await ext.activate();
+        assert.strictEqual(ext.isActive, true, 'extension failed to activate');
     });
 
     test('browser language server answers document symbol requests', async () => {
