@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Reduced production dependency surface** — moved `elkjs` to `devDependencies` (it is only a build-time source for the vendored `media/vendor/elk.bundled.js` bundle, consistent with `d3`/`cytoscape*`). Runtime production dependencies are now just `sysml-v2-lsp` and `vscode-languageclient`. Advisories in the vendored visualization libraries no longer require an extension release.
+
+### Removed
+
+- **Removed unused `ts-node`** devDependency (unit tests run compiled `.js` output).
+
+### Fixed
+
+- **Cleared all high-severity npm advisories** (`brace-expansion`, `fast-uri`, `js-yaml`) — these originated solely from dev-only tooling (`@vscode/vsce`, `mocha`) and never shipped to users; `npm audit` is now clean.
+
 ## [0.43.0]
 
 ### Fixed
