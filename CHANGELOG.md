@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **No false `unused-definition` warning for a part used as a connection source** ([#80](https://github.com/daltskin/VSCode_SysML_Extension/issues/80)) — updated the bundled `sysml-v2-lsp` dependency so anonymous shorthand connections such as `connect a.outP to b.inP;` no longer overwrite the source part usage's symbol and discard its type reference.
+- **Standalone MCP clients receive structured, host-neutral tool results** ([#81](https://github.com/daltskin/VSCode_SysML_Extension/issues/81)) — the bundled server now emits `structuredContent` with a JSON text fallback, avoiding heuristic payload extraction. Copilot-only `ACTION REQUIRED` and initialization prose is omitted outside the VS Code launch path.
+- **Documentation prose no longer creates false visibility labels** ([#82](https://github.com/daltskin/VSCode_SysML_Extension/issues/82)) — Model Explorer visibility now comes from the parsed SysML membership prefix, so phrases such as `PCM-protected` do not label an otherwise public element as `protected`.
+- **Documentation stays on its owning element and renders without comment gutters** ([#83](https://github.com/daltskin/VSCode_SysML_Extension/issues/83)) — a first member's documentation no longer appears on its package in Model Explorer or MCP symbol output, and conventional multiline `*` prefixes are removed from hovers and inspector text according to the KerML processing rules.
+- **State Transition View receives authoritative transition edges** ([#84](https://github.com/daltskin/VSCode_SysML_Extension/issues/84)) — the bundled language server now records `first`/`then` endpoints and accepter labels, avoids anonymous-transition name collisions, emits transition relationships for the visualizer, and renders the same edges in MCP state previews.
+- **Action Flow View now preserves declared succession branches** ([#85](https://github.com/daltskin/VSCode_SysML_Extension/issues/85)) — explicit `first`/`then` edges, including `start`/`done` links, now drive both the visualizer and MCP preview. When no succession data is available, actions render without edges rather than being misleadingly connected in declaration order.
+- **Feature Explorer now groups resolved features by their actual kinds** ([#86](https://github.com/daltskin/VSCode_SysML_Extension/issues/86)) — canonical metaclass names and legacy lowercase server kinds both map to the correct Parts, Ports, Attributes, Actions, States, and other groups, with matching feature icons. Resolved feature details now include available type, multiplicity, direction, visibility, derived, and readonly metadata.
+- **Development dependency security updates** — refreshed the lockfile to use `fast-uri` 3.1.7 and `qs` 6.16.0, resolving all known npm audit findings. The complete dependency tree now reports zero vulnerabilities.
+
+### Changed
+
+- **Updated `sysml-v2-lsp` from 0.24.0 to the published 0.26.0 package**, incorporating the fixes for issues #80–#86 and current language-server changes.
+- **Preserved VS Code diagram rendering behavior** by explicitly enabling the server's Copilot mode for both the extension-provided MCP definition and the repository's local development MCP configuration.
+
 ## [0.45.0]
 
 ### Changed

@@ -7,6 +7,9 @@
       "args": [
         "./node_modules/sysml-v2-lsp/dist/server/mcpServer.js"
       ],
+      "env": {
+        "SYSML_MCP_COPILOT_MODE": "1"
+      },
       "tools": [
         "*"
       ]

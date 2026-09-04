@@ -125,7 +125,22 @@ class FeatureItem extends vscode.TreeItem {
             'FlowConnectionUsage': 'arrow-both',
             'InterfaceUsage': 'symbol-interface',
         };
-        return new vscode.ThemeIcon(map[kind] || 'symbol-field');
+        const legacyMap: Record<string, string> = {
+            'part': 'symbol-class',
+            'port': 'symbol-interface',
+            'attribute': 'symbol-property',
+            'ref': 'references',
+            'action': 'symbol-method',
+            'perform action': 'symbol-method',
+            'state': 'symbol-enum',
+            'exhibit state': 'symbol-enum',
+            'constraint': 'lock',
+            'requirement': 'checklist',
+            'item': 'symbol-struct',
+            'connection': 'link',
+            'interface': 'symbol-interface',
+        };
+        return new vscode.ThemeIcon(map[kind] || legacyMap[kind.toLowerCase()] || 'symbol-field');
     }
 }
 
@@ -322,11 +337,38 @@ export class FeatureExplorerProvider implements vscode.TreeDataProvider<FeatureT
             'ConnectionUsage': 'Connections',
             'FlowConnectionUsage': 'Connections',
             'InterfaceUsage': 'Connections',
+            'PerformActionUsage': 'Actions',
+            'ExhibitStateUsage': 'States',
+            'TransitionUsage': 'States',
+            'part': 'Parts',
+            'part def': 'Parts',
+            'port': 'Ports',
+            'port def': 'Ports',
+            'attribute': 'Attributes',
+            'attribute def': 'Attributes',
+            'ref': 'References',
+            'action': 'Actions',
+            'action def': 'Actions',
+            'perform action': 'Actions',
+            'state': 'States',
+            'state def': 'States',
+            'exhibit state': 'States',
+            'transition': 'States',
+            'constraint': 'Constraints',
+            'constraint def': 'Constraints',
+            'requirement': 'Requirements',
+            'requirement def': 'Requirements',
+            'item': 'Items',
+            'item def': 'Items',
+            'connection': 'Connections',
+            'connection def': 'Connections',
+            'interface': 'Connections',
+            'interface def': 'Connections',
         };
 
         const groups = new Map<string, ResolvedFeatureDTO[]>();
         for (const f of features) {
-            const cat = categoryMap[f.kind] ?? 'Other';
+            const cat = categoryMap[f.kind] ?? categoryMap[f.kind.toLowerCase()] ?? 'Other';
             let arr = groups.get(cat);
             if (!arr) { arr = []; groups.set(cat, arr); }
             arr.push(f);

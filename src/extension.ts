@@ -104,6 +104,7 @@ async function registerMcpServer(
                     'SysML v2 Model Context',
                     'node',
                     [mcpServerUri.fsPath],
+                    { SYSML_MCP_COPILOT_MODE: '1' },
                 ),
             ],
         }),

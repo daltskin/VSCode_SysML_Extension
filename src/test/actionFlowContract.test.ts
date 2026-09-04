@@ -17,6 +17,8 @@
  * behaviour.
  */
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 
 type NodeShape = 'bar' | 'diamond' | 'circle' | 'box';
 
@@ -96,5 +98,23 @@ suite('Action Flow View Contract — control nodes (issue #62)', () => {
         assert.strictEqual(synthesizeNodeType('branchDecide', 1, 2, /*hasGuards*/ true), 'decision');
         // Nameless multi-incoming endpoint → merge (last-resort heuristic).
         assert.strictEqual(synthesizeNodeType('n1', 3, 0), 'merge');
+    });
+});
+
+suite('Action Flow View Contract — declared successions (issue #85)', () => {
+    test('does not fabricate declaration-order edges when flows are absent', () => {
+        const source = fs.readFileSync(
+            path.join(__dirname, '..', 'visualization', 'visualizationPanel.js'),
+            'utf8',
+        );
+
+        assert.ok(
+            source.includes('Declaration order does not imply execution'),
+            'The element fallback must explicitly preserve an empty flow list.',
+        );
+        assert.ok(
+            !source.includes('If no explicit flows, create implicit flows'),
+            'The renderer must not connect consecutive action declarations.',
+        );
     });
 });
