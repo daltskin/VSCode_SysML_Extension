@@ -372,6 +372,28 @@ suite('FeatureExplorerProvider', () => {
             assert.ok(attrsIdx < actionsIdx, 'Attributes should come before Actions');
         });
 
+        test('groups lowercase LSP symbol kinds instead of placing them under Other', async () => {
+            const resolved = makeResolvedType({
+                simpleName: 'Controller',
+                qualifiedName: 'Controller',
+                features: [
+                    makeFeature({ name: 'powerIn', kind: 'port' }),
+                    makeFeature({ name: 'operating', kind: 'exhibit state' }),
+                    makeFeature({ name: 'control', kind: 'perform action' }),
+                ],
+            });
+
+            const provider = new FeatureExplorerProvider(createMockLspProvider());
+            provider.pushResolvedTypes(testUri.toString(), { 'Controller': resolved });
+            await provider.selectElement(makeSysMLElement({ name: 'Controller' }), testUri);
+
+            const groupLabels = provider.getChildren()
+                .filter((item: any) => item.contextValue === 'featureExplorer.group')
+                .map((item: any) => item.label);
+            assert.deepStrictEqual(groupLabels, ['Ports', 'Actions', 'States']);
+            assert.ok(!groupLabels.includes('Other'));
+        });
+
         test('unknown feature kinds go to Other category', async () => {
             const resolved = makeResolvedType({
                 simpleName: 'Sys',

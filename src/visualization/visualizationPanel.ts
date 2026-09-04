@@ -296,13 +296,11 @@ export class VisualizationPanel {
                 if (result.activityDiagrams) { allActivityDiagrams.push(...(result.activityDiagrams as unknown[])); }
             }
 
-            // The LSP emits `transition` elements but does not populate their
-            // source/target (the `first … then …` targets), so the State
-            // Transition View never receives any edges.  Recover the
-            // transitions directly from the document text and inject them as
-            // `transition` relationships that the webview's state view
-            // already knows how to render.  De-duplicate against anything the
-            // LSP may provide in future so we never double-draw an edge.
+            // Current LSPs emit grammar-derived transition relationships.
+            // Retain the source scanner as a compatibility fallback for older
+            // servers and transition shorthands not represented as symbols.
+            // De-duplicate against authoritative relationships so an edge is
+            // never drawn twice.
             const existingTransitionKeys = new Set(
                 allRelationships
                     .map(r => r as { type?: string; source?: string; target?: string })
@@ -383,10 +381,9 @@ export class VisualizationPanel {
     /**
      * Extract state-machine transitions from raw SysML source.
      *
-     * The LSP recognises `transition` elements but does not currently expose
-     * their `first … [accept …] then …` source/target, so the State
-     * Transition View has no edges to draw.  This lightweight scanner
-     * recovers those edges directly from the text, supporting both the
+    * Compatibility fallback for servers that do not expose transition
+    * relationships. This lightweight scanner recovers edges directly from
+    * the text, supporting both the
      * inline form (`transition first S then T;`) and the named/multi-line
      * form (`transition name first S accept Trig then T;`).  The optional
      * `accept` trigger becomes the transition label.
@@ -2926,27 +2923,13 @@ export class VisualizationPanel {
                                     id: c.name
                                 }));
 
-                            // Create flows from sequential actions
-                            const flows = [];
-                            for (let i = 0; i < childActions.length - 1; i++) {
-                                flows.push({
-                                    from: childActions[i].name,
-                                    to: childActions[i + 1].name
-                                });
-                            }
-
-                            // Add start/done nodes
-                            if (childActions.length > 0) {
-                                flows.unshift({ from: 'start', to: childActions[0].name });
-                                flows.push({ from: childActions[childActions.length - 1].name, to: 'done' });
-                                childActions.unshift({ name: 'start', type: 'initial', kind: 'initial', id: 'start' });
-                                childActions.push({ name: 'done', type: 'final', kind: 'final', id: 'done' });
-                            }
-
                             return {
                                 name: actionDef.name,
                                 actions: childActions,
-                                flows: flows,
+                                // Declaration order does not imply execution
+                                // order. Render no edges when the LSP supplies
+                                // no explicit successions.
+                                flows: [],
                                 decisions: [],
                                 states: []
                             };
@@ -13236,19 +13219,7 @@ export class VisualizationPanel {
                 containerChildren.get(action.parent).push(action);
             });
 
-            let flows = diagram.flows || [];
-
-            // If no explicit flows, create implicit flows between consecutive actions
-            if (flows.length === 0 && actions.length > 1) {
-                flows = [];
-                for (let i = 0; i < actions.length - 1; i++) {
-                    flows.push({
-                        from: actions[i].id || actions[i].name,
-                        to: actions[i + 1].id || actions[i + 1].name,
-                        type: 'control'
-                    });
-                }
-            }
+            const flows = diagram.flows || [];
 
             // Layout configuration - activity view defaults to vertical (top-down)
             // Only use horizontal if explicitly set

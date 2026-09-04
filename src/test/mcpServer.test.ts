@@ -30,6 +30,11 @@ suite('MCP Server Test Suite', () => {
         assert.ok(localServer, 'Expected servers.sysml-v2-local in .vscode/mcp.json');
         assert.strictEqual(localServer.type, 'stdio', 'sysml-v2-local should use stdio transport');
         assert.strictEqual(localServer.command, 'node', 'sysml-v2-local should launch with node');
+        assert.strictEqual(
+            localServer.env?.SYSML_MCP_COPILOT_MODE,
+            '1',
+            'VS Code launches should retain Copilot-specific diagram rendering instructions',
+        );
         assert.ok(
             Array.isArray(localServer.args) && localServer.args.some((a: string) =>
                 a.includes('node_modules/sysml-v2-lsp/dist/server/mcpServer.js')),
