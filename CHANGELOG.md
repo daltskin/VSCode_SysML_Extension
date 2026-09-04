@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.46.0]
+
 ### Fixed
 
 - **No false `unused-definition` warning for a part used as a connection source** ([#80](https://github.com/daltskin/VSCode_SysML_Extension/issues/80)) — updated the bundled `sysml-v2-lsp` dependency so anonymous shorthand connections such as `connect a.outP to b.inP;` no longer overwrite the source part usage's symbol and discard its type reference.
