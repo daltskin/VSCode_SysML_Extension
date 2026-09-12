@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Updated `sysml-v2-lsp` from 0.26.0 to the published 0.27.0 package to fix false `circular-containment` diagnostics for referential usages and recursive composite type structures ([sysml-v2-lsp#101](https://github.com/daltskin/sysml-v2-lsp/issues/101)).
+- Updated js-yaml to 4.3.2 and Morgan to 1.12.1, addressing the reported Dependabot alert and newly discovered npm advisories. The published language server also incorporates its dependency security fixes.
+
 ## [0.46.0]
 
 ### Fixed
