@@ -14326,7 +14326,7 @@ export class VisualizationPanel {
 
                 // Self-loop
                 if (sourceKey === targetKey) {
-                    const loopSize = 30;
+                    const loopSize = 30 + transitionIndex * 35;
                     return {
                         path: 'M ' + (sx + stateWidth) + ' ' + (sy + stateHeight/2) +
                                ' C ' + (sx + stateWidth + loopSize) + ' ' + (sy + stateHeight/2 - loopSize) + ',' +
@@ -14343,7 +14343,8 @@ export class VisualizationPanel {
                 const dy = ty - sy;
 
                 // Offset for multiple transitions between same states
-                const offset = (transitionIndex - (totalTransitions - 1) / 2) * 15;
+                const lane = transitionIndex - (totalTransitions - 1) / 2;
+                const offset = lane * Math.min(24, 40 / Math.max(1, totalTransitions - 1));
 
                 if (Math.abs(dx) > Math.abs(dy)) {
                     // Horizontal connection
@@ -14396,14 +14397,16 @@ export class VisualizationPanel {
                 const midX = (startX + endX) / 2;
                 const midY = (startY + endY) / 2;
                 // Add slight curve to avoid overlap
-                const curveOffset = offset * 0.5;
-                const controlX = midX + curveOffset;
-                const controlY = midY + curveOffset;
+                const horizontal = Math.abs(dx) > Math.abs(dy);
+                const curveOffset = lane * 100;
+                const controlX = midX + (horizontal ? 0 : curveOffset);
+                const controlY = midY + (horizontal ? curveOffset : 0);
 
                 return {
                     path: 'M ' + startX + ' ' + startY + ' Q ' + controlX + ' ' + controlY + ' ' + endX + ' ' + endY,
-                    labelX: controlX,
-                    labelY: controlY - 8
+                    labelX: (midX + controlX) / 2,
+                    labelY: (midY + controlY) / 2 - 8,
+                    labelAnchor: !horizontal && lane !== 0 ? (lane < 0 ? 'end' : 'start') : 'middle'
                 };
             }
 
@@ -14420,7 +14423,7 @@ export class VisualizationPanel {
                         return;
                     }
 
-                    const pairKey = sourceKey + '->' + targetKey;
+                    const pairKey = JSON.stringify([sourceKey, targetKey].sort());
                     if (!transitionPairs.has(pairKey)) {
                         transitionPairs.set(pairKey, []);
                     }
@@ -14458,24 +14461,24 @@ export class VisualizationPanel {
                                 ? transition.label.substring(0, 12) + '...'
                                 : transition.label;
 
-                            transitionGroup.append('rect')
-                                .attr('x', edgeData.labelX - 25)
-                                .attr('y', edgeData.labelY - 10)
-                                .attr('width', 50)
-                                .attr('height', 14)
-                                .attr('rx', 3)
-                                .style('fill', 'var(--vscode-editor-background)')
-                                .style('opacity', 0.9);
-
-                            transitionGroup.append('text')
+                            const label = transitionGroup.append('text')
                                 .attr('x', edgeData.labelX)
                                 .attr('y', edgeData.labelY)
-                                .attr('text-anchor', 'middle')
+                                .attr('text-anchor', edgeData.labelAnchor || 'start')
                                 .attr('dominant-baseline', 'middle')
                                 .text(labelText)
                                 .style('font-size', '10px')
                                 .style('fill', 'var(--vscode-charts-purple)')
                                 .style('font-weight', '500');
+                            const bounds = label.node().getBBox();
+                            transitionGroup.insert('rect', () => label.node())
+                                .attr('x', bounds.x - 4)
+                                .attr('y', bounds.y - 2)
+                                .attr('width', bounds.width + 8)
+                                .attr('height', bounds.height + 4)
+                                .attr('rx', 3)
+                                .style('fill', 'var(--vscode-editor-background)')
+                                .style('opacity', 0.9);
                         }
                     });
                 });

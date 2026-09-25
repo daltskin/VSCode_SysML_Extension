@@ -186,6 +186,65 @@ suite('Visualization Panel Test Suite', () => {
 suite('State Transition Extraction', () => {
     const { VisualizationPanel } = require('../visualization/visualizationPanel');
 
+    test('routes opposite transitions in separate lanes (issue #98)', () => {
+        const source = require('fs').readFileSync(
+            path.resolve(__dirname, '../../src/visualization/visualizationPanel.ts'), 'utf8',
+        ) as string;
+        const edgeStart = source.indexOf('function calculateEdgePath(');
+        const edgeEnd = source.indexOf('// Draw all transitions', edgeStart);
+        const drawStart = source.indexOf('function drawTransitions()', edgeEnd);
+        const drawEnd = source.indexOf('// Draw initial transitions', drawStart);
+        const paths: string[] = [];
+        const labels: { x?: number; y?: number; text?: string }[] = [];
+        const selection = (kind: string) => {
+            const label: { x?: number; y?: number; text?: string } = {};
+            if (kind === 'text') labels.push(label);
+            const element: any = {
+                attr(name: string, value: any) {
+                    if (kind === 'path' && name === 'd') paths.push(value);
+                    if (kind === 'text' && (name === 'x' || name === 'y')) label[name] = value;
+                    return element;
+                },
+                style() { return element; },
+                text(value: string) { label.text = value; return element; },
+                node() { return { getBBox: () => ({ x: 0, y: 0, width: 60, height: 10 }) }; },
+            };
+            return element;
+        };
+        for (const orientation of ['vertical', 'horizontal']) {
+            paths.length = 0;
+            labels.length = 0;
+            const target = orientation === 'vertical' ? { x: 0, y: 160 } : { x: 240, y: 0 };
+            require('vm').runInNewContext(
+                source.slice(edgeStart, edgeEnd) + source.slice(drawStart, drawEnd) + 'drawTransitions();',
+                {
+                    statePositions: new Map([['locked', { x: 0, y: 0 }], ['unlocked', target]]),
+                    stateWidth: 160, stateHeight: 60, INITIAL_PSEUDOSTATE: '__sysml_initial__',
+                    stateNameToKey: new Map(), getSimpleStateName: (name: string) => name,
+                    stateKeys: new Set(['locked', 'unlocked']),
+                    machineTransitions: [
+                        { source: 'locked', target: 'unlocked', label: 'CoinSignal' },
+                        { source: 'unlocked', target: 'locked', label: 'PushSignal' },
+                        { source: 'locked', target: 'locked', label: 'PushSignal' },
+                        { source: 'locked', target: 'locked', label: 'CoinSignal' },
+                    ],
+                    transitionGroup: {
+                        selectAll: () => ({ remove() {} }),
+                        append: selection,
+                        insert: selection,
+                    },
+                },
+            );
+            assert.strictEqual(paths.length, 4);
+            assert.deepStrictEqual(labels.map(label => label.text),
+                ['CoinSignal', 'PushSignal', 'PushSignal', 'CoinSignal']);
+            const coordinate = orientation === 'vertical' ? 'x' : 'y';
+            assert.ok(Math.abs(labels[0][coordinate]! - labels[1][coordinate]!) >= 60,
+                'Opposite labels must occupy distinct lanes');
+            assert.notStrictEqual(paths[2], paths[3], 'Parallel self-loops must not overlap');
+        }
+    });
+
     test('extracts named multi-line transitions (issue #60)', () => {
         const src = `package TrafficLight {
     state def SignalStateMachine {
