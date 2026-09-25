@@ -9,8 +9,12 @@
 
 ### Fixed
 
-- Workspace preloading now honors `always`, `workspaceOnly`, and `never`, including nested unopened SysML and KerML files in ordinary folders (#96). Uses a locally linked LSP build based on 0.28.0.
+- Workspace preloading now honors `always`, `workspaceOnly`, and `never`, including nested unopened SysML and KerML files in ordinary folders (#96).
 - Opposite FSM transitions now follow separate paths with separate labels instead of appearing as one bidirectional transition; parallel self-loops also use distinct paths (#98).
+
+### Changed
+
+- Replaced the local LSP tarball dependency with the published `sysml-v2-lsp` 0.29.0 package, pinned exactly for reproducible installs.
 
 ## [0.47.0]
 

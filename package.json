@@ -528,7 +528,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "sysml-v2-lsp": "file:../sysml-v2-lsp/sysml-v2-lsp-0.28.0.tgz",
+    "sysml-v2-lsp": "0.29.0",
     "vscode-languageclient": "^10.1.0"
   },
   "overrides": {
