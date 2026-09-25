@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- `sysml.validation.disabledCodes` suppresses selected diagnostic codes (for example, `missing-doc`) and refreshes open documents immediately (#97).
+- Documented all 16 suppressible diagnostic codes and added selectable values in VS Code Settings.
+
+### Fixed
+
+- Workspace preloading now honors `always`, `workspaceOnly`, and `never`, including nested unopened SysML and KerML files in ordinary folders (#96).
+- Opposite FSM transitions now follow separate paths with separate labels instead of appearing as one bidirectional transition; parallel self-loops also use distinct paths (#98).
+
+### Changed
+
+- Replaced the local LSP tarball dependency with the published `sysml-v2-lsp` 0.29.0 package, pinned exactly for reproducible installs.
+
 ## [0.48.0]
 
 ## [0.47.0]

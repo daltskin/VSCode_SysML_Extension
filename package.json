@@ -359,6 +359,34 @@
     "configuration": {
       "title": "SysML v2.0",
       "properties": {
+        "sysml.validation.disabledCodes": {
+          "type": "array",
+          "scope": "window",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ambiguous-namespace-name",
+              "circular-specialization",
+              "duplicate-definition",
+              "empty-enum",
+              "incompatible-port-types",
+              "invalid-constraint-body",
+              "invalid-multiplicity",
+              "invalid-redefinition-multiplicity",
+              "missing-doc",
+              "naming-convention",
+              "unresolved-constraint-reference",
+              "unresolved-type",
+              "unsatisfied-requirement",
+              "unused-definition",
+              "unverified-requirement",
+              "view-no-scope"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "markdownDescription": "Diagnostic codes to suppress, for example `[\"missing-doc\"]`. Other diagnostics remain enabled. Changes apply to open documents immediately."
+        },
         "sysml.validation.enabled": {
           "type": "boolean",
           "default": true,
@@ -435,7 +463,7 @@
             "never"
           ],
           "default": "workspaceOnly",
-          "markdownDescription": "Control when the LSP server pre-parses all `.sysml` / `.kerml` files in the workspace for cross-file navigation (go-to-definition, find references).\n- **always**: Pre-parse on every folder or workspace open\n- **workspaceOnly** *(default)*: Pre-parse only when a `.code-workspace` file is opened\n- **never**: Never pre-parse — files are parsed lazily when opened"
+          "markdownDescription": "Control when the LSP server pre-parses all `.sysml` / `.kerml` files in the workspace for cross-file navigation (go-to-definition, find references).\n- **always**: Pre-parse on every folder or workspace open\n- **workspaceOnly** *(default)*: Pre-parse only when a `.code-workspace` file is opened\n- **never**: Never pre-parse — files are parsed lazily when opened\n\nRestart the language server after changing this setting."
         },
         "sysml.workspace.excludePatterns": {
           "type": "array",
@@ -500,7 +528,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "sysml-v2-lsp": "0.27.0",
+    "sysml-v2-lsp": "0.29.0",
     "vscode-languageclient": "^10.1.0"
   },
   "overrides": {

@@ -138,15 +138,51 @@ Right-click a package node in the **SysML Model Explorer** → **Visualize Packa
 | Setting                            | Default           | Description                                                                                                                                                  |
 | ---------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `sysml.validation.enabled`         | `true`            | Enable SysML model validation                                                                                                                                |
+| `sysml.validation.disabledCodes`   | `[]`              | Suppress individual diagnostic codes, e.g. `["missing-doc"]`; applies immediately to open documents                                                          |
 | `sysml.format.indentSize`          | `4`               | Number of spaces for indentation                                                                                                                             |
 | `sysml.visualization.defaultView`  | `"sysml"`         | Default view when opening the visualizer (`sysml`, `tree`, `elk`, `bdd`, `package`, `ibd`, `graph`, `hierarchy`, `sequence`, `activity`, `state`, `usecase`) |
 | `sysml.export.defaultScale`        | `2`               | Default scale factor for PNG exports (1x–4x)                                                                                                                 |
 | `sysml.library.path`               | `""`              | Path to SysML v2 standard library directory                                                                                                                  |
 | `sysml.maxNumberOfProblems`        | `100`             | Maximum number of problems reported per file                                                                                                                 |
 | `sysml.inlayHints.enabled`         | `false`           | Enable inlay hints (inline type annotations). May interfere with renaming — disable if you experience editing issues                                         |
-| `sysml.workspace.preloadOnOpen`    | `"workspaceOnly"` | Control workspace pre-parsing: `always`, `workspaceOnly`, `never`                                                                                            |
+| `sysml.workspace.preloadOnOpen`    | `"workspaceOnly"` | Control workspace pre-parsing: `always`, `workspaceOnly`, `never`. Restart the language server after changing this setting.                                  |
 | `sysml.workspace.excludePatterns`  | `[]`              | Glob patterns to exclude from workspace pre-parsing                                                                                                          |
 | `sysmlLanguageServer.trace.server` | `"off"`           | Traces communication between VS Code and the language server (`off`, `messages`, `verbose`)                                                                  |
+
+### Diagnostic Suppression
+
+Set `sysml.validation.disabledCodes` to the codes you want to suppress. For example:
+
+```json
+{
+  "sysml.validation.disabledCodes": ["missing-doc", "naming-convention"]
+}
+```
+
+All currently supported codes are listed below and offered in VS Code Settings:
+
+| Code                                | Diagnostic                                                |
+| ----------------------------------- | --------------------------------------------------------- |
+| `ambiguous-namespace-name`          | Declarations with an ambiguous name in the same namespace |
+| `circular-specialization`           | A cycle in specialization relationships                   |
+| `duplicate-definition`              | A duplicate definition                                    |
+| `empty-enum`                        | An enumeration with no values                             |
+| `incompatible-port-types`           | Connected ports with incompatible types                   |
+| `invalid-constraint-body`           | An invalid constraint body                                |
+| `invalid-multiplicity`              | Invalid multiplicity bounds                               |
+| `invalid-redefinition-multiplicity` | A redefinition with incompatible multiplicity             |
+| `missing-doc`                       | Missing documentation                                     |
+| `naming-convention`                 | A name that does not follow the recommended convention    |
+| `unresolved-constraint-reference`   | A constraint reference that cannot be resolved            |
+| `unresolved-type`                   | A type reference that cannot be resolved                  |
+| `unsatisfied-requirement`           | A requirement with no satisfaction relationship           |
+| `unused-definition`                 | A definition that is not used                             |
+| `unverified-requirement`            | A requirement with no verification relationship           |
+| `view-no-scope`                     | A view with no scope                                      |
+
+Codes are case-sensitive. Changes apply to open documents immediately; `[]` restores
+all diagnostics. Syntax errors and keyword-typo errors currently have no diagnostic
+code and cannot be suppressed with this setting.
 
 ## Development
 

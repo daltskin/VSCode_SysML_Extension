@@ -95,6 +95,13 @@ src/
 
 ## Testing Strategies
 
+### Required Validation
+
+- Always run `npm run lint` as part of testing, alongside compilation and relevant tests.
+- Run lint after the final edits and before declaring work complete, committing, or pushing changes.
+- Fix lint errors and any warnings introduced by the changes, then rerun lint to confirm.
+- If lint cannot run or existing failures remain, explicitly report the blocker; do not claim it passed.
+
 ### Test Coverage Goals
 
 - Unit tests for all parser logic and utilities
@@ -151,6 +158,23 @@ describe("SysML Parser", () => {
 - Use `vsce package` for creating marketplace-ready packages
 - Include proper LICENSE and README.md files
 - Test extension installation and activation thoroughly
+
+## Cross-Repo Dependency Workflow (sysml-v2-lsp)
+
+- Resolve paths in this section relative to the extension repository root, not the shell's current directory.
+- Treat the sibling checkout `../sysml-v2-lsp` as an approved editable dependency workspace for this repo.
+- If that checkout is unavailable, report the blocker and ask for its location; do not silently skip this workflow.
+- When an issue appears related to parsing, validation, code actions, quick fixes, keywords, diagnostics, or formatting, proactively inspect both repositories:
+  - `.` (the extension repository)
+  - `../sysml-v2-lsp` (the language-server repository)
+- Prefer fixing the root cause in `sysml-v2-lsp` when extension behavior depends on language-server logic.
+- If any file is changed in `sysml-v2-lsp`, always run this sequence before considering the task complete:
+  1. In `sysml-v2-lsp`: `npm run clean`
+  2. In `sysml-v2-lsp`: `npm run package:server` (produces `sysml-v2-lsp-<version>.tgz`)
+  3. In `VSCode_SysML_Extension`: `npm install ../sysml-v2-lsp/sysml-v2-lsp-<version>.tgz --save-exact`
+  4. In `VSCode_SysML_Extension`: `npm run compile`
+- After relinking, verify `package.json` dependency and `package-lock.json` resolution both point to the local tarball under `../sysml-v2-lsp/`.
+- If no `sysml-v2-lsp` files were changed, do not rebuild/repack the tarball.
 
 ## Code Style Guidelines
 
