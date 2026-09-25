@@ -216,7 +216,7 @@ suite('State Transition Extraction', () => {
             labels.length = 0;
             const target = orientation === 'vertical' ? { x: 0, y: 160 } : { x: 240, y: 0 };
             require('vm').runInNewContext(
-                source.slice(edgeStart, edgeEnd) + source.slice(drawStart, drawEnd) + 'drawTransitions();',
+                `${source.slice(edgeStart, edgeEnd)}${source.slice(drawStart, drawEnd)}drawTransitions();`,
                 {
                     statePositions: new Map([['locked', { x: 0, y: 0 }], ['unlocked', target]]),
                     stateWidth: 160, stateHeight: 60, INITIAL_PSEUDOSTATE: '__sysml_initial__',
@@ -239,7 +239,11 @@ suite('State Transition Extraction', () => {
             assert.deepStrictEqual(labels.map(label => label.text),
                 ['CoinSignal', 'PushSignal', 'PushSignal', 'CoinSignal']);
             const coordinate = orientation === 'vertical' ? 'x' : 'y';
-            assert.ok(Math.abs(labels[0][coordinate]! - labels[1][coordinate]!) >= 60,
+            const firstPosition = labels[0][coordinate];
+            const secondPosition = labels[1][coordinate];
+            assert.ok(typeof firstPosition === 'number' && typeof secondPosition === 'number',
+                'Opposite labels must have numeric coordinates');
+            assert.ok(Math.abs(firstPosition - secondPosition) >= 60,
                 'Opposite labels must occupy distinct lanes');
             assert.notStrictEqual(paths[2], paths[3], 'Parallel self-loops must not overlap');
         }
