@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.49.0]
+
 ### Added
 
 - `sysml.validation.disabledCodes` suppresses selected diagnostic codes (for example, `missing-doc`) and refreshes open documents immediately (#97).
