@@ -16,6 +16,8 @@
 
 - Replaced the local LSP tarball dependency with the published `sysml-v2-lsp` 0.29.0 package, pinned exactly for reproducible installs.
 
+## [0.48.0]
+
 ## [0.47.0]
 
 ### Fixed
