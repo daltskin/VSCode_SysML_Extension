@@ -16,7 +16,7 @@ declare const mocha: {
 
 export function run(): Promise<void> {
     return new Promise((resolve, reject) => {
-        mocha.setup({ ui: 'tdd', reporter: undefined, timeout: 30000 });
+        mocha.setup({ ui: 'tdd', reporter: 'spec', timeout: 30000 });
 
         // Bundled by esbuild: importing pulls the test suite into the bundle
         // and registers the `suite(...)` / `test(...)` callbacks with Mocha.

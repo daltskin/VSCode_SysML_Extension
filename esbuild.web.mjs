@@ -11,7 +11,7 @@
  * `dist/web/sysmlServer.js`; the extension launches it as a Web Worker.
  */
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
@@ -83,6 +83,18 @@ if (withTests) {
         entryPoints: ['src/web/test/suite/index.ts'],
         outfile: 'dist/web/test/suite/index.js',
         external: ['vscode'],
+        plugins: [{
+            name: 'mocha-browser-commonjs',
+            setup(build) {
+                const browserPath = require.resolve('mocha/mocha');
+                build.onResolve({ filter: /^mocha\/mocha$/ }, () => ({
+                    path: `${browserPath}.cjs`, namespace: 'mocha-browser',
+                }));
+                build.onLoad({ filter: /\.cjs$/, namespace: 'mocha-browser' }, () => ({
+                    contents: readFileSync(browserPath, 'utf8'), loader: 'js',
+                }));
+            },
+        }],
         sourcemap: true,
         logLevel: 'info',
         define: {
