@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Support Mocha 12 in browser-host tests by isolating its UMD bundle as CommonJS
+  and explicitly selecting the DOM-free console reporter.
+
 ## [0.49.0]
 
 ### Added
