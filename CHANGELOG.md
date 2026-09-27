@@ -20,6 +20,8 @@
 
 - Workbench refresh after source edits, clearing stale synchronization errors and edit state.
 - WSL and remote Extension Host debugging reliability.
+- Support Mocha 12 in browser-host tests by isolating its UMD bundle as CommonJS
+  and explicitly selecting the DOM-free console reporter.
 
 ## [0.49.0]
 
