@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.50.0]
+
 ### Added
 
 - **Model Workbench** for editing requirements, elements and relationships, with scoped views,
