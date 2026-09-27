@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { BaseLanguageClient } from 'vscode-languageclient';
+import { telemetry } from '../telemetry';
 import {
     PositionDTO,
     RangeDTO,
@@ -123,18 +124,27 @@ export class LspModelProvider {
         // Retry with short back-off when the server hasn't
         // finished parsing yet (returns 0 elements).
         const retryDelays = [100, 250, 500]; // ms
+        const started = Date.now();
         let result: SysMLModelResult;
 
         for (let attempt = 0; ; attempt++) {
             if (token?.isCancellationRequested) {
+                telemetry?.operation('language', 'model', 'cancelled', Date.now() - started);
                 return { version: 0, elements: [], relationships: [] };
             }
 
-            result = await this._client.sendRequest<SysMLModelResult>(
-                'sysml/model',
-                params,
-                token,
-            );
+            try {
+                result = await this._client.sendRequest<SysMLModelResult>(
+                    'sysml/model', params, token,
+                );
+            } catch (error) {
+                const cancelled = token?.isCancellationRequested
+                    || (error instanceof Error && error.name === 'Canceled');
+                telemetry?.operation('language', 'model', cancelled ? 'cancelled' : 'failure',
+                    Date.now() - started);
+                if (!cancelled) telemetry?.error('language', 'model', 'request-failed');
+                throw error;
+            }
 
             const hasData = (result.elements?.length ?? 0) > 0;
             if (hasData || attempt >= retryDelays.length) {
@@ -159,6 +169,7 @@ export class LspModelProvider {
 
         // Cache the result for deduplication across consumers
         this._cache.set(uri, { version: result.version, result });
+        telemetry?.operation('language', 'model', 'success', Date.now() - started);
 
         return result;
     }

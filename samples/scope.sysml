@@ -1,6 +1,6 @@
 package SystemAssembly {
 
-  import StandardViewDefinitions::*;
+  private import StandardViewDefinitions::*;
 
   part def ComponentA {
     out port pOut;

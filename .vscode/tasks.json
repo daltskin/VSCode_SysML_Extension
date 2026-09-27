@@ -2,6 +2,17 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Launch Extension Development Host",
+      "type": "process",
+      "command": "node",
+      "args": ["${workspaceFolder}/scripts/launch-extension.cjs", "--inspect"],
+      "dependsOn": "npm: compile",
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
       "label": "npm: compile",
       "type": "shell",
       "command": "npm run compile",

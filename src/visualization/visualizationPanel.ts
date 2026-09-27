@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { LspModelProvider, toVscodeRange } from '../providers/lspModelProvider';
 import type { SysMLElementDTO } from '../providers/sysmlModelTypes';
+import { telemetry } from '../telemetry';
 import type { SysMLElement } from '../types/sysmlTypes';
 
 export class VisualizationPanel {
@@ -72,13 +73,18 @@ export class VisualizationPanel {
                         this.renameElement(message.oldName, message.newName);
                         break;
                     case 'export':
-                        this.handleExport(message.format, message.data);
+                        void this.handleExport(message.format, message.data).catch(() => {
+                            telemetry?.operation('visualizer', 'export', 'failure');
+                            telemetry?.error('visualizer', 'export', 'export-failed');
+                            void vscode.window.showErrorMessage('Unable to export the visualization.');
+                        });
                         break;
                     case 'executeCommand':
                         if (message.args && message.args.length > 0) {
                             const cmd = message.args[0];
                             const allowedCommands = [
                                 'sysml.showModelDashboard',
+                                'sysml.showModelWorkbench',
                                 'sysml.showSysRunner',
                             ];
                             if (!allowedCommands.includes(cmd)) {
@@ -86,7 +92,7 @@ export class VisualizationPanel {
                                 console.warn(`[SysML Visualizer] Blocked disallowed command: ${cmd}`);
                                 break;
                             }
-                            if (cmd === 'sysml.showModelDashboard') {
+                            if (cmd === 'sysml.showModelDashboard' || cmd === 'sysml.showModelWorkbench') {
                                 // Pass a file URI so the dashboard can load data
                                 // even when no text editor is active (webview is focused).
                                 const dashboardUri = this._fileUris.length > 0
@@ -106,6 +112,7 @@ export class VisualizationPanel {
                     case 'viewChanged':
                         // Store the current view state when it changes
                         this._currentView = message.view;
+                        telemetry?.operation('visualizer', 'change-view', 'success', undefined, message.view);
                         break;
                     case 'openExternal':
                         if (message.url) {
@@ -150,6 +157,7 @@ export class VisualizationPanel {
             // If panel exists, update title and reveal it
             VisualizationPanel.currentPanel._panel.title = title;
             VisualizationPanel.currentPanel._panel.reveal(visualizerColumn);
+            telemetry?.panelOpened('visualizer');
             if (lspModelProvider) {
                 VisualizationPanel.currentPanel._lspModelProvider = lspModelProvider;
             }
@@ -189,6 +197,7 @@ export class VisualizationPanel {
         );
 
         VisualizationPanel.currentPanel = new VisualizationPanel(panel, extensionUri, document, lspModelProvider, fileUris);
+        telemetry?.panelOpened('visualizer');
     }
 
     public exportVisualization(format: string, scale: number = 2) {
@@ -878,6 +887,7 @@ export class VisualizationPanel {
     }
 
     private async handleExport(format: string, data: string) {
+        const started = Date.now();
         const filters: { [key: string]: string[] } = {
             'PNG Images': ['png'],
             'SVG Images': ['svg'],
@@ -939,6 +949,8 @@ export class VisualizationPanel {
             await vscode.workspace.fs.writeFile(uri, buffer);
             vscode.window.showInformationMessage(`Visualization exported to ${uri.fsPath}`);
         }
+        telemetry?.operation('visualizer', 'export', uri ? 'success' : 'cancelled',
+            Date.now() - started);
     }
 
     public getDocument(): vscode.TextDocument {
@@ -1810,6 +1822,7 @@ export class VisualizationPanel {
             <button id="layout-mode-btn" class="action-btn active" title="Toggle Grid vs. connection-driven layout" style="background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-background);">▦ Grid</button>
             <button id="minimap-toolbar-btn" class="action-btn" title="Toggle minimap">⊡ Map</button>
             <button id="dashboard-btn" class="action-btn" title="Open Model Dashboard">📊 Dashboard</button>
+            <button id="workbench-btn" class="action-btn" title="Open Model Workbench">Edit Model</button>
             <button id="legend-btn" class="action-btn" title="Show diagram legend">🔑 Legend</button>
             <button id="ee-egg" title="What's this?">🥚</button>
             <button id="about-btn" class="action-btn" title="About this extension">ℹ️ About</button>
@@ -16143,6 +16156,12 @@ export class VisualizationPanel {
         updateActiveViewButton(currentView);
 
         // Dashboard toolbar button
+        const workbenchToolbarBtn = document.getElementById('workbench-btn');
+        if (workbenchToolbarBtn) {
+            workbenchToolbarBtn.addEventListener('click', () => {
+                vscode.postMessage({ command: 'executeCommand', args: ['sysml.showModelWorkbench'] });
+            });
+        }
         const dashboardToolbarBtn = document.getElementById('dashboard-btn');
         if (dashboardToolbarBtn) {
             dashboardToolbarBtn.addEventListener('click', () => {

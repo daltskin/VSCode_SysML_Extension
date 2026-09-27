@@ -1,5 +1,5 @@
 package CameraTestIBD {
-    import CameraTestBDD::*;
+    private import CameraTestBDD::*;
 
     part def CameraSystemAssembly {
         part camera : CameraSystem {

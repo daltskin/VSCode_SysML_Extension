@@ -1,0 +1,158 @@
+{
+  "common": {
+    "schemaVersion": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "Allowlisted event contract version, currently 2."
+    },
+    "extensionVersion": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "SysML extension numeric release version."
+    },
+    "lspVersion": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "Bundled language server numeric release version."
+    },
+    "vscodeVersion": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "VS Code numeric release version."
+    },
+    "host": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "desktop, remote or web only."
+    },
+    "platform": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "linux, win32, darwin, web or other only."
+    },
+    "ai.user.id": {
+      "classification": "EndUserPseudonymizedInformation",
+      "purpose": "FeatureInsight",
+      "comment": "Usage only: random local installation UUID, erased on usage opt-out. Not a person or machine ID."
+    },
+    "ai.session.id": {
+      "classification": "EndUserPseudonymizedInformation",
+      "purpose": "FeatureInsight",
+      "comment": "Usage only: random per-activation UUID. Never included in error events."
+    },
+    "sequence": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "isMeasurement": true,
+      "comment": "Usage only: increasing sequence within an activation, not a complete interaction history."
+    },
+    "ai.location.ip": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "Constant 0.0.0.0 masking override, never a client IP."
+    }
+  },
+  "sysml.extension.activated": {
+    "durationMs": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "isMeasurement": true,
+      "comment": "Completed synchronous activation setup, not LSP readiness or installation count."
+    }
+  },
+  "sysml.panel.opened": {
+    "panel": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "visualizer, workbench, dashboard, inspector or sysrunner; creation or reveal only."
+    }
+  },
+  "sysml.visualizer.operation": {
+    "action": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "change-view or export."
+    },
+    "view": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "Built-in elk, ibd, activity, state, sequence, usecase, tree, package, graph or hierarchy."
+    },
+    "outcome": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "success, failure, rejected or cancelled."
+    },
+    "durationMs": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "isMeasurement": true,
+      "comment": "Optional elapsed milliseconds, including export dialog wait; not diagram render timing."
+    }
+  },
+  "sysml.workbench.operation": {
+    "action": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "preview, apply or export. Bulk imports are included in preview/apply."
+    },
+    "outcome": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "success, failure, rejected or cancelled. Invalid/stale edits are rejected, not unexpected bugs."
+    },
+    "durationMs": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "isMeasurement": true,
+      "comment": "Elapsed host operation milliseconds, including export dialog wait."
+    }
+  },
+  "sysml.explorer.operation": {
+    "action": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "change-mode only."
+    },
+    "outcome": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "success, failure, rejected or cancelled."
+    }
+  },
+  "sysml.language.operation": {
+    "action": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "start, restart or model. Model includes background uncached requests, not just direct user actions."
+    },
+    "outcome": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "success, failure, rejected or cancelled."
+    },
+    "durationMs": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "isMeasurement": true,
+      "comment": "Elapsed milliseconds; model includes warm-up retries and conversion, cache hits omitted."
+    }
+  },
+  "sysml.error": {
+    "component": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "visualizer, workbench, explorer or language. No identity or sequence on this event."
+    },
+    "operation": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "Reviewed built-in operation belonging to the component."
+    },
+    "code": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "start-failed, request-failed, render-failed, export-failed or edit-failed only; never exception text."
+    }
+  }
+}

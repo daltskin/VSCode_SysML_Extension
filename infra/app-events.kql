@@ -1,0 +1,63 @@
+source
+| where Name in ('sysml.extension.activated', 'sysml.panel.opened', 'sysml.error',
+    'sysml.visualizer.operation', 'sysml.workbench.operation',
+    'sysml.explorer.operation', 'sysml.language.operation')
+| extend incoming = parse_json(Properties), measurements = parse_json(Measurements)
+| extend schemaVersion = tostring(incoming.schemaVersion),
+    extensionVersion = tostring(incoming.extensionVersion),
+    lspVersion = tostring(incoming.lspVersion), vscodeVersion = tostring(incoming.vscodeVersion),
+    host = tostring(incoming.host), platform = tostring(incoming.platform)
+| where schemaVersion == '2'
+    and (extensionVersion == 'unknown' or extensionVersion matches regex '^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}$')
+    and (lspVersion == 'unknown' or lspVersion matches regex '^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}$')
+    and (vscodeVersion == 'unknown' or vscodeVersion matches regex '^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}$')
+    and host in ('desktop', 'remote', 'web')
+    and platform in ('linux', 'win32', 'darwin', 'web', 'other')
+| extend component = case(
+    Name == 'sysml.visualizer.operation', 'visualizer',
+    Name == 'sysml.workbench.operation', 'workbench',
+    Name == 'sysml.explorer.operation', 'explorer',
+    Name == 'sysml.language.operation', 'language',
+    Name == 'sysml.error', tostring(incoming.component), ''),
+    action = iif(Name == 'sysml.error', tostring(incoming.operation), tostring(incoming.action)),
+    outcome = tostring(incoming.outcome), panel = tostring(incoming.panel),
+    code = tostring(incoming.code), view = tostring(incoming.view),
+    duration = toreal(iif(isempty(tostring(measurements.durationMs)),
+        '-1', tostring(measurements.durationMs))),
+    sequence = toreal(measurements.sequence)
+| extend validUsageIdentity = Name != 'sysml.error'
+    and UserId matches regex '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+    and SessionId matches regex '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+    and gettype(measurements.sequence) in ('long', 'real')
+    and isfinite(sequence) and sequence >= 1 and sequence <= 9007199254740991
+    and sequence == floor(sequence, 1)
+| extend validDuration = (Name == 'sysml.extension.activated'
+    or Name in ('sysml.visualizer.operation', 'sysml.workbench.operation', 'sysml.language.operation'))
+    and isfinite(duration) and duration >= 0 and duration <= 3600000
+| extend validOperation =
+    (component == 'visualizer' and action in ('change-view', 'export')) or
+    (component == 'workbench' and action in ('preview', 'apply', 'export')) or
+    (component == 'explorer' and action == 'change-mode') or
+    (component == 'language' and action in ('start', 'restart', 'model'))
+| where Name == 'sysml.extension.activated'
+    or (Name == 'sysml.panel.opened' and panel in ('visualizer', 'workbench', 'dashboard', 'inspector', 'sysrunner'))
+    or (Name == 'sysml.error' and validOperation and code in ('start-failed', 'request-failed', 'render-failed', 'export-failed', 'edit-failed'))
+    or (Name endswith '.operation' and validOperation and outcome in ('success', 'cancelled', 'rejected', 'failure'))
+| project TimeGenerated, Name,
+    ItemCount = toint(1),
+        UserId = iif(validUsageIdentity, tolower(UserId), ''),
+        SessionId = iif(validUsageIdentity, tolower(SessionId), ''),
+    Properties = pack(
+            'schemaVersion', '2', 'extensionVersion', extensionVersion, 'lspVersion', lspVersion,
+      'vscodeVersion', vscodeVersion, 'host', host, 'platform', platform,
+      'panel', iif(Name == 'sysml.panel.opened', panel, ''),
+      'component', iif(Name == 'sysml.error', component, ''),
+      'operation', iif(Name == 'sysml.error', action, ''),
+      'code', iif(Name == 'sysml.error', code, ''),
+      'action', iif(Name endswith '.operation', action, ''),
+      'outcome', iif(Name endswith '.operation', outcome, ''),
+            'view', iif(Name == 'sysml.visualizer.operation' and view in ('elk', 'ibd', 'activity', 'state', 'sequence', 'usecase', 'tree', 'package', 'graph', 'hierarchy'), view, '')),
+        Measurements = iif(validUsageIdentity,
+            iif(validDuration, pack('sequence', tolong(sequence), 'durationMs', round(duration, 0)),
+                pack('sequence', tolong(sequence))),
+            iif(validDuration, pack('durationMs', round(duration, 0)), parse_json('{}')))

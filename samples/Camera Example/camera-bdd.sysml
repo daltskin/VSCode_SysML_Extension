@@ -1,5 +1,5 @@
 package CameraTestBDD {
-    import PictureTaking::*;
+    private import PictureTaking::*;
 
     part def CameraSystem {
         attribute resolution : Resolution;

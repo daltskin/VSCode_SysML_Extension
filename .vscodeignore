@@ -9,6 +9,7 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 node_modules/**/test/**
+node_modules/papaparse/.github/**
 node_modules/**/*.md
 node_modules/**/*.ts
 node_modules/**/tsconfig.json
@@ -16,15 +17,19 @@ node_modules/**/.eslintrc*
 
 # Build/dev artifacts
 .venv/**
+.ruff_cache/**
 .sysml-cache/**
 .devcontainer/**
 .github/**
 .nvmrc
+tsconfig.web.json
 tsconfig.tsbuildinfo
 scripts/**
 schemas/**
 samples/**
 docs/**
+infra/**
+.azure/**
 test-output/**
 coverage/**
 tmp/**

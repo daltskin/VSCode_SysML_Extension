@@ -12,18 +12,23 @@ function ensureDir(dir) {
     }
 }
 
-function copyAsset(sourceModulePath, targetFileName) {
+function copyAsset(sourceModulePath, targetFileName, trimTrailingWhitespace = false) {
     const targetDir = path.join(__dirname, '..', 'media', 'vendor');
     ensureDir(targetDir);
 
     const targetPath = path.join(targetDir, targetFileName);
     fs.copyFileSync(sourceModulePath, targetPath);
+    if (trimTrailingWhitespace) {
+        const content = fs.readFileSync(targetPath, 'utf8');
+        fs.writeFileSync(targetPath, content.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, ''));
+    }
     console.log(`Copied ${sourceModulePath} -> ${targetPath}`);
 }
 
 function resolvePackageRoot(packageName) {
     try {
-        const entryPoint = require.resolve(packageName);
+        const entryPoint = require.resolve(packageName === '@vscode/codicons'
+            ? '@vscode/codicons/package.json' : packageName);
         let dir = path.dirname(entryPoint);
         const { root } = path.parse(dir);
         while (dir !== root) {
@@ -46,8 +51,21 @@ function resolvePackageFile(packageName, relativePath) {
 
 function run() {
     const assets = [
+        { packageName: '@vscode/codicons', relativePath: 'dist/codicon.css', filename: 'codicon.css' },
+        { packageName: '@vscode/codicons', relativePath: 'dist/codicon.ttf', filename: 'codicon.ttf' },
+        {
+            packageName: '@vscode/codicons', relativePath: 'LICENSE',
+            filename: 'codicons-LICENSE-CC-BY-4.0.txt', trimTrailingWhitespace: true
+        },
+        {
+            packageName: '@vscode/codicons', relativePath: 'LICENSE-CODE',
+            filename: 'codicons-LICENSE-MIT.txt', trimTrailingWhitespace: true
+        },
         { packageName: 'd3', relativePath: 'dist/d3.min.js', filename: 'd3.min.js' },
-        { packageName: 'elkjs', relativePath: 'lib/elk.bundled.js', filename: 'elk.bundled.js' },
+        {
+            packageName: 'elkjs', relativePath: 'lib/elk.bundled.js',
+            filename: 'elk.bundled.js', trimTrailingWhitespace: true
+        },
         { packageName: 'cytoscape', relativePath: 'dist/cytoscape.min.js', filename: 'cytoscape.min.js' },
         { packageName: 'cytoscape-elk', relativePath: 'dist/cytoscape-elk.js', filename: 'cytoscape-elk.js' },
         { packageName: 'cytoscape-svg', relativePath: 'cytoscape-svg.js', filename: 'cytoscape-svg.js' }
@@ -56,7 +74,7 @@ function run() {
     assets.forEach(asset => {
         try {
             const resolvedPath = resolvePackageFile(asset.packageName, asset.relativePath);
-            copyAsset(resolvedPath, asset.filename);
+            copyAsset(resolvedPath, asset.filename, asset.trimTrailingWhitespace);
         } catch (error) {
             console.error(`Failed to resolve ${asset.packageName}/${asset.relativePath}.`);
             throw error;

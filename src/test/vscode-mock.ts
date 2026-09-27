@@ -369,7 +369,28 @@ const _registeredCommands = new Map<string, (...args: any[]) => any>();
 
 // ─── Workspace / Window stubs ────────────────────────────────────
 
+export enum FileType {
+    Unknown = 0,
+    File = 1,
+    Directory = 2,
+    SymbolicLink = 64,
+}
+
+export enum ProgressLocation {
+    SourceControl = 1,
+    Window = 10,
+    Notification = 15,
+}
+
+export class RelativePattern {
+    readonly baseUri: Uri;
+    constructor(base: Uri | string | { uri: Uri }, public readonly pattern: string) {
+        this.baseUri = typeof base === 'string' ? Uri.file(base) : 'uri' in base ? base.uri : base;
+    }
+}
+
 export const workspace = {
+    findFiles: async (..._args: any[]): Promise<Uri[]> => [],
     openTextDocument: async (uriOrOptions: any): Promise<any> => {
         // Support the { language, content } form used by many tests
         if (uriOrOptions && typeof uriOrOptions === 'object' && 'content' in uriOrOptions) {
@@ -460,6 +481,8 @@ export const workspace = {
     onDidCloseTextDocument: () => ({ dispose: () => {} }),
     onDidChangeConfiguration: () => ({ dispose: () => {} }),
     workspaceFolders: undefined as any,
+    asRelativePath: (pathOrUri: string | Uri) =>
+        typeof pathOrUri === 'string' ? pathOrUri : pathOrUri.fsPath,
     fs: {
         readFile: async () => Buffer.from(''),
         writeFile: async () => {},

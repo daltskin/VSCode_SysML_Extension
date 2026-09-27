@@ -1,3 +1,4 @@
+import { telemetry } from '../telemetry';
 /**
  * SysML v2 Language Client
  *
@@ -152,11 +153,15 @@ export function startLanguageClient(
         }
     });
 
+    const startTime = Date.now();
     client.start().then(
         () => {
             outputChannel.appendLine('SysML v2 language server started successfully');
+            telemetry?.operation('language', 'start', 'success', Date.now() - startTime);
         },
         (err) => {
+            telemetry?.operation('language', 'start', 'failure', Date.now() - startTime);
+            telemetry?.error('language', 'start', 'start-failed');
             const msg = `Failed to start SysML language server: ${err}`;
             outputChannel.appendLine(msg);
             outputChannel.show(true);
@@ -168,10 +173,18 @@ export function startLanguageClient(
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.restartServer', async () => {
             if (client) {
-                await client.stop();
-                await client.start();
-                outputChannel.appendLine('Language server restarted');
-                vscode.window.showInformationMessage('SysML Language Server restarted.');
+                const started = Date.now();
+                try {
+                    await client.stop();
+                    await client.start();
+                    telemetry?.operation('language', 'restart', 'success', Date.now() - started);
+                    outputChannel.appendLine('Language server restarted');
+                    vscode.window.showInformationMessage('SysML Language Server restarted.');
+                } catch (error) {
+                    telemetry?.operation('language', 'restart', 'failure', Date.now() - started);
+                    telemetry?.error('language', 'restart', 'start-failed');
+                    throw error;
+                }
             }
         })
     );

@@ -2,8 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Model Workbench** for editing requirements, elements and relationships, with scoped views,
+  edit previews, undo and bulk CSV/TSV paste.
+- Editable traceability matrices with coverage checks and CSV export.
+- Consent-controlled, content-free usage telemetry with maintainer analytics,
+  privacy disclosures and reviewable issue reports.
+
+### Changed
+
+- Updated `sysml-v2-lsp` to 0.31.0 with the published `sysml-v2-grammar` v2026.08.1 release, corrected expression precedence, explicit visibility on sample imports, and clearer ambiguous-name diagnostics.
+- Refreshed documentation, screenshots and the smart-home sample.
+- Excluded development caches and repository metadata from release packages.
+
 ### Fixed
 
+- Workbench refresh after source edits, clearing stale synchronization errors and edit state.
+- WSL and remote Extension Host debugging reliability.
 - Support Mocha 12 in browser-host tests by isolating its UMD bundle as CommonJS
   and explicitly selecting the DOM-free console reporter.
 

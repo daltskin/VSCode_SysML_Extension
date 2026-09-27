@@ -3,16 +3,29 @@
   "configurations": [
     {
       "name": "Run Extension",
-      "type": "extensionHost",
-      "request": "launch",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
-        "${workspaceFolder}/samples"
-      ],
+      "type": "node",
+      "request": "attach",
+      "address": "127.0.0.1",
+      "port": 6008,
+      "continueOnAttach": true,
+      "timeout": 60000,
       "outFiles": [
         "${workspaceFolder}/out/**/*.js"
       ],
-      "preLaunchTask": "${defaultBuildTask}"
+      "preLaunchTask": "Launch Extension Development Host"
+    },
+    {
+      "name": "Attach to Extension Host (IPv4)",
+      "type": "node",
+      "request": "attach",
+      "address": "127.0.0.1",
+      "port": "${input:extensionHostPort}",
+      "outFiles": [
+        "${workspaceFolder}/out/**/*.js"
+      ],
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
     },
     {
       "name": "Attach to Language Server",
@@ -36,6 +49,13 @@
         "${workspaceFolder}/out/test/**/*.js"
       ],
       "preLaunchTask": "${defaultBuildTask}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "extensionHostPort",
+      "type": "promptString",
+      "description": "Inspector port from the failed Extension Host connection message"
     }
   ],
   "compounds": [

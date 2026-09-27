@@ -1,5 +1,5 @@
 package CameraTestSequence {
-    import CameraTestBDD::*;
+    private import CameraTestBDD::*;
 
     part def CaptureSequence {
         part photographer;

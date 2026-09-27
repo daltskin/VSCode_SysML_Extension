@@ -5,6 +5,7 @@ import { SysRunnerPanel } from './game/sysRunnerPanel';
 import { startLanguageClient, stopLanguageClient } from './lsp/client';
 import { FeatureInspectorPanel } from './panels/featureInspectorPanel';
 import { ModelDashboardPanel } from './panels/modelDashboardPanel';
+import { ModelWorkbenchPanel } from './panels/modelWorkbenchPanel';
 import { ParseOrchestrator } from './parseOrchestrator';
 import { LspModelProvider } from './providers/lspModelProvider';
 import {
@@ -20,6 +21,8 @@ import {
     showParseProgress,
     updateModelMetrics,
 } from './statusBar';
+import { initializeTelemetry, telemetry } from './telemetry';
+import { registerIssueReport } from './telemetry/reportIssue';
 import { VisualizationPanel } from './visualization/visualizationPanel';
 
 // Re-export so client.ts (which does `require('../extension')`) still works
@@ -113,6 +116,9 @@ async function registerMcpServer(
 }
 
 export function activate(context: vscode.ExtensionContext) {
+    const activationStarted = Date.now();
+    initializeTelemetry(context);
+    registerIssueReport(context);
     // Create dedicated output channel for logging
     outputChannel = vscode.window.createOutputChannel('SysML', { log: true });
     context.subscriptions.push(outputChannel);
@@ -375,18 +381,21 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
             modelExplorerProvider.toggleWorkspaceViewMode();
+            telemetry?.operation('explorer', 'change-mode', 'success');
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.switchToFileView', () => {
             modelExplorerProvider.setWorkspaceViewMode('byFile');
+            telemetry?.operation('explorer', 'change-mode', 'success');
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.switchToSemanticView', () => {
             modelExplorerProvider.setWorkspaceViewMode('bySemantic');
+            telemetry?.operation('explorer', 'change-mode', 'success');
         })
     );
 
@@ -705,10 +714,22 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.showFeatureInspector', () => {
             FeatureInspectorPanel.createOrShow(context.extensionUri, lspModelProvider);
+            telemetry?.panelOpened('inspector');
         })
     );
 
     // ─── Model Dashboard ────────────────────────────────────────────
+    context.subscriptions.push(
+        vscode.commands.registerCommand('sysml.showModelWorkbench',
+            async (target?: vscode.Uri | ModelTreeItem) => {
+                const uri = target instanceof vscode.Uri ? target : target?.elementUri;
+                const packageName = target && !(target instanceof vscode.Uri)
+                    && target.element?.type === 'package' ? target.element.name : undefined;
+                await ModelWorkbenchPanel.createOrShow(context.extensionUri, lspModelProvider, uri, packageName);
+            }),
+        new vscode.Disposable(() => ModelWorkbenchPanel.currentPanel?.dispose()),
+    );
+
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.showModelDashboard', async (target?: vscode.Uri | ModelTreeItem) => {
             let fileUri: vscode.Uri | undefined;
@@ -726,6 +747,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             ModelDashboardPanel.createOrShow(context.extensionUri, lspModelProvider, fileUri, packageName);
+            telemetry?.panelOpened('dashboard');
         })
     );
 
@@ -780,6 +802,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.showSysRunner', () => {
             SysRunnerPanel.createOrShow(context.extensionUri);
+            telemetry?.panelOpened('sysrunner');
         })
     );
 
@@ -891,6 +914,8 @@ export function activate(context: vscode.ExtensionContext) {
             retryIndex++;
         }, retryDelays[Math.min(retryIndex, retryDelays.length - 1)]);
     }
+
+    telemetry?.activated(Date.now() - activationStarted);
 
     // Auto-scan all workspace .sysml files once the LSP server is ready,
     // but only when a .code-workspace is open.  Plain folders may contain
