@@ -45,6 +45,9 @@ jobs:
       - name: Unit Tests
         run: npm run test:unit
 
+      - name: Telemetry build configuration tests
+        run: node --test scripts/telemetry-config.test.cjs
+
       - name: Integration Tests (Extension Host)
         run: xvfb-run -a npm test
 
@@ -86,6 +89,9 @@ jobs:
           fi
 
       - name: Package VSIX
+        env:
+          SYSML_TELEMETRY_CONNECTION_STRING: ${{ vars.SYSML_TELEMETRY_CONNECTION_STRING }}
+          SYSML_TELEMETRY_REQUIRED: '1'
         run: npm run package
 
       - name: Verify VSIX version

@@ -9,9 +9,26 @@ A Visual Studio Code extension for SysML v2.0 with syntax highlighting, formatti
 
 ## Demo
 
-![Demo](assets/visualiser.webp)
+[![Show Model Visualizer toolbar action and diagram chooser beside the SysML source](assets/visualiser.png)](assets/visualiser.png)
+
+Open a SysML file, click **Show Model Visualizer** in the editor toolbar, then choose a diagram from the visualizer's view menu.
 
 ## Features
+
+### Privacy and Telemetry
+
+Configured release packages can send optional telemetry following VS Code's telemetry
+permissions and the independent `sysml.telemetry.enabled` User setting (default
+`true`). Usage events include random installation/session IDs for feature-frequency
+and journey analytics, not model content, accounts or machine IDs. Disabling usage
+deletes the local installation ID. See [Privacy](PRIVACY.md) and the complete
+[event catalog](telemetry.json). `SysML: Report Issue` previews an editable report
+before any content is sent to GitHub.
+
+Release packaging injects the public ingestion destination from the GitHub Actions
+repository variable `SYSML_TELEMETRY_CONNECTION_STRING`; an absent or invalid value
+fails release packaging. Local builds without it remain disconnected. See the
+[telemetry infrastructure runbook](infra/README.md).
 
 ### Language Support (LSP)
 
@@ -43,6 +60,7 @@ All language features are provided by the [sysml-v2-lsp](https://www.npmjs.com/p
 - **Feature Inspector** — Interactive sidebar panel showing detailed type information, specialization breadcrumbs, feature tables with direction/multiplicity/modifier badges, clickable type drill-down, and navigation history
 - **Interactive Diagrams** — 10 diagram views: General, Interconnection, Action Flow, State Transition, Sequence, Case, Package, Graph, Tree, and Hierarchy — with search, pan, zoom, and PNG/SVG export
 - **Model Dashboard** — Webview panel displaying model-wide statistics, element counts, build timing metrics, and Model Complexity Index (MCI)
+- **Model Workbench** — Requirement and element tables, guided editing and deletion, spreadsheet paste, relationship editing, and traceability matrices with source previews
 - **Model Complexity Index** — Status bar indicator (0–100 score) with hotspot detection for complex elements, documentation coverage, and coupling analysis
 - **Animated Parse Progress** — Status bar animation showing parse stages (assembling, building, linking) with real-time progress feedback
 - **Diagnostic-Reactive Status Bar** — Live error/warning counts with colour-coded icons; click to open the Problems panel
@@ -64,18 +82,50 @@ For single-folder workspaces, files are parsed lazily when opened.
 
 ## Screenshots
 
+Click an image to open it at full resolution.
+
+### Modeling Tools
+
 <table>
 <tr>
-<td align="center"><strong>General</strong><br><img src="assets/general_view.png" width="250" alt="General View"></td>
-<td align="center"><strong>Interconnection</strong><br><img src="assets/interconnection_view.png" width="250" alt="Interconnection View"></td>
-<td align="center"><strong>Action Flow</strong><br><img src="assets/action_flow_view.png" width="250" alt="Action Flow View"></td>
-<td align="center"><strong>State Transition</strong><br><img src="assets/state_view.png" width="250" alt="State Transition View"></td>
+<td align="center"><a href="assets/model_explorer.png"><strong>Model Explorer</strong></a><br><a href="assets/model_explorer.png"><img src="assets/model_explorer.png" width="400" alt="Camera package expanded in Model Explorer beside its SysML source"></a></td>
+<td align="center"><a href="assets/feature_explorer.png"><strong>Feature Explorer</strong></a><br><a href="assets/feature_explorer.png"><img src="assets/feature_explorer.png" width="400" alt="Resolved CameraSystem parts in Feature Explorer"></a></td>
 </tr>
 <tr>
-<td align="center"><strong>Hierarchy</strong><br><img src="assets/hierarchy_view.png" width="250" alt="Hierarchy View"></td>
-<td align="center"><strong>Graph</strong><br><img src="assets/graph_view.png" width="250" alt="Graph View"></td>
-<td align="center"><strong>Tree</strong><br><img src="assets/tree_view.png" width="250" alt="Tree View"></td>
-<td></td>
+<td align="center"><a href="assets/feature_inspector.png"><strong>Feature Inspector</strong></a><br><a href="assets/feature_inspector.png"><img src="assets/feature_inspector.png" width="400" alt="CameraSystem resolved feature table in Feature Inspector"></a></td>
+<td align="center"><a href="assets/model_dashboard.png"><strong>Model Dashboard</strong></a><br><a href="assets/model_dashboard.png"><img src="assets/model_dashboard.png" width="400" alt="Torch model statistics, type coverage, and complexity in Model Dashboard"></a></td>
+</tr>
+<tr>
+<td align="center"><a href="assets/model_workbench.png"><strong>Requirements Workbench</strong></a><br><a href="assets/model_workbench.png"><img src="assets/model_workbench.png" width="400" alt="Torch requirements with editable documentation and deletion actions"></a></td>
+<td align="center"><a href="assets/workbench_elements.png"><strong>Element Editing</strong></a><br><a href="assets/workbench_elements.png"><img src="assets/workbench_elements.png" width="400" alt="Torch element table with identifiers, types, multiplicity, and documentation"></a></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><a href="assets/traceability_matrix.png"><strong>Traceability Matrix</strong></a><br><a href="assets/traceability_matrix.png"><img src="assets/traceability_matrix.png" width="800" alt="Satisfaction matrix showing uncovered requirements"></a></td>
+</tr>
+</table>
+
+### Diagram Views
+
+<table>
+<tr>
+<td align="center"><strong>General</strong><br><a href="assets/general_view.png"><img src="assets/general_view.png" width="400" alt="Camera General diagram in VS Code Dark Modern"></a></td>
+<td align="center"><strong>Interconnection</strong><br><a href="assets/interconnection_view.png"><img src="assets/interconnection_view.png" width="400" alt="Smart-home parts, ports, and connections"></a></td>
+</tr>
+<tr>
+<td align="center"><strong>Action Flow</strong><br><a href="assets/action_flow_view.png"><img src="assets/action_flow_view.png" width="400" alt="Smart-home automatic lighting action flow"></a></td>
+<td align="center"><strong>State Transition</strong><br><a href="assets/state_view.png"><img src="assets/state_view.png" width="400" alt="Camera states and transition paths"></a></td>
+</tr>
+<tr>
+<td align="center"><strong>Sequence</strong><br><a href="assets/sequence_view.png"><img src="assets/sequence_view.png" width="400" alt="Camera interaction sequence with participants and messages"></a></td>
+<td align="center"><strong>Case</strong><br><a href="assets/case_view.png"><img src="assets/case_view.png" width="400" alt="Smart-home actors and use cases"></a></td>
+</tr>
+<tr>
+<td align="center"><strong>Package</strong><br><a href="assets/package_view.png"><img src="assets/package_view.png" width="400" alt="View Showcase package diagram"></a></td>
+<td align="center"><strong>Graph</strong><br><a href="assets/graph_view.png"><img src="assets/graph_view.png" width="400" alt="Smart-home model force-directed graph"></a></td>
+</tr>
+<tr>
+<td align="center"><strong>Tree</strong><br><a href="assets/tree_view.png"><img src="assets/tree_view.png" width="400" alt="Smart-home tree close-up showing LightingSystem, AutomaticLighting, and nested action steps"></a></td>
+<td align="center"><strong>Hierarchy</strong><br><a href="assets/hierarchy_view.png"><img src="assets/hierarchy_view.png" width="400" alt="Camera hierarchical block diagram"></a></td>
 </tr>
 </table>
 
@@ -104,24 +154,25 @@ package MySystem {
 
 ### Commands (Ctrl+Shift+P)
 
-| Command                                        | Description                                                 |
-| ---------------------------------------------- | ----------------------------------------------------------- |
-| `SysML: Show Model Visualizer`                 | Open interactive diagram for the current file               |
-| `SysML: Show Model Explorer`                   | Open the tree view showing packages and elements            |
-| `SysML: Validate SysML Model`                  | Run validation on the current file                          |
-| `SysML: Format SysML Document`                 | Format the current SysML file                               |
-| `SysML: Export Visualization (PNG/SVG)`        | Export the current diagram as PNG or SVG                    |
-| `SysML: Change Visualizer View`                | Switch between diagram views (General, IBD, Activity, etc.) |
-| `SysML: Refresh Visualization`                 | Re-render the current diagram                               |
-| `SysML: Jump to Definition`                    | Navigate to the definition of the symbol under cursor       |
-| `SysML: Show Type Hierarchy`                   | View supertypes and subtypes of the current definition      |
-| `SysML: Show Call Hierarchy`                   | Trace incoming and outgoing action/state invocations        |
-| `SysML: Show Feature Inspector`                | Inspect attributes, types, and relationships of an element  |
-| `SysML: Show Model Dashboard`                  | View model statistics, build timing, and complexity index   |
-| `SysML: Clear Parse Cache`                     | Flush server caches and re-parse the active file            |
-| `SysML: Refresh Model Tree`                    | Refresh the Model Explorer tree view                        |
-| `SysML: Toggle View: By File / Semantic Model` | Switch Model Explorer between file and semantic views       |
-| `SysML: Restart Language Server`               | Restart the SysML LSP server                                |
+| Command                                        | Description                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------- |
+| `SysML: Show Model Visualizer`                 | Open interactive diagram for the current file                       |
+| `SysML: Show Model Explorer`                   | Open the tree view showing packages and elements                    |
+| `SysML: Validate SysML Model`                  | Run validation on the current file                                  |
+| `SysML: Format SysML Document`                 | Format the current SysML file                                       |
+| `SysML: Export Visualization (PNG/SVG)`        | Export the current diagram as PNG or SVG                            |
+| `SysML: Change Visualizer View`                | Switch between diagram views (General, IBD, Activity, etc.)         |
+| `SysML: Refresh Visualization`                 | Re-render the current diagram                                       |
+| `SysML: Jump to Definition`                    | Navigate to the definition of the symbol under cursor               |
+| `SysML: Show Type Hierarchy`                   | View supertypes and subtypes of the current definition              |
+| `SysML: Show Call Hierarchy`                   | Trace incoming and outgoing action/state invocations                |
+| `SysML: Show Feature Inspector`                | Inspect attributes, types, and relationships of an element          |
+| `SysML: Show Model Dashboard`                  | View model statistics, build timing, and complexity index           |
+| `SysML: Open Model Workbench`                  | Edit requirements, relationships, tables, and traceability matrices |
+| `SysML: Clear Parse Cache`                     | Flush server caches and re-parse the active file                    |
+| `SysML: Refresh Model Tree`                    | Refresh the Model Explorer tree view                                |
+| `SysML: Toggle View: By File / Semantic Model` | Switch Model Explorer between file and semantic views               |
+| `SysML: Restart Language Server`               | Restart the SysML LSP server                                        |
 
 ### Context Menu
 
@@ -132,6 +183,52 @@ Right-click in a SysML file editor → **Show Feature Inspector** to inspect the
 Right-click a `.sysml` file or folder → **Show Model Dashboard** for statistics and complexity analysis.
 
 Right-click a package node in the **SysML Model Explorer** → **Visualize Package** to open an isolated diagram for that package.
+
+## Model Workbench
+
+Open a SysML file and run **SysML: Open Model Workbench**. It is also available from the editor context menu, a package's Model Explorer context menu, or **Edit Model** in the visualizer.
+
+In the Files Explorer, right-click a `.sysml` or `.kerml` file or any folder and select **SysML: Open Model Workbench**. Folder selection recursively adds its SysML and KerML files to the workbench, excluding `node_modules` and `.git` directories.
+
+| View          | Supported workflow                                                                                                                             |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Requirements  | Edit identifiers, requirement text, and a single usage type; create definitions or typed usages; inspect satisfaction and verification counts. |
+| Elements      | Edit identifiers, documentation, single typing, and multiplicity on supported simple declarations.                                             |
+| Relationships | Create, retarget, or delete explicit `satisfy`, `verify`, and `dependency` links.                                                              |
+| Traceability  | Inspect requirement coverage or dependency links; toggle cells through an edit preview; filter uncovered targets; export CSV.                  |
+
+Use **Load model files** for cross-file relationships and requirement types. File, package, and search filters narrow the tables; matrix filters narrow target rows while source columns include all loaded files. Coverage reflects resolved links in those loaded files, not the entire workspace or inherited semantics. Tables show 75 rows per page and matrices show 25 source columns per page.
+
+Edits are staged until **Review changes** and **Apply changes**. A batch is applied as one VS Code workspace edit, leaving documents unsaved. Use the source editor's normal Undo/Redo and Save commands. Changes elsewhere invalidate stale previews; pending table changes must be reviewed or discarded before other editing operations. Editing requires a trusted workspace and writable destination files.
+
+### Spreadsheet Paste
+
+**Bulk paste** accepts comma-separated CSV or tab-separated spreadsheet text with a header row, including quoted commas and multiline cells. Choose an operation and, for new requirements, a destination file/package.
+
+| Operation                | Accepted column headers                                                    |
+| ------------------------ | -------------------------------------------------------------------------- |
+| Create requirements      | `name`, `identifier`, `documentation`, `typeName`, `definition`            |
+| Create relationships     | `kind`, `source`, `target`                                                 |
+| Update existing elements | `qualifiedName`, `identifier`, `documentation`, `typeName`, `multiplicity` |
+
+For creation, `name` is required; omitted fields default to empty, and `definition` is `true` or `false` (default `false`). A `typeName` must identify a requirement definition in a loaded file. Relationship kinds are `satisfy`, `verify`, and `dependency`; endpoints and update rows use unique loaded qualified names. Omit an update column to leave it unchanged; an empty cell clears that field. Batches are limited to 500 rows and 1 MB and rejected without partial edits when validation fails.
+
+```csv
+name,identifier,documentation,typeName,definition
+minimumRange,REQ-001,"Travel at least 100 km, fully charged.",Mobility::RangeSpecification,false
+```
+
+CSV export includes the complete filtered view, not just the current page, and neutralizes spreadsheet formula prefixes. Element exports can be pasted using **Update existing elements**; matrix exports are for reporting, not reimport.
+
+### Editing Boundaries
+
+The workbench preserves source as the authority. It edits simple named declarations and leading `doc` comments, not arbitrary expressions, specializations, or every SysML/KerML construct. Advanced declarations remain available for source navigation. Names are not editable: workspace-wide reference-safe rename is not part of this feature.
+
+Use a row's trash action to remove a requirement, element, or explicit relationship. Review the source preview and confirm **Delete**; no source changes occur until confirmation. Removing a container also removes its nested declarations and relationships. Known satisfaction, verification, or dependency links outside the deleted declaration must be removed first, including links to its children. Other references, such as type usages or references in unloaded files, are not checked automatically; review diagnostics after deletion. Deletion uses the same version-checked, undoable workspace edit as other changes.
+
+Satisfaction links originate from part usages and target requirement usages. Verification links originate from verification cases and are written inside a simple `objective`; advanced objective forms remain source-only. Named, multi-target, quoted-endpoint, or otherwise complex existing relationships may be shown as source-only and cannot be changed through matrix cells. Normal LSP diagnostics continue after applying edits; preview validation is not a full semantic proof of the model.
+
+For UI development, run `npm run preview:workbench` and open `http://127.0.0.1:45188/` (override the port with `PORT`). This uses an in-memory demo model and the real parser. It does not exercise VS Code file dialogs, file writes, or native undo.
 
 ## Settings
 
@@ -189,6 +286,10 @@ code and cannot be suppressed with this setting.
 ```bash
 npm install && npm run compile && npm test
 ```
+
+Run `make debug` to open the local extension in its dedicated samples workspace. In VS Code, select **Run Extension** and press **F5** to compile, launch the same workspace, and attach the Node debugger on `127.0.0.1:6008`. Development launches do not disable installed extensions.
+
+On WSL, the launcher locates the Windows desktop `code` wrapper because the remote terminal's `code` command ignores extension-development arguments. Windows VS Code must be on the Windows `PATH`. Close any older Extension Development Host windows once before using this setup: VS Code otherwise reloads their old workspace. Stop the existing debug session before launching another one on port 6008.
 
 Note for when packaged as a VSIX, the extension registers its MCP server from the extension install path at activation time. A workspace `.vscode/mcp.json` is only a local development override (for example, to pin Copilot chat to a specific local server build).
 

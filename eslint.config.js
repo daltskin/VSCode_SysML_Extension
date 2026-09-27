@@ -124,6 +124,7 @@ module.exports = [
       ecmaVersion: 2020,
       sourceType: 'script',
       globals: {
+        acquireVsCodeApi: 'readonly',
         document: 'readonly',
         window: 'readonly',
         console: 'readonly',

@@ -1,7 +1,51 @@
 import * as assert from 'assert';
+import * as net from 'net';
 import * as vscode from 'vscode';
 
 const _isUnitTest = (vscode as any)._isMock === true;
+
+suite('Development launcher', () => {
+    const { launchArguments, checkInspectorPort } = require('../../scripts/launch-extension.cjs') as {
+        launchArguments(root: string, inspect?: boolean): string[];
+        checkInspectorPort(port?: number): Promise<void>;
+    };
+
+    test('rejects an occupied inspector port and accepts a free port', async () => {
+        const server = net.createServer();
+        await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+        const port = (server.address() as net.AddressInfo).port;
+        try {
+            await assert.rejects(checkInspectorPort(port), /Stop the previous debug session/);
+        } finally {
+            await new Promise<void>(resolve => server.close(() => resolve()));
+        }
+        await checkInspectorPort(port);
+    });
+
+    test('passes the dedicated workspace without disabling extensions on desktop', () => {
+        const args = launchArguments('/models/extension');
+        assert.strictEqual(args[0], '/models/extension/.vscode/extension-development.code-workspace');
+        assert.ok(args.includes('--extensionDevelopmentPath=/models/extension'));
+        assert.ok(!args.some(argument => argument.startsWith('--disable-extension')));
+    });
+
+    test('leaves paths containing spaces intact for the desktop CLI to convert in WSL', () => {
+        const args = launchArguments('/home/test/Model Extension');
+        assert.ok(!args.includes('--remote'));
+        assert.strictEqual(args[0], '/home/test/Model Extension/.vscode/extension-development.code-workspace');
+        assert.ok(args.includes('--extensionDevelopmentPath=/home/test/Model Extension'));
+        assert.ok(!args.some(argument => argument.startsWith('--disable-extension')));
+    });
+
+    test('only pauses for the inspector when launched for F5 attachment', () => {
+        assert.ok(!launchArguments('/models/extension')
+            .some(argument => argument.startsWith('--inspect')));
+        assert.ok(launchArguments('/models/extension', true)
+            .includes('--inspect-brk-extensions=6008'));
+        assert.ok(!launchArguments('/models/extension', true)
+            .some(argument => argument.startsWith('--disable-extension')));
+    });
+});
 
 suite('Extension Integration Test Suite', () => {
     vscode.window.showInformationMessage('Running Integration tests...');
@@ -29,6 +73,7 @@ suite('Extension Integration Test Suite', () => {
         assert.ok(commands.includes('sysml.formatDocument'));
         assert.ok(commands.includes('sysml.validateModel'));
         assert.ok(commands.includes('sysml.showVisualizer'));
+        assert.ok(commands.includes('sysml.showModelWorkbench'));
         assert.ok(commands.includes('sysml.refreshModelTree'));
         assert.ok(commands.includes('sysml.exportVisualization'));
         assert.ok(commands.includes('sysml.restartServer'));

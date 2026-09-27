@@ -21,6 +21,7 @@ export function run(): Promise<void> {
         // Bundled by esbuild: importing pulls the test suite into the bundle
         // and registers the `suite(...)` / `test(...)` callbacks with Mocha.
         require('./extension.test');
+        require('../../../test/telemetryHost.test');
 
         try {
             mocha.run((failures: number) => {

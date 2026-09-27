@@ -1,0 +1,4 @@
+.local/
+*.local.bicepparam
+*.local.parameters.json
+main.json

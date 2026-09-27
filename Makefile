@@ -45,7 +45,7 @@ help:
 	@echo "  $(GREEN)clean-all$(NC)      - Clean + deterministic reinstall + refresh local file deps"
 	@echo "  $(GREEN)dev$(NC)            - Start development environment"
 	@echo "  $(GREEN)web$(NC)            - Build & serve the web (browser) extension like vscode.dev"
-	@echo "  $(GREEN)debug$(NC)          - Prepare for debugging (then press F5 in VS Code)"
+	@echo "  $(GREEN)debug$(NC)          - Launch the local extension with the samples workspace"
 	@echo "  $(GREEN)debug-watch$(NC)    - Launch watch mode for debugging with auto-recompile"
 	@echo "  $(GREEN)prepublish$(NC)     - Prepare for publishing"
 	@echo "  $(GREEN)info$(NC)           - Show project information"
@@ -214,10 +214,7 @@ dev: install
 .PHONY: debug
 debug: compile
 	@echo "$(YELLOW)Launching VS Code Extension Development Host...$(NC)"
-	@echo "$(BLUE)Using Wayland-optimized settings for best compatibility$(NC)"
-	@code --extensionDevelopmentPath="$(CURDIR)" "$(CURDIR)/samples"
-	@echo "$(GREEN)✓ Extension Development Host should be starting!$(NC)"
-	@echo "$(BLUE)Look for a new VS Code window with your extension loaded$(NC)"
+	@node scripts/launch-extension.cjs
 
 # Launch extension in debug mode with watch compilation
 .PHONY: debug-watch

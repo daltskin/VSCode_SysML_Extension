@@ -79,6 +79,11 @@
     ],
     "commands": [
       {
+        "command": "sysml.reportIssue",
+        "title": "SysML: Report Issue",
+        "icon": "$(bug)"
+      },
+      {
         "command": "sysml.formatDocument",
         "title": "Format SysML Document",
         "category": "SysML"
@@ -190,6 +195,12 @@
         "icon": "$(inspect)"
       },
       {
+        "command": "sysml.showModelWorkbench",
+        "title": "Open Model Workbench",
+        "category": "SysML",
+        "icon": "$(table)"
+      },
+      {
         "command": "sysml.showModelDashboard",
         "title": "Show Model Dashboard",
         "category": "SysML",
@@ -211,12 +222,22 @@
     "menus": {
       "editor/context": [
         {
+          "command": "sysml.showModelWorkbench",
+          "when": "resourceLangId == sysml",
+          "group": "sysml@2"
+        },
+        {
           "command": "sysml.showFeatureInspector",
           "when": "resourceLangId == sysml",
           "group": "sysml@1"
         }
       ],
       "view/item/context": [
+        {
+          "command": "sysml.showModelWorkbench",
+          "when": "view == sysmlModelExplorer && viewItem == sysmlPackage",
+          "group": "sysml@3"
+        },
         {
           "command": "sysml.visualizePackage",
           "when": "view == sysmlModelExplorer && viewItem == sysmlPackage",
@@ -310,6 +331,11 @@
       ],
       "explorer/context": [
         {
+          "command": "sysml.showModelWorkbench",
+          "when": "explorerResourceIsFolder || resourceExtname == .sysml || resourceExtname == .kerml",
+          "group": "sysml@4"
+        },
+        {
           "command": "sysml.visualizeFolder",
           "when": "explorerResourceIsFolder",
           "group": "sysml@1"
@@ -359,6 +385,16 @@
     "configuration": {
       "title": "SysML v2.0",
       "properties": {
+        "sysml.telemetry.enabled": {
+          "type": "boolean",
+          "scope": "application",
+          "default": true,
+          "tags": [
+            "telemetry",
+            "usesOnlineServices"
+          ],
+          "markdownDescription": "Allow SysML usage and error telemetry when permitted by VS Code's telemetry settings. No model content is collected. Disable to stop SysML telemetry. [Privacy details](https://github.com/daltskin/VSCode_SysML_Extension/blob/main/PRIVACY.md)."
+        },
         "sysml.validation.disabledCodes": {
           "type": "array",
           "scope": "window",
@@ -484,7 +520,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && npm run build:web -- --production && npm run build:webview-assets",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && node scripts/telemetry-config.cjs",
+    "preview:workbench": "npm run compile && node scripts/workbench-preview.cjs",
     "watch": "tsc -watch -p ./",
     "build:web": "node ./esbuild.web.mjs",
     "watch:web": "node ./esbuild.web.mjs --watch",
@@ -508,9 +545,11 @@
     "@eslint/js": "^10.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.1.1",
+    "@types/papaparse": "^5.5.2",
     "@types/vscode": "^1.125.0",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
+    "@vscode/codicons": "^0.0.46-24",
     "@vscode/test-electron": "^3.0.0",
     "@vscode/test-web": "^0.0.81",
     "@vscode/vsce": "^3.9.2",
@@ -528,7 +567,8 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "sysml-v2-lsp": "0.29.0",
+    "papaparse": "^5.7.0",
+    "sysml-v2-lsp": "0.31.0",
     "vscode-languageclient": "^10.1.0"
   },
   "overrides": {

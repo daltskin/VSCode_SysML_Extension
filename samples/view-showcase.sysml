@@ -3,7 +3,7 @@
 
 package ViewShowcase {
 
-  import StandardViewDefinitions::*;
+  private import StandardViewDefinitions::*;
 
   // ─── Model Elements ───────────────────────────────────────────
 

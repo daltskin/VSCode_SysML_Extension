@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { telemetryModule } = require('./scripts/telemetry-config.cjs');
 const isProduction = process.argv.includes('--production');
 const isWatch = process.argv.includes('--watch');
 const withTests = process.argv.includes('--tests');
@@ -53,7 +54,15 @@ const webConfig = {
     sourcemap: !isProduction,
     minify: isProduction,
     logLevel: 'info',
-    plugins: [browserClientPlugin],
+    plugins: [browserClientPlugin, {
+        name: 'telemetry-destination',
+        setup(build) {
+            build.onLoad({ filter: /[/\\]telemetry[/\\]destinations\.ts$/ }, () => ({
+                contents: telemetryModule(process.env, 'esm'),
+                loader: 'js',
+            }));
+        },
+    }],
     // The web extension host provides a CommonJS-like environment; map
     // `process` references that may appear in deps to a minimal stub.
     define: { 'process.env.NODE_ENV': isProduction ? '"production"' : '"development"' },

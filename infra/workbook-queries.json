@@ -1,0 +1,226 @@
+{
+  "timeScope": "let WindowEnd = min_of(datetime({TimeRange:end}), now());\nlet WindowStart = max_of(datetime({TimeRange:start}), WindowEnd - 90d, ago(90d));\nlet TimeEvents = AppEvents\n| where TimeGenerated >= WindowStart and TimeGenerated <= WindowEnd\n| where tostring(Properties.schemaVersion) == '2';\n",
+  "filterScope": "let Events = TimeEvents\n| where ('{Version:escape}' == '*' or tostring(Properties.extensionVersion) == '{Version:escape}')\n    and ('{Host:escape}' == '*' or tostring(Properties.host) == '{Host:escape}');\nlet UsageEvents = Events | where Name != 'sysml.error';\nlet CorrelatedUsage = UsageEvents | where isnotempty(UserId) and isnotempty(SessionId) and tolong(Measurements.sequence) > 0;\nlet FeatureEvents = CorrelatedUsage\n| where Name != 'sysml.language.operation'\n| where Name == 'sysml.panel.opened' or Name endswith '.operation'\n| extend Sequence = tolong(Measurements.sequence),\n    Feature = iif(Name == 'sysml.panel.opened', strcat('panel:', tostring(Properties.panel)),\n      strcat(Name, ':', tostring(Properties.action), iif(isempty(tostring(Properties.view)), '', strcat(':', tostring(Properties.view)))));\n",
+  "notice": "## SysML participating-installation analytics\nCounts describe random, locally persisted installation IDs participating in usage telemetry, **not people, accounts, total installs, or successful unique users**. IDs reset on usage opt-out; sessions are per activation, not visits. No machine/account/email/workspace identity is collected.\n\nAll charts use schema 2 and the selected dates/version/host, limited to the retained last 90 days. Empty charts do not prove health or zero activity. Consent, offline loss, client rate caps, concurrency limits, dropped events, schema filtering, ingestion caps/delay and spoofed public traffic bias the results; missing activity cannot be reconstructed. Sequence gaps are not a count of dropped events. Distinct estimates use dcount accuracy 2 where marked approximate. Nothing is sampling-extrapolated.\n\nUsage outcome rates share an operation-event denominator. Standalone sysml.error records include the separate error-only-consent population, contain no IDs, and are never divided by usage or joined into journeys. Completed activation latency provides no failed-boot denominator.",
+  "sections": [
+    {
+      "id": "overview",
+      "label": "Overview"
+    },
+    {
+      "id": "features",
+      "label": "Features"
+    },
+    {
+      "id": "journeys",
+      "label": "Journeys"
+    },
+    {
+      "id": "performance",
+      "label": "Performance"
+    },
+    {
+      "id": "ingestion",
+      "label": "Ingestion"
+    }
+  ],
+  "parameters": [
+    {
+      "id": "time-range",
+      "version": "KqlParameterItem/1.0",
+      "name": "TimeRange",
+      "type": 4,
+      "isRequired": true,
+      "value": {
+        "durationMs": 2592000000
+      },
+      "typeSettings": {
+        "selectableValues": [
+          {
+            "durationMs": 86400000
+          },
+          {
+            "durationMs": 604800000
+          },
+          {
+            "durationMs": 2592000000
+          },
+          {
+            "durationMs": 7776000000
+          }
+        ],
+        "allowCustom": true
+      }
+    },
+    {
+      "id": "host",
+      "version": "KqlParameterItem/1.0",
+      "name": "Host",
+      "type": 2,
+      "isRequired": true,
+      "multiSelect": false,
+      "value": "*",
+      "query": "datatable(value:string, label:string, selected:bool)['*', 'All hosts', true, 'desktop', 'Desktop', false, 'remote', 'Remote', false, 'web', 'Web', false]"
+    },
+    {
+      "id": "version",
+      "version": "KqlParameterItem/1.0",
+      "name": "Version",
+      "label": "Extension version",
+      "type": 2,
+      "isRequired": true,
+      "multiSelect": false,
+      "value": "*",
+      "query": "TimeEvents\n| where '{Host:escape}' == '*' or tostring(Properties.host) == '{Host:escape}'\n| distinct value = tostring(Properties.extensionVersion)\n| project value, label = value, selected = false\n| union (datatable(value:string, label:string, selected:bool)['*', 'All versions', true])\n| order by selected desc, value asc"
+    },
+    {
+      "id": "page",
+      "version": "KqlParameterItem/1.0",
+      "name": "Page",
+      "type": 1,
+      "value": "overview",
+      "isHiddenWhenLocked": true
+    }
+  ],
+  "sessionParameter": {
+    "id": "session",
+    "version": "KqlParameterItem/1.0",
+    "name": "Session",
+    "label": "Journey session (latest 100 matching sessions)",
+    "type": 2,
+    "isRequired": true,
+    "multiSelect": false,
+    "value": "none",
+    "query": "CorrelatedUsage\n| summarize LastSeen = max(TimeGenerated) by SessionId\n| top 100 by LastSeen desc\n| project value = SessionId, label = strcat(format_datetime(LastSeen, 'yyyy-MM-dd HH:mm:ss'), ' UTC / ', SessionId), selected = false\n| union (datatable(value:string, label:string, selected:bool)['none', 'Select a session', true])\n| order by selected desc, label desc"
+  },
+  "queries": [
+    {
+      "id": "activity-overview",
+      "section": "overview",
+      "title": "Active participating installations and observed sessions",
+      "description": "DAU/WAU/MAU are trailing 24-hour/7-day/30-day counts ending at the selected end, intersected with the selected dates and retention. Window-complete flags describe date coverage only, not delivery completeness. Any received usage event qualifies, regardless of outcome; error-only events do not.",
+      "visualization": "table",
+      "query": "let SessionCount = toscalar(CorrelatedUsage | summarize by SessionId | count);\nCorrelatedUsage\n| summarize LastSeen = max(TimeGenerated) by UserId\n| summarize ActiveInstallations = count(), DAU = countif(LastSeen > WindowEnd - 1d), WAU = countif(LastSeen > WindowEnd - 7d), MAU = countif(LastSeen > WindowEnd - 30d)\n| extend Sessions = SessionCount, SelectedStart = WindowStart, SelectedEnd = WindowEnd,\n    DAUWindowComplete = WindowStart <= WindowEnd - 1d, WAUWindowComplete = WindowStart <= WindowEnd - 7d, MAUWindowComplete = WindowStart <= WindowEnd - 30d"
+    },
+    {
+      "id": "daily-activity",
+      "section": "overview",
+      "title": "Daily participating installations and sessions (approximate)",
+      "description": "UTC calendar days; boundary days can be partial. Zero means no retained matching events, not confirmed inactivity. These daily counts are not summed to obtain WAU/MAU.",
+      "visualization": "timechart",
+      "query": "range Day from startofday(WindowStart) to startofday(WindowEnd) step 1d\n| where WindowStart <= WindowEnd\n| join kind=leftouter (CorrelatedUsage | summarize Installations = dcount(UserId, 2), Sessions = dcount(SessionId, 2) by Day = bin(TimeGenerated, 1d)) on Day\n| project Day, Installations = coalesce(Installations, 0), Sessions = coalesce(Sessions, 0)\n| order by Day asc"
+    },
+    {
+      "id": "returning-installations",
+      "section": "overview",
+      "title": "Returning installations within the selected window",
+      "description": "Returning means observed in BOTH equal halves of this date selection, under the same version/host filters. The percentage is returning / second-half active installations. Second-half-only does NOT mean first-ever or newly installed; history before this window is unknown, and opt-out resets identity.",
+      "visualization": "table",
+      "query": "let Midpoint = WindowStart + (WindowEnd - WindowStart) / 2;\nCorrelatedUsage\n| summarize EarlierEvents = countif(TimeGenerated < Midpoint), LaterEvents = countif(TimeGenerated >= Midpoint) by UserId\n| summarize FirstHalfActive = countif(EarlierEvents > 0), SecondHalfActive = countif(LaterEvents > 0), Returning = countif(EarlierEvents > 0 and LaterEvents > 0), SecondHalfOnly = countif(EarlierEvents == 0 and LaterEvents > 0)\n| extend ReturningPctOfSecondHalf = iif(SecondHalfActive == 0, real(null), 100.0 * Returning / SecondHalfActive), SplitAt = Midpoint"
+    },
+    {
+      "id": "sessions",
+      "section": "overview",
+      "title": "Observed sessions: event frequency and observed span",
+      "description": "A session is a random per-activation ID, not a visit or person. Span is last minus first received client timestamp inside the filters; it is NOT active time, uptime, or completed session duration. Single-event sessions have zero span.",
+      "visualization": "table",
+      "query": "CorrelatedUsage\n| summarize UsageRecords = count(), FirstObserved = min(TimeGenerated), LastObserved = max(TimeGenerated) by SessionId\n| extend ObservedSpanMs = datetime_diff('millisecond', LastObserved, FirstObserved)\n| summarize Sessions = count(), SingleRecordSessions = countif(UsageRecords == 1), P50Records = percentile(UsageRecords, 50), P95Records = percentile(UsageRecords, 95), P50ObservedSpanMs = percentile(ObservedSpanMs, 50), P95ObservedSpanMs = percentile(ObservedSpanMs, 95)"
+    },
+    {
+      "id": "installation-session-frequency",
+      "section": "overview",
+      "title": "Observed sessions per participating installation",
+      "description": "Distribution within this window, including all usage outcomes. No raw installation IDs are displayed.",
+      "visualization": "barchart",
+      "query": "CorrelatedUsage\n| summarize by UserId, SessionId\n| summarize Sessions = count() by UserId\n| summarize Installations = count() by Sessions\n| order by Sessions asc"
+    },
+    {
+      "id": "feature-reach",
+      "section": "features",
+      "title": "Feature reach and frequency (approximate distinct counts)",
+      "description": "Features are named operation/action/view combinations or panel-open events, not deduplicated user interactions. Panel-open and operation-open are separate signals. Reach uses ALL correlated usage installations/sessions in this selection as its denominator. Frequency is received feature records per installation that used that feature, including every outcome.",
+      "visualization": "table",
+      "query": "let AllInstallations = toscalar(CorrelatedUsage | summarize Total = dcount(UserId, 2));\nlet AllSessions = toscalar(CorrelatedUsage | summarize Total = dcount(SessionId, 2));\nFeatureEvents\n| summarize FeatureRecords = count(), Installations = dcount(UserId, 2), Sessions = dcount(SessionId, 2) by Feature\n| extend InstallationReachPct = iif(AllInstallations == 0, real(null), 100.0 * Installations / AllInstallations), SessionReachPct = iif(AllSessions == 0, real(null), 100.0 * Sessions / AllSessions), RecordsPerReachedInstallation = 1.0 * FeatureRecords / Installations\n| order by FeatureRecords desc"
+    },
+    {
+      "id": "feature-session-frequency",
+      "section": "features",
+      "title": "Feature frequency in sessions that used it",
+      "description": "Each observation is one feature/session pair; sessions without that feature are excluded from these frequency percentiles. Use session reach above for the all-session denominator.",
+      "visualization": "table",
+      "query": "FeatureEvents\n| summarize FeatureRecords = count() by Feature, SessionId\n| summarize SessionsWithFeature = count(), MeanRecords = avg(FeatureRecords), P50Records = percentile(FeatureRecords, 50), P95Records = percentile(FeatureRecords, 95), P99Records = percentile(FeatureRecords, 99) by Feature\n| order by SessionsWithFeature desc"
+    },
+    {
+      "id": "transitions",
+      "section": "journeys",
+      "title": "Common next observed feature transitions (top 25)",
+      "description": "Pairs are ordered numerically by sequence WITHIN a random SessionId, not by arrival time, and are aggregated before display. Ambiguous duplicate sequence positions are excluded. WithSequenceGaps can reflect omitted activation records, filtering or loss; it cannot measure dropped events. Next observed does not imply an uninterrupted or causal journey. Sessions is approximate.",
+      "visualization": "table",
+      "query": "FeatureEvents\n| summarize Copies = count(), Feature = take_any(Feature) by SessionId, Sequence\n| where Copies == 1\n| sort by SessionId asc, Sequence asc\n| serialize\n| extend NextSession = next(SessionId), NextFeature = next(Feature), NextSequence = next(Sequence)\n| where NextSession == SessionId and NextSequence > Sequence\n| summarize Transitions = count(), Sessions = dcount(SessionId, 2), WithSequenceGaps = countif(NextSequence > Sequence + 1) by FromFeature = Feature, ToFeature = NextFeature\n| top 25 by Transitions desc"
+    },
+    {
+      "id": "session-journey",
+      "section": "journeys",
+      "title": "Selected session: sequence-ordered usage records (first 500)",
+      "description": "Choose a random session ID above. The picker lists the latest 100 sessions matching dates/version/host; the same filters apply here. No installation IDs or standalone error records are displayed. Missing sequence positions and repeated positions are not silently repaired. A retained operation failure can appear; an anonymous sysml.error cannot be joined to it.",
+      "visualization": "table",
+      "query": "CorrelatedUsage\n| where SessionId == '{Session:escape}'\n| project Sequence = tolong(Measurements.sequence), TimeGenerated, Name, Panel = tostring(Properties.panel), Action = tostring(Properties.action), View = tostring(Properties.view), Outcome = tostring(Properties.outcome), DurationMs = todouble(Measurements.durationMs), Version = tostring(Properties.extensionVersion), Host = tostring(Properties.host)\n| order by Sequence asc, TimeGenerated asc\n| take 500"
+    },
+    {
+      "id": "latency",
+      "section": "performance",
+      "title": "Client-reported latency by operation, outcome and version (ms)",
+      "description": "P50/P95/P99 include only reported, bounded durations. Samples and small-sample flags remain visible. Outcome separation avoids mixing successful work with cancellations/rejections/failures. Activated records measure completed activation only; absent or failed boots are not inferred.",
+      "visualization": "table",
+      "query": "UsageEvents\n| where Name == 'sysml.extension.activated' or Name endswith '.operation'\n| extend DurationMs = todouble(Measurements.durationMs), Operation = iif(Name == 'sysml.extension.activated', 'completed-activation', tostring(Properties.action)), Outcome = tostring(Properties.outcome), Version = tostring(Properties.extensionVersion)\n| where isfinite(DurationMs) and DurationMs >= 0 and DurationMs <= 3600000\n| summarize Samples = count(), P50Ms = percentile(DurationMs, 50), P95Ms = percentile(DurationMs, 95), P99Ms = percentile(DurationMs, 99) by Name, Operation, Outcome, Version\n| extend SmallSample = Samples < 100\n| order by Name asc, Operation asc, Version asc, Outcome asc"
+    },
+    {
+      "id": "operation-outcomes",
+      "section": "performance",
+      "title": "Usage operation outcomes: common denominator per operation/version",
+      "description": "Each rate uses all retained usage operation records for the SAME operation and version, across success/failure/rejected/cancelled. These are reported-operation rates, not attempted-operation or boot-failure rates. sysml.error is explicitly excluded, including error-only-consent records. Missing usage is unknown, not success.",
+      "visualization": "table",
+      "query": "UsageEvents\n| where Name endswith '.operation'\n| summarize Operations = count(), Successes = countif(tostring(Properties.outcome) == 'success'), Failures = countif(tostring(Properties.outcome) == 'failure'), Rejections = countif(tostring(Properties.outcome) == 'rejected'), Cancellations = countif(tostring(Properties.outcome) == 'cancelled') by Name, Action = tostring(Properties.action), Version = tostring(Properties.extensionVersion)\n| extend FailurePct = 100.0 * Failures / Operations, RejectionPct = 100.0 * Rejections / Operations, CancellationPct = 100.0 * Cancellations / Operations, SuccessPct = 100.0 * Successes / Operations\n| order by Operations desc"
+    },
+    {
+      "id": "standalone-errors",
+      "section": "performance",
+      "title": "Standalone error codes: separate error-consent population",
+      "description": "Volume only. Includes installations permitting errors but NOT usage, as well as errors from usage participants; those populations cannot be separated because errors never carry IDs. Not an affected-installation count, usage failure rate, or failed-boot rate.",
+      "visualization": "table",
+      "query": "Events\n| where Name == 'sysml.error'\n| summarize ErrorRecords = count() by Component = tostring(Properties.component), Operation = tostring(Properties.operation), Code = tostring(Properties.code), Version = tostring(Properties.extensionVersion), Host = tostring(Properties.host)\n| order by ErrorRecords desc"
+    },
+    {
+      "id": "ingestion-health",
+      "section": "ingestion",
+      "title": "Filtered retained-event health and ingestion lag",
+      "description": "Only stored schema-2 rows can be assessed. Uncorrelated usage is retained but excluded from installation/session/journey metrics. ErrorIdentityViolations should be zero; any nonzero value blocks collection. Reported ingestion lag includes client clock skew. No stored query can count pre-ingestion/schema/rate-cap drops or consent-disabled activity.",
+      "visualization": "table",
+      "query": "Events\n| extend IsUsage = Name != 'sysml.error', IngestionLagMs = datetime_diff('millisecond', ingestion_time(), TimeGenerated)\n| summarize RetainedRecords = count(), UsageRecords = countif(IsUsage), UncorrelatedUsage = countif(IsUsage and (isempty(UserId) or isempty(SessionId) or isnull(tolong(Measurements.sequence)))), ErrorRecords = countif(not(IsUsage)), ErrorIdentityViolations = countif(not(IsUsage) and (isnotempty(UserId) or isnotempty(SessionId) or isnotnull(Measurements.sequence))), LastEvent = max(TimeGenerated), LastIngested = max(ingestion_time()), P50LagMs = percentile(IngestionLagMs, 50), P95LagMs = percentile(IngestionLagMs, 95)\n| extend MinutesSinceLastIngestion = datetime_diff('minute', now(), LastIngested)"
+    },
+    {
+      "id": "sequence-health",
+      "section": "ingestion",
+      "title": "Duplicate usage sequence positions",
+      "description": "Repeated SessionId/sequence positions are ambiguous and excluded from common transitions. This aggregate is not a replay detector or proof of source authenticity; random-looking public-ingestion payloads can be spoofed.",
+      "visualization": "table",
+      "query": "CorrelatedUsage\n| summarize Copies = count() by SessionId, Sequence = tolong(Measurements.sequence)\n| summarize SequencePositions = count(), DuplicatePositions = countif(Copies > 1), ExtraCopies = sum(Copies - 1)"
+    },
+    {
+      "id": "retained-volume",
+      "section": "ingestion",
+      "title": "Filtered retained AppEvents billable MB per day",
+      "description": "Respects version/host filters using stored AppEvents billing metadata. Excludes other tables, rejected data, transformation processing and fixed alert costs; NOT total workspace ingestion, real-time spend, or a cap/budget guarantee. Existing 80 MB workspace alerts and the combined budget remain separate controls.",
+      "visualization": "timechart",
+      "query": "Events\n| where _IsBillable == 'true'\n| summarize RetainedBillableMB = sum(_BilledSize) / 1000000.0 by Day = bin(TimeGenerated, 1d)\n| order by Day asc"
+    },
+    {
+      "id": "cap-interruptions",
+      "section": "ingestion",
+      "title": "Workspace cap interruptions (All versions / All hosts only)",
+      "description": "Workspace operational records cannot be attributed to an extension version or host. This panel is intentionally suppressed unless BOTH filters are All, and always respects the dates and 30-day query bound. Empty results are not proof that no cap or other ingestion loss occurred; operational logs can lag.",
+      "visualization": "table",
+      "query": "_LogOperation\n| where TimeGenerated >= WindowStart and TimeGenerated <= WindowEnd\n| where '{Version:escape}' == '*' and '{Host:escape}' == '*'\n| where Category =~ 'Ingestion' and Detail contains 'OverQuota'\n| summarize Interruptions = count() by Day = bin(TimeGenerated, 1d)\n| order by Day desc"
+    }
+  ]
+}
