@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated extension packaging to `@vscode/vsce` 4 while preserving VS Code 1.125 API compatibility.
+
+### Fixed
+
+- Initialize Azure telemetry Workbook host and extension-version filters before analytics queries run.
+
 ## [0.50.0]
 
 ### Added

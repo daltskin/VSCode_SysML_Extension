@@ -171,6 +171,15 @@ test('shared budget, alerts and resource boundaries stay unchanged', () => {
 
 const workbook = JSON.parse(readFileSync(join(__dirname, 'workbook-queries.json'), 'utf8'));
 const environmentSource = readFileSync(join(__dirname, 'modules/environment.bicep'), 'utf8');
+const unescapeArmLiterals = value => {
+  if (typeof value === 'string') return value.startsWith('[[') ? value.slice(1) : value;
+  if (Array.isArray(value)) return value.map(unescapeArmLiterals);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .map(([key, entry]) => [key, unescapeArmLiterals(entry)]));
+  }
+  return value;
+};
 const queryById = id => {
   const query = workbook.queries.find(entry => entry.id === id);
   assert.ok(query, `Missing workbook query: ${id}`);
@@ -179,7 +188,7 @@ const queryById = id => {
 
 test('workbooks link to App Insights and use real parameter query fields and defaults', () => {
   assert.ok(Object.values(environment.variables).some(value =>
-    JSON.stringify(value) === JSON.stringify(workbook)));
+    JSON.stringify(unescapeArmLiterals(value)) === JSON.stringify(workbook)));
   const deployedWorkbook = resource(environment, 'Microsoft.Insights/workbooks');
   assert.match(deployedWorkbook.properties.sourceId, /resourceId\('Microsoft.Insights\/components'/);
   assert.match(environmentSource, /fallbackResourceIds: \[applicationInsights.id\]/);
@@ -198,15 +207,20 @@ test('workbooks link to App Insights and use real parameter query fields and def
   assert.deepEqual(parameters.get('TimeRange').typeSettings.selectableValues
     .map(value => value.durationMs), [1, 7, 30, 90].map(days => days * 86400000));
   assert.equal(parameters.get('TimeRange').typeSettings.allowCustom, true);
+  assert.ok(workbook.parameters.findIndex(parameter => parameter.name === 'Host')
+    < workbook.parameters.findIndex(parameter => parameter.name === 'Version'));
   for (const name of ['Version', 'Host']) {
     assert.equal(parameters.get(name).type, 2);
     assert.equal(parameters.get(name).value, '*');
     assert.equal(parameters.get(name).multiSelect, false);
   }
-  assert.equal(parameters.get('Host').jsonData, undefined);
-  assert.equal(parameters.get('Host').query,
-    "datatable(value:string, label:string, selected:bool)['*', 'All hosts', true, "
-    + "'desktop', 'Desktop', false, 'remote', 'Remote', false, 'web', 'Web', false]");
+  assert.equal(parameters.get('Host').query, undefined);
+  assert.deepEqual(JSON.parse(parameters.get('Host').jsonData), [
+    { value: '*', label: 'All hosts', selected: true },
+    { value: 'desktop', label: 'Desktop', selected: false },
+    { value: 'remote', label: 'Remote', selected: false },
+    { value: 'web', label: 'Web', selected: false },
+  ]);
   assert.match(parameters.get('Version').query, /'\*', 'All versions', true/);
   assert.doesNotMatch(parameters.get('Version').query, /\{Version/);
   assert.match(parameters.get('Version').query, /\{Host:escape\}/);
