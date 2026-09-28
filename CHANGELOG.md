@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated extension packaging to `@vscode/vsce` 4 while preserving VS Code 1.125 API compatibility.
+
 ## [0.50.0]
 
 ### Added
