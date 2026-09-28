@@ -9,26 +9,11 @@ A Visual Studio Code extension for SysML v2.0 with syntax highlighting, formatti
 
 ## Demo
 
-[![Show Model Visualizer toolbar action and diagram chooser beside the SysML source](assets/visualiser.png)](assets/visualiser.png)
+![Demo](assets/visualiser.webp)
 
 Open a SysML file, click **Show Model Visualizer** in the editor toolbar, then choose a diagram from the visualizer's view menu.
 
 ## Features
-
-### Privacy and Telemetry
-
-Configured release packages can send optional telemetry following VS Code's telemetry
-permissions and the independent `sysml.telemetry.enabled` User setting (default
-`true`). Usage events include random installation/session IDs for feature-frequency
-and journey analytics, not model content, accounts or machine IDs. Disabling usage
-deletes the local installation ID. See [Privacy](PRIVACY.md) and the complete
-[event catalog](telemetry.json). `SysML: Report Issue` previews an editable report
-before any content is sent to GitHub.
-
-Release packaging injects the public ingestion destination from the GitHub Actions
-repository variable `SYSML_TELEMETRY_CONNECTION_STRING`; an absent or invalid value
-fails release packaging. Local builds without it remain disconnected. See the
-[telemetry infrastructure runbook](infra/README.md).
 
 ### Language Support (LSP)
 
@@ -312,6 +297,21 @@ make test-web   # run the web integration tests in a headless browser host
 Under the hood these wrap [`@vscode/test-web`](https://github.com/microsoft/vscode-test-web)
 and the `npm run build:web` / `npm run test:web` scripts. The MCP server is
 desktop-only and is automatically skipped in the web host.
+
+### Privacy and Telemetry
+
+Configured release packages can send optional telemetry following VS Code's telemetry
+permissions and the independent `sysml.telemetry.enabled` User setting (default
+`true`). Usage events include random installation/session IDs for feature-frequency
+and journey analytics, not model content, accounts or machine IDs. Disabling usage
+deletes the local installation ID. See [Privacy](PRIVACY.md) and the complete
+[event catalog](telemetry.json). `SysML: Report Issue` previews an editable report
+before any content is sent to GitHub.
+
+Release packaging injects the public ingestion destination from the GitHub Actions
+repository variable `SYSML_TELEMETRY_CONNECTION_STRING`; an absent or invalid value
+fails release packaging. Local builds without it remain disconnected. See the
+[telemetry infrastructure runbook](infra/README.md).
 
 ## License
 

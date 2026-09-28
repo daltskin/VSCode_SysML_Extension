@@ -60,7 +60,7 @@
       "isRequired": true,
       "multiSelect": false,
       "value": "*",
-      "query": "datatable(value:string, label:string, selected:bool)['*', 'All hosts', true, 'desktop', 'Desktop', false, 'remote', 'Remote', false, 'web', 'Web', false]"
+      "jsonData": "[{\"value\":\"*\",\"label\":\"All hosts\",\"selected\":true},{\"value\":\"desktop\",\"label\":\"Desktop\",\"selected\":false},{\"value\":\"remote\",\"label\":\"Remote\",\"selected\":false},{\"value\":\"web\",\"label\":\"Web\",\"selected\":false}]"
     },
     {
       "id": "version",
