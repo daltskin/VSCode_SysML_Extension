@@ -56,7 +56,7 @@ resource tables 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = [
 }]
 
 resource transformation 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
-  name: 'dcr-${suffix}'
+  name: 'dcr-${suffix}-v2'
   location: location
   tags: tags
   kind: 'WorkspaceTransforms'
@@ -184,11 +184,10 @@ var workbookLinks = [for section in workbookDefinition.sections: {
 }]
 var workbookParameters = [for parameter in workbookDefinition.parameters: union(parameter,
   contains(parameter, 'query') ? {
-    query: '${workbookDefinition.timeScope}${parameter.query}'
+    query: parameter.query
     queryType: 0
     resourceType: 'microsoft.operationalinsights/workspaces'
     crossComponentResources: [workspace.id]
-    timeContextFromParameter: 'TimeRange'
   } : {})]
 var workbookItems = [for query in workbookDefinition.queries: {
   type: 12
@@ -207,7 +206,7 @@ var workbookItems = [for query in workbookDefinition.queries: {
       {
         type: 1
         name: '${query.id}-notes'
-        content: { json: query.description }
+        content: { json: '**What this means:** ${query.description}' }
       }
       {
         type: 3

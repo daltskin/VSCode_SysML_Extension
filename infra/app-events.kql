@@ -24,6 +24,10 @@ source
     code = tostring(incoming.code), view = tostring(incoming.view),
     duration = toreal(iif(isempty(tostring(measurements.durationMs)),
         '-1', tostring(measurements.durationMs))),
+    parseTime = toreal(iif(isempty(tostring(measurements.parseTimeMs)),
+        '-1', tostring(measurements.parseTimeMs))),
+    modelBuildTime = toreal(iif(isempty(tostring(measurements.modelBuildTimeMs)),
+        '-1', tostring(measurements.modelBuildTimeMs))),
     sequence = toreal(measurements.sequence)
 | extend validUsageIdentity = Name != 'sysml.error'
     and UserId matches regex '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
@@ -34,6 +38,10 @@ source
 | extend validDuration = (Name == 'sysml.extension.activated'
     or Name in ('sysml.visualizer.operation', 'sysml.workbench.operation', 'sysml.language.operation'))
     and isfinite(duration) and duration >= 0 and duration <= 3600000
+| extend validModelTiming = Name == 'sysml.language.operation' and action == 'model'
+    and outcome == 'success'
+    and isfinite(parseTime) and parseTime >= 0 and parseTime <= 3600000
+    and isfinite(modelBuildTime) and modelBuildTime >= 0 and modelBuildTime <= 3600000
 | extend validOperation =
     (component == 'visualizer' and action in ('change-view', 'export')) or
     (component == 'workbench' and action in ('preview', 'apply', 'export')) or
@@ -58,6 +66,11 @@ source
       'outcome', iif(Name endswith '.operation', outcome, ''),
             'view', iif(Name == 'sysml.visualizer.operation' and view in ('elk', 'ibd', 'activity', 'state', 'sequence', 'usecase', 'tree', 'package', 'graph', 'hierarchy'), view, '')),
         Measurements = iif(validUsageIdentity,
-            iif(validDuration, pack('sequence', tolong(sequence), 'durationMs', round(duration, 0)),
-                pack('sequence', tolong(sequence))),
+            iif(validDuration,
+                iif(validModelTiming, pack('sequence', tolong(sequence), 'durationMs', round(duration, 0),
+                    'parseTimeMs', round(parseTime, 0), 'modelBuildTimeMs', round(modelBuildTime, 0)),
+                    pack('sequence', tolong(sequence), 'durationMs', round(duration, 0))),
+                iif(validModelTiming, pack('sequence', tolong(sequence),
+                    'parseTimeMs', round(parseTime, 0), 'modelBuildTimeMs', round(modelBuildTime, 0)),
+                    pack('sequence', tolong(sequence)))),
             iif(validDuration, pack('durationMs', round(duration, 0)), parse_json('{}')))
