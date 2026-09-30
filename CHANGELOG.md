@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.52.0]
+
 ### Fixed
 
 - Update `sysml-v2-lsp` to 0.32.0 for corrected namespace diagnostics and anonymous-element
