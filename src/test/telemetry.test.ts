@@ -7,7 +7,10 @@ import { UsageIdentityStore } from '../telemetry/usageIdentity';
 const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000000;'
   + 'IngestionEndpoint=https://westeurope-5.in.applicationinsights.azure.com/';
 
-function harness(level: 'all' | 'error' | 'crash' | 'off' = 'all', enabled = true) {
+function harness(
+  level: 'all' | 'error' | 'crash' | 'off' = 'all', enabled = true,
+  now: () => number = Date.now,
+) {
   const requests: NonNullable<Parameters<typeof globalThis.fetch>[1]>[] = [];
   let storedId: string | undefined;
   let randomCalls = 0;
@@ -34,7 +37,7 @@ function harness(level: 'all' | 'error' | 'crash' | 'off' = 'all', enabled = tru
   const service = new TelemetryService({
     extensionId: 'JamieD.sysml-v2-support',
     identity,
-    connectionString, enabled: () => permissions.enabled,
+    connectionString, enabled: () => permissions.enabled, now,
     metadata: { extensionVersion: '0.49.0', lspVersion: '0.30.0', vscodeVersion: '1.125.0',
       platform: 'linux', host: 'desktop' },
     createLogger: (supplied, options) => {
@@ -111,6 +114,29 @@ suite('Telemetry privacy and consent', () => {
     state.service.dispose();
   });
 
+  test('adds bounded server timings only to sampled model operations', async () => {
+    const state = harness();
+    state.service.modelOperation('success', 40.4, {
+      parseTimeMs: 12.4, modelBuildTimeMs: 27.6,
+    });
+    await tick();
+    const baseData = JSON.parse(state.requests[0].body as string).data.baseData;
+    assert.deepStrictEqual(baseData.properties, {
+      action: 'model', outcome: 'success', schemaVersion: '2',
+      extensionVersion: '0.49.0', lspVersion: '0.30.0', vscodeVersion: '1.125.0',
+      host: 'desktop', platform: 'linux',
+    });
+    assert.deepStrictEqual(baseData.measurements, {
+      durationMs: 40, parseTimeMs: 12, modelBuildTimeMs: 28, sequence: 1,
+    });
+    state.sender().sendEventData('JamieD.sysml-v2-support/sysml.visualizer.operation', {
+      action: 'change-view', outcome: 'success', parseTimeMs: 12,
+    });
+    await tick();
+    assert.strictEqual(state.requests.length, 1);
+    state.service.dispose();
+  });
+
   test('rechecks permission immediately before dispatch and does not replay after re-enable', async () => {
     const state = harness();
     state.service.activated(10);
@@ -150,6 +176,34 @@ suite('Telemetry privacy and consent', () => {
     for (let index = 0; index < 100; index++) state.service.activated(10);
     await tick();
     assert.strictEqual(state.requests.length, 2);
+    state.service.dispose();
+  });
+
+  test('samples model operations once per minute without throttling reviewed errors', async () => {
+    let now = 100_000;
+    const state = harness('all', true, () => now);
+    state.service.operation('language', 'model', 'success', 10);
+    await tick();
+    state.service.operation('language', 'model', 'cancelled', 20);
+    await tick();
+    state.service.error('language', 'model', 'request-failed');
+    await tick();
+    now += 59_999;
+    state.service.operation('language', 'model', 'failure', 30);
+    await tick();
+    assert.strictEqual(state.requests.length, 2);
+    now += 1;
+    state.service.operation('language', 'model', 'cancelled', 40);
+    await tick();
+    assert.strictEqual(state.requests.length, 3);
+    assert.deepStrictEqual(state.requests.map(request => {
+      const envelope = JSON.parse(request.body as string);
+      return [envelope.data.baseData.name, envelope.data.baseData.properties.outcome];
+    }), [
+      ['sysml.language.operation', 'success'],
+      ['sysml.error', undefined],
+      ['sysml.language.operation', 'cancelled'],
+    ]);
     state.service.dispose();
   });
 });

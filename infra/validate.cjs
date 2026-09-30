@@ -97,6 +97,9 @@ test('schema 2 storage reconstructs bounded fields and strips all unapproved ide
   assert.match(transform, /and isfinite\(duration\) and duration >= 0 and duration <= 3600000/);
   assert.match(transform,
     /duration = toreal\(iif\(isempty\(tostring\(measurements.durationMs\)\),\s*'-1', tostring\(measurements.durationMs\)\)\)/);
+  assert.match(transform, /validModelTiming = Name == 'sysml.language.operation' and action == 'model'/);
+  assert.match(transform, /isfinite\(parseTime\) and parseTime >= 0 and parseTime <= 3600000/);
+  assert.match(transform, /isfinite\(modelBuildTime\) and modelBuildTime >= 0 and modelBuildTime <= 3600000/);
   assert.match(transform, /Name == 'sysml.error' and validOperation and code in/);
   assert.match(transform, /Name endswith '.operation' and validOperation and outcome in/);
   assert.match(projection[1], /UserId = iif\(validUsageIdentity, tolower\(UserId\), ''\)/);
@@ -106,7 +109,8 @@ test('schema 2 storage reconstructs bounded fields and strips all unapproved ide
     .map(match => match[1]);
   assert.deepEqual([...new Set(keys)].sort(), [
     'action', 'code', 'component', 'durationMs', 'extensionVersion', 'host', 'lspVersion',
-    'operation', 'outcome', 'panel', 'platform', 'schemaVersion', 'sequence', 'view', 'vscodeVersion'
+    'modelBuildTimeMs', 'operation', 'outcome', 'panel', 'parseTimeMs',
+    'platform', 'schemaVersion', 'sequence', 'view', 'vscodeVersion'
   ].sort());
 });
 
@@ -193,9 +197,9 @@ test('workbooks link to App Insights and use real parameter query fields and def
   assert.match(deployedWorkbook.properties.sourceId, /resourceId\('Microsoft.Insights\/components'/);
   assert.match(environmentSource, /fallbackResourceIds: \[applicationInsights.id\]/);
   assert.match(environmentSource, /query: '\$\{queryScope\}\$\{query.query\}'/);
-  assert.match(environmentSource, /query: '\$\{workbookDefinition.timeScope\}\$\{parameter.query\}'/);
+  assert.match(environmentSource, /query: parameter.query/);
   assert.match(environmentSource, /query: '\$\{queryScope\}\$\{workbookDefinition.sessionParameter.query\}'/);
-  assert.equal((environmentSource.match(/timeContextFromParameter: 'TimeRange'/g) || []).length, 3);
+  assert.equal((environmentSource.match(/timeContextFromParameter: 'TimeRange'/g) || []).length, 2);
   assert.doesNotMatch(environmentSource, /querySettings|timeContext:|durationMs: 604800000/);
   assert.match(environmentSource, /crossComponentResources: \[workspace.id\]/);
   assert.match(environmentSource, /version: 'KqlParameterItem\/1.0'/);
@@ -222,18 +226,25 @@ test('workbooks link to App Insights and use real parameter query fields and def
     { value: 'web', label: 'Web', selected: false },
   ]);
   assert.match(parameters.get('Version').query, /'\*', 'All versions', true/);
+  assert.match(parameters.get('Version').query, /^AppEvents/);
+  assert.match(parameters.get('Version').query, /schemaVersion/);
+  assert.match(parameters.get('Version').query, /extensionVersion\) startswith '999\.'/);
   assert.doesNotMatch(parameters.get('Version').query, /\{Version/);
-  assert.match(parameters.get('Version').query, /\{Host:escape\}/);
+  assert.doesNotMatch(parameters.get('Version').query, /\{Host|\{TimeRange/);
   assert.equal(workbook.sessionParameter.value, 'none');
   assert.match(workbook.sessionParameter.query, /top 100 by LastSeen desc/);
   assert.doesNotMatch(workbook.sessionParameter.query, /UserId/);
 });
 
 test('every analytics query inherits schema/date/version/host scope and bounded retention', () => {
-  assert.match(workbook.timeScope, /max_of\(datetime\(\{TimeRange:start\}\), WindowEnd - 90d, ago\(90d\)\)/);
+  assert.match(workbook.timeScope, /min_of\(\{TimeRange:end\}, now\(\)\)/);
+  assert.match(workbook.timeScope, /max_of\(\{TimeRange:start\}, WindowEnd - 90d, ago\(90d\)\)/);
+  assert.doesNotMatch(workbook.timeScope, /datetime\(\{TimeRange:/);
   assert.match(workbook.notice, /retained last 90 days/);
   assert.match(workbook.timeScope, /TimeGenerated >= WindowStart and TimeGenerated <= WindowEnd/);
   assert.match(workbook.timeScope, /schemaVersion\) == '2'/);
+  assert.match(workbook.timeScope, /extensionVersion\) startswith '999\.'/);
+  assert.match(workbook.notice, /synthetic pilot versions under `999\.\*` are excluded/);
   for (const name of ['Version', 'Host']) {
     assert.match(workbook.filterScope, new RegExp(`\\{${name}:escape\\}.*== '\\*' or`));
   }
@@ -241,6 +252,8 @@ test('every analytics query inherits schema/date/version/host scope and bounded 
   assert.match(workbook.filterScope, /let FeatureEvents = CorrelatedUsage\n\| where Name != 'sysml.language.operation'/);
   const ids = workbook.queries.map(query => query.id);
   assert.equal(new Set(ids).size, ids.length);
+  for (const id of ['version-adoption', 'latest-environment',
+    'vscode-version-distribution', 'release-regressions']) assert.ok(ids.includes(id));
   for (const query of workbook.queries) {
     assert.ok(workbook.sections.some(section => section.id === query.section));
     assert.ok(query.description.length > 50);
@@ -264,7 +277,12 @@ test('installation activity and returns are window-relative and never infer firs
   assert.match(returning, /100.0 \* Returning \/ SecondHalfActive/);
   assert.match(queryById('feature-reach'), /AllInstallations = toscalar\(CorrelatedUsage/);
   assert.match(queryById('feature-reach'), /AllSessions = toscalar\(CorrelatedUsage/);
+  assert.match(queryById('feature-reach'), /round\(100\.0 \* Installations \/ AllInstallations, 1\)/);
   assert.match(queryById('feature-session-frequency'), /by Feature, SessionId/);
+  assert.match(queryById('version-adoption'), /summarize by Day, Version, UserId/);
+  assert.match(queryById('latest-environment'), /summarize arg_max\(TimeGenerated, \*\) by UserId/);
+  assert.match(queryById('latest-environment'), /round\(100\.0 \* Installations \/ Total, 1\)/);
+  assert.match(queryById('vscode-version-distribution'), /project VSCodeVersion/);
   assert.match(workbook.notice, /not people/);
   assert.match(workbook.notice, /opt-out/);
   assert.match(workbook.notice, /rate caps/);
@@ -297,6 +315,15 @@ test('latencies and operation rates use usage only; error-only records stay sepa
   for (const numerator of ['Failures', 'Rejections', 'Cancellations', 'Successes']) {
     assert.ok(outcomes.includes(`100.0 * ${numerator} / Operations`));
   }
+  const regressions = queryById('release-regressions');
+  assert.match(regressions, /PreviousVersion = prev\(Version\)/);
+  assert.match(regressions, /FailureDeltaPoints = round/);
+  assert.match(regressions, /P95DeltaPct = iif/);
+  assert.match(regressions, /SmallSample = Operations < 100 or DurationSamples < 100/);
+  const parserTiming = queryById('parser-timing');
+  assert.match(parserTiming, /ParseTimeMs = todouble\(Measurements.parseTimeMs\)/);
+  assert.match(parserTiming, /ModelBuildTimeMs = todouble\(Measurements.modelBuildTimeMs\)/);
+  assert.match(parserTiming, /by Version/);
   const errors = queryById('standalone-errors');
   assert.match(errors, /^Events\n\| where Name == 'sysml.error'/);
   assert.doesNotMatch(errors, /UserId|SessionId|join|dcount|Pct|\/ Operations/);

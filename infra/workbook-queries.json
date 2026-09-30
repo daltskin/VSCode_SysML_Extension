@@ -1,7 +1,7 @@
 {
-  "timeScope": "let WindowEnd = min_of(datetime({TimeRange:end}), now());\nlet WindowStart = max_of(datetime({TimeRange:start}), WindowEnd - 90d, ago(90d));\nlet TimeEvents = AppEvents\n| where TimeGenerated >= WindowStart and TimeGenerated <= WindowEnd\n| where tostring(Properties.schemaVersion) == '2';\n",
+  "timeScope": "let WindowEnd = min_of({TimeRange:end}, now());\nlet WindowStart = max_of({TimeRange:start}, WindowEnd - 90d, ago(90d));\nlet TimeEvents = AppEvents\n| where TimeGenerated >= WindowStart and TimeGenerated <= WindowEnd\n| where tostring(Properties.schemaVersion) == '2'\n| where not(tostring(Properties.extensionVersion) startswith '999.');\n",
   "filterScope": "let Events = TimeEvents\n| where ('{Version:escape}' == '*' or tostring(Properties.extensionVersion) == '{Version:escape}')\n    and ('{Host:escape}' == '*' or tostring(Properties.host) == '{Host:escape}');\nlet UsageEvents = Events | where Name != 'sysml.error';\nlet CorrelatedUsage = UsageEvents | where isnotempty(UserId) and isnotempty(SessionId) and tolong(Measurements.sequence) > 0;\nlet FeatureEvents = CorrelatedUsage\n| where Name != 'sysml.language.operation'\n| where Name == 'sysml.panel.opened' or Name endswith '.operation'\n| extend Sequence = tolong(Measurements.sequence),\n    Feature = iif(Name == 'sysml.panel.opened', strcat('panel:', tostring(Properties.panel)),\n      strcat(Name, ':', tostring(Properties.action), iif(isempty(tostring(Properties.view)), '', strcat(':', tostring(Properties.view)))));\n",
-  "notice": "## SysML participating-installation analytics\nCounts describe random, locally persisted installation IDs participating in usage telemetry, **not people, accounts, total installs, or successful unique users**. IDs reset on usage opt-out; sessions are per activation, not visits. No machine/account/email/workspace identity is collected.\n\nAll charts use schema 2 and the selected dates/version/host, limited to the retained last 90 days. Empty charts do not prove health or zero activity. Consent, offline loss, client rate caps, concurrency limits, dropped events, schema filtering, ingestion caps/delay and spoofed public traffic bias the results; missing activity cannot be reconstructed. Sequence gaps are not a count of dropped events. Distinct estimates use dcount accuracy 2 where marked approximate. Nothing is sampling-extrapolated.\n\nUsage outcome rates share an operation-event denominator. Standalone sysml.error records include the separate error-only-consent population, contain no IDs, and are never divided by usage or joined into journeys. Completed activation latency provides no failed-boot denominator.",
+  "notice": "## SysML participating-installation analytics\nCounts describe random, locally persisted installation IDs participating in usage telemetry, **not people, accounts, total installs, or successful unique users**. IDs reset on usage opt-out; sessions are per activation, not visits. No machine/account/email/workspace identity is collected.\n\nAll charts use schema 2 and the selected dates/version/host, limited to the retained last 90 days. Reserved synthetic pilot versions under `999.*` are excluded. Empty charts do not prove health or zero activity. Consent, offline loss, client rate caps, concurrency limits, dropped events, schema filtering, ingestion caps/delay and spoofed public traffic bias the results; missing activity cannot be reconstructed. Sequence gaps are not a count of dropped events. Distinct estimates use dcount accuracy 2 where marked approximate. Nothing is sampling-extrapolated.\n\nFrom the next release, high-frequency `sysml.language.operation:model` records are sampled at most once per minute per extension host; their record counts and outcome rates are samples, not total model requests. Usage outcome rates otherwise share an operation-event denominator. Standalone sysml.error records include the separate error-only-consent population, contain no IDs, remain unsampled by the model limit, and are never divided by usage or joined into journeys. Completed activation latency provides no failed-boot denominator.",
   "sections": [
     {
       "id": "overview",
@@ -71,7 +71,7 @@
       "isRequired": true,
       "multiSelect": false,
       "value": "*",
-      "query": "TimeEvents\n| where '{Host:escape}' == '*' or tostring(Properties.host) == '{Host:escape}'\n| distinct value = tostring(Properties.extensionVersion)\n| project value, label = value, selected = false\n| union (datatable(value:string, label:string, selected:bool)['*', 'All versions', true])\n| order by selected desc, value asc"
+      "query": "AppEvents\n| where tostring(Properties.schemaVersion) == '2'\n| where not(tostring(Properties.extensionVersion) startswith '999.')\n| distinct value = tostring(Properties.extensionVersion)\n| project value, label = value, selected = false\n| union (datatable(value:string, label:string, selected:bool)['*', 'All versions', true])\n| order by selected desc, value asc"
     },
     {
       "id": "page",
@@ -111,12 +111,36 @@
       "query": "range Day from startofday(WindowStart) to startofday(WindowEnd) step 1d\n| where WindowStart <= WindowEnd\n| join kind=leftouter (CorrelatedUsage | summarize Installations = dcount(UserId, 2), Sessions = dcount(SessionId, 2) by Day = bin(TimeGenerated, 1d)) on Day\n| project Day, Installations = coalesce(Installations, 0), Sessions = coalesce(Sessions, 0)\n| order by Day asc"
     },
     {
+      "id": "version-adoption",
+      "section": "overview",
+      "title": "Daily participating installations by extension version",
+      "description": "Each point is the exact number of participating installation IDs observed on that UTC day for a version. An installation can appear on multiple days or versions, so values measure daily adoption and migration rather than cumulative installs or people.",
+      "visualization": "timechart",
+      "query": "CorrelatedUsage\n| extend Version = tostring(Properties.extensionVersion), Day = bin(TimeGenerated, 1d)\n| summarize by Day, Version, UserId\n| summarize Installations = count() by Day, Version\n| order by Day asc, Version asc"
+    },
+    {
+      "id": "latest-environment",
+      "section": "overview",
+      "title": "Latest observed host and platform mix",
+      "description": "Each participating installation is counted once using its latest retained event in this selection. Remote Linux describes the extension host and can include WSL, SSH, containers or Codespaces; it does not identify which one or the user's physical device.",
+      "visualization": "table",
+      "query": "let LatestEnvironment = CorrelatedUsage\n| summarize arg_max(TimeGenerated, *) by UserId\n| project Host = tostring(Properties.host), Platform = tostring(Properties.platform);\nlet Total = toscalar(LatestEnvironment | count);\nLatestEnvironment\n| summarize Installations = count() by Host, Platform\n| extend Percentage = iif(Total == 0, real(null), round(100.0 * Installations / Total, 1))\n| order by Installations desc"
+    },
+    {
+      "id": "vscode-version-distribution",
+      "section": "overview",
+      "title": "Latest observed VS Code version mix",
+      "description": "Each participating installation is counted once at its latest retained VS Code version in this selection. This shows compatibility exposure, not VS Code market share, and percentages are rounded to one decimal place.",
+      "visualization": "table",
+      "query": "let LatestVersion = CorrelatedUsage\n| summarize arg_max(TimeGenerated, *) by UserId\n| project VSCodeVersion = tostring(Properties.vscodeVersion);\nlet Total = toscalar(LatestVersion | count);\nLatestVersion\n| summarize Installations = count() by VSCodeVersion\n| extend Percentage = iif(Total == 0, real(null), round(100.0 * Installations / Total, 1))\n| order by Installations desc"
+    },
+    {
       "id": "returning-installations",
       "section": "overview",
       "title": "Returning installations within the selected window",
       "description": "Returning means observed in BOTH equal halves of this date selection, under the same version/host filters. The percentage is returning / second-half active installations. Second-half-only does NOT mean first-ever or newly installed; history before this window is unknown, and opt-out resets identity.",
       "visualization": "table",
-      "query": "let Midpoint = WindowStart + (WindowEnd - WindowStart) / 2;\nCorrelatedUsage\n| summarize EarlierEvents = countif(TimeGenerated < Midpoint), LaterEvents = countif(TimeGenerated >= Midpoint) by UserId\n| summarize FirstHalfActive = countif(EarlierEvents > 0), SecondHalfActive = countif(LaterEvents > 0), Returning = countif(EarlierEvents > 0 and LaterEvents > 0), SecondHalfOnly = countif(EarlierEvents == 0 and LaterEvents > 0)\n| extend ReturningPctOfSecondHalf = iif(SecondHalfActive == 0, real(null), 100.0 * Returning / SecondHalfActive), SplitAt = Midpoint"
+      "query": "let Midpoint = WindowStart + (WindowEnd - WindowStart) / 2;\nCorrelatedUsage\n| summarize EarlierEvents = countif(TimeGenerated < Midpoint), LaterEvents = countif(TimeGenerated >= Midpoint) by UserId\n| summarize FirstHalfActive = countif(EarlierEvents > 0), SecondHalfActive = countif(LaterEvents > 0), Returning = countif(EarlierEvents > 0 and LaterEvents > 0), SecondHalfOnly = countif(EarlierEvents == 0 and LaterEvents > 0)\n| extend ReturningPctOfSecondHalf = iif(SecondHalfActive == 0, real(null), round(100.0 * Returning / SecondHalfActive, 1)), SplitAt = Midpoint"
     },
     {
       "id": "sessions",
@@ -140,7 +164,7 @@
       "title": "Feature reach and frequency (approximate distinct counts)",
       "description": "Features are named operation/action/view combinations or panel-open events, not deduplicated user interactions. Panel-open and operation-open are separate signals. Reach uses ALL correlated usage installations/sessions in this selection as its denominator. Frequency is received feature records per installation that used that feature, including every outcome.",
       "visualization": "table",
-      "query": "let AllInstallations = toscalar(CorrelatedUsage | summarize Total = dcount(UserId, 2));\nlet AllSessions = toscalar(CorrelatedUsage | summarize Total = dcount(SessionId, 2));\nFeatureEvents\n| summarize FeatureRecords = count(), Installations = dcount(UserId, 2), Sessions = dcount(SessionId, 2) by Feature\n| extend InstallationReachPct = iif(AllInstallations == 0, real(null), 100.0 * Installations / AllInstallations), SessionReachPct = iif(AllSessions == 0, real(null), 100.0 * Sessions / AllSessions), RecordsPerReachedInstallation = 1.0 * FeatureRecords / Installations\n| order by FeatureRecords desc"
+      "query": "let AllInstallations = toscalar(CorrelatedUsage | summarize Total = dcount(UserId, 2));\nlet AllSessions = toscalar(CorrelatedUsage | summarize Total = dcount(SessionId, 2));\nFeatureEvents\n| summarize FeatureRecords = count(), Installations = dcount(UserId, 2), Sessions = dcount(SessionId, 2) by Feature\n| extend InstallationReachPct = iif(AllInstallations == 0, real(null), round(100.0 * Installations / AllInstallations, 1)), SessionReachPct = iif(AllSessions == 0, real(null), round(100.0 * Sessions / AllSessions, 1)), RecordsPerReachedInstallation = round(1.0 * FeatureRecords / Installations, 2)\n| order by FeatureRecords desc"
     },
     {
       "id": "feature-session-frequency",
@@ -148,7 +172,7 @@
       "title": "Feature frequency in sessions that used it",
       "description": "Each observation is one feature/session pair; sessions without that feature are excluded from these frequency percentiles. Use session reach above for the all-session denominator.",
       "visualization": "table",
-      "query": "FeatureEvents\n| summarize FeatureRecords = count() by Feature, SessionId\n| summarize SessionsWithFeature = count(), MeanRecords = avg(FeatureRecords), P50Records = percentile(FeatureRecords, 50), P95Records = percentile(FeatureRecords, 95), P99Records = percentile(FeatureRecords, 99) by Feature\n| order by SessionsWithFeature desc"
+      "query": "FeatureEvents\n| summarize FeatureRecords = count() by Feature, SessionId\n| summarize SessionsWithFeature = count(), MeanRecords = round(avg(FeatureRecords), 2), P50Records = round(percentile(FeatureRecords, 50), 1), P95Records = round(percentile(FeatureRecords, 95), 1), P99Records = round(percentile(FeatureRecords, 99), 1) by Feature\n| order by SessionsWithFeature desc"
     },
     {
       "id": "transitions",
@@ -170,17 +194,33 @@
       "id": "latency",
       "section": "performance",
       "title": "Client-reported latency by operation, outcome and version (ms)",
-      "description": "P50/P95/P99 include only reported, bounded durations. Samples and small-sample flags remain visible. Outcome separation avoids mixing successful work with cancellations/rejections/failures. Activated records measure completed activation only; absent or failed boots are not inferred.",
+      "description": "P50/P95/P99 include only reported, bounded durations. Samples and small-sample flags remain visible. From the next release, model-request timings are sampled at most once per minute per extension host. Outcome separation avoids mixing successful work with cancellations/rejections/failures. Activated records measure completed activation only; absent or failed boots are not inferred.",
       "visualization": "table",
-      "query": "UsageEvents\n| where Name == 'sysml.extension.activated' or Name endswith '.operation'\n| extend DurationMs = todouble(Measurements.durationMs), Operation = iif(Name == 'sysml.extension.activated', 'completed-activation', tostring(Properties.action)), Outcome = tostring(Properties.outcome), Version = tostring(Properties.extensionVersion)\n| where isfinite(DurationMs) and DurationMs >= 0 and DurationMs <= 3600000\n| summarize Samples = count(), P50Ms = percentile(DurationMs, 50), P95Ms = percentile(DurationMs, 95), P99Ms = percentile(DurationMs, 99) by Name, Operation, Outcome, Version\n| extend SmallSample = Samples < 100\n| order by Name asc, Operation asc, Version asc, Outcome asc"
+      "query": "UsageEvents\n| where Name == 'sysml.extension.activated' or Name endswith '.operation'\n| extend DurationMs = todouble(Measurements.durationMs), Operation = iif(Name == 'sysml.extension.activated', 'completed-activation', tostring(Properties.action)), Outcome = tostring(Properties.outcome), Version = tostring(Properties.extensionVersion)\n| where isfinite(DurationMs) and DurationMs >= 0 and DurationMs <= 3600000\n| summarize Samples = count(), P50Ms = round(percentile(DurationMs, 50), 0), P95Ms = round(percentile(DurationMs, 95), 0), P99Ms = round(percentile(DurationMs, 99), 0) by Name, Operation, Outcome, Version\n| extend SmallSample = Samples < 100\n| order by Name asc, Operation asc, Version asc, Outcome asc"
     },
     {
       "id": "operation-outcomes",
       "section": "performance",
       "title": "Usage operation outcomes: common denominator per operation/version",
-      "description": "Each rate uses all retained usage operation records for the SAME operation and version, across success/failure/rejected/cancelled. These are reported-operation rates, not attempted-operation or boot-failure rates. sysml.error is explicitly excluded, including error-only-consent records. Missing usage is unknown, not success.",
+      "description": "Each rate uses retained usage operation records for the SAME operation and version, across success/failure/rejected/cancelled. From the next release, model outcomes are one-per-minute samples rather than total requests. These are reported-record rates, not attempted-operation or boot-failure rates. sysml.error is explicitly excluded, including error-only-consent records. Missing usage is unknown, not success.",
       "visualization": "table",
-      "query": "UsageEvents\n| where Name endswith '.operation'\n| summarize Operations = count(), Successes = countif(tostring(Properties.outcome) == 'success'), Failures = countif(tostring(Properties.outcome) == 'failure'), Rejections = countif(tostring(Properties.outcome) == 'rejected'), Cancellations = countif(tostring(Properties.outcome) == 'cancelled') by Name, Action = tostring(Properties.action), Version = tostring(Properties.extensionVersion)\n| extend FailurePct = 100.0 * Failures / Operations, RejectionPct = 100.0 * Rejections / Operations, CancellationPct = 100.0 * Cancellations / Operations, SuccessPct = 100.0 * Successes / Operations\n| order by Operations desc"
+      "query": "UsageEvents\n| where Name endswith '.operation'\n| summarize Operations = count(), Successes = countif(tostring(Properties.outcome) == 'success'), Failures = countif(tostring(Properties.outcome) == 'failure'), Rejections = countif(tostring(Properties.outcome) == 'rejected'), Cancellations = countif(tostring(Properties.outcome) == 'cancelled') by Name, Action = tostring(Properties.action), Version = tostring(Properties.extensionVersion)\n| extend FailurePct = round(100.0 * Failures / Operations, 1), RejectionPct = round(100.0 * Rejections / Operations, 1), CancellationPct = round(100.0 * Cancellations / Operations, 1), SuccessPct = round(100.0 * Successes / Operations, 1)\n| order by Operations desc"
+    },
+    {
+      "id": "parser-timing",
+      "section": "performance",
+      "title": "Sampled parser and model-build timing (ms)",
+      "description": "Available from the next release. At most one model request per minute per extension host contributes server-reported ANTLR parse and model-build timings. These are samples without file identity or size, so they show latency distributions rather than per-file performance.",
+      "visualization": "table",
+      "query": "UsageEvents\n| where Name == 'sysml.language.operation' and tostring(Properties.action) == 'model'\n| extend ParseTimeMs = todouble(Measurements.parseTimeMs), ModelBuildTimeMs = todouble(Measurements.modelBuildTimeMs), Version = tostring(Properties.extensionVersion)\n| where isfinite(ParseTimeMs) and ParseTimeMs >= 0 and isfinite(ModelBuildTimeMs) and ModelBuildTimeMs >= 0\n| summarize Samples = count(), P50ParseMs = round(percentile(ParseTimeMs, 50), 0), P95ParseMs = round(percentile(ParseTimeMs, 95), 0), P99ParseMs = round(percentile(ParseTimeMs, 99), 0), P50BuildMs = round(percentile(ModelBuildTimeMs, 50), 0), P95BuildMs = round(percentile(ModelBuildTimeMs, 95), 0), P99BuildMs = round(percentile(ModelBuildTimeMs, 99), 0) by Version\n| extend SmallSample = Samples < 100\n| order by Version asc"
+    },
+    {
+      "id": "release-regressions",
+      "section": "performance",
+      "title": "Release-over-release operation regressions",
+      "description": "Compares each operation/version with its previous observed semantic version. FailureDeltaPoints is a percentage-point change; P95DeltaPct is relative latency change. Positive values are worse. Use All versions, and treat rows with fewer than 100 records or duration samples as directional only. From the next release, model rows compare one-per-minute samples, not total requests.",
+      "visualization": "table",
+      "query": "let Outcomes = UsageEvents\n| where Name endswith '.operation'\n| extend Operation = strcat(Name, ':', tostring(Properties.action)), Version = tostring(Properties.extensionVersion), Outcome = tostring(Properties.outcome)\n| summarize Operations = count(), Failures = countif(Outcome == 'failure') by Operation, Version\n| extend FailurePct = round(100.0 * Failures / Operations, 1);\nlet Latencies = UsageEvents\n| where Name endswith '.operation'\n| extend Operation = strcat(Name, ':', tostring(Properties.action)), Version = tostring(Properties.extensionVersion), DurationMs = todouble(Measurements.durationMs)\n| where isfinite(DurationMs) and DurationMs >= 0 and DurationMs <= 3600000\n| summarize DurationSamples = count(), P95Ms = round(percentile(DurationMs, 95), 0) by Operation, Version;\nOutcomes\n| join kind=leftouter Latencies on Operation, Version\n| extend VersionParts = split(Version, '.')\n| extend Major = toint(VersionParts[0]), Minor = toint(VersionParts[1]), Patch = toint(VersionParts[2])\n| sort by Operation asc, Major asc, Minor asc, Patch asc\n| serialize\n| extend PreviousOperation = prev(Operation), PreviousVersion = prev(Version), PreviousFailurePct = prev(FailurePct), PreviousP95Ms = prev(P95Ms)\n| where PreviousOperation == Operation\n| project Operation, Version, PreviousVersion, Operations, DurationSamples, FailurePct, FailureDeltaPoints = round(FailurePct - PreviousFailurePct, 1), P95Ms, P95DeltaPct = iif(isnull(PreviousP95Ms) or PreviousP95Ms == 0, real(null), round(100.0 * (P95Ms - PreviousP95Ms) / PreviousP95Ms, 1)), SmallSample = Operations < 100 or DurationSamples < 100\n| order by Operation asc, Version asc"
     },
     {
       "id": "standalone-errors",
@@ -212,7 +252,7 @@
       "title": "Filtered retained AppEvents billable MB per day",
       "description": "Respects version/host filters using stored AppEvents billing metadata. Excludes other tables, rejected data, transformation processing and fixed alert costs; NOT total workspace ingestion, real-time spend, or a cap/budget guarantee. Existing 80 MB workspace alerts and the combined budget remain separate controls.",
       "visualization": "timechart",
-      "query": "Events\n| where _IsBillable == 'true'\n| summarize RetainedBillableMB = sum(_BilledSize) / 1000000.0 by Day = bin(TimeGenerated, 1d)\n| order by Day asc"
+      "query": "Events\n| where _IsBillable == 'true'\n| summarize RetainedBillableMB = round(sum(_BilledSize) / 1000000.0, 3) by Day = bin(TimeGenerated, 1d)\n| order by Day asc"
     },
     {
       "id": "cap-interruptions",

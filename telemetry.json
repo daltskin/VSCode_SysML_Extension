@@ -124,18 +124,30 @@
     "action": {
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
-      "comment": "start, restart or model. Model includes background uncached requests, not just direct user actions."
+      "comment": "start, restart or model. Model includes background uncached requests, not just direct user actions, and is sampled at most once per minute per extension host."
     },
     "outcome": {
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
-      "comment": "success, failure, rejected or cancelled."
+      "comment": "success, failure, rejected or cancelled. Model outcomes are sampled at most once per minute; reviewed sysml.error records remain separate and unsampled."
     },
     "durationMs": {
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "isMeasurement": true,
-      "comment": "Elapsed milliseconds; model includes warm-up retries and conversion, cache hits omitted."
+      "comment": "Elapsed milliseconds; model includes warm-up retries and conversion, cache hits omitted, with at most one model timing sample per minute."
+    },
+    "parseTimeMs": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "isMeasurement": true,
+      "comment": "Sampled server-reported ANTLR parse milliseconds; no file identity, size or content."
+    },
+    "modelBuildTimeMs": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "isMeasurement": true,
+      "comment": "Sampled server-reported symbol-table and requested DTO construction milliseconds."
     }
   },
   "sysml.error": {

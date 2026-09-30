@@ -16,6 +16,11 @@ export type FailureCode = 'start-failed' | 'request-failed' | 'render-failed'
   | 'export-failed' | 'edit-failed';
 export type Panel = 'visualizer' | 'workbench' | 'dashboard' | 'inspector' | 'sysrunner';
 
+export interface ModelTiming {
+  readonly parseTimeMs: number;
+  readonly modelBuildTimeMs: number;
+}
+
 const views = ['elk', 'ibd', 'activity', 'state', 'sequence', 'usecase', 'tree',
   'package', 'graph', 'hierarchy'];
 const outcomes: readonly string[] = ['success', 'cancelled', 'rejected', 'failure'];
@@ -23,6 +28,7 @@ const failureCodes: readonly string[] = [
   'start-failed', 'request-failed', 'render-failed', 'export-failed', 'edit-failed',
 ];
 const panels: readonly string[] = ['visualizer', 'workbench', 'dashboard', 'inspector', 'sysrunner'];
+const modelSampleIntervalMs = 60_000;
 
 export interface TelemetryMetadata {
   readonly extensionVersion: string;
@@ -94,6 +100,13 @@ function approve(name: string, data: unknown): ApprovedEvent | undefined {
       || !accept('outcome', outcomes)) return;
     if (values.view !== undefined && !accept('view', views)) return;
   }
+  for (const key of ['parseTimeMs', 'modelBuildTimeMs'] as const) {
+    if (values[key] === undefined) continue;
+    if (name !== 'sysml.language.operation' || properties.action !== 'model'
+      || typeof values[key] !== 'number' || !Number.isFinite(values[key])
+      || values[key] < 0 || values[key] > 3_600_000) return;
+    measurements[key] = Math.round(values[key]);
+  }
   if (values.durationMs !== undefined) {
     if (typeof values.durationMs !== 'number' || !Number.isFinite(values.durationMs)
       || values.durationMs < 0 || values.durationMs > 3_600_000) return;
@@ -113,6 +126,7 @@ export class TelemetryService implements Disposable {
   private windowStart = 0;
   private usageCount = 0;
   private errorCount = 0;
+  private lastModelSampleAt = Number.NEGATIVE_INFINITY;
   private disposed = false;
 
   constructor(private readonly options: TelemetryOptions) {
@@ -147,6 +161,17 @@ export class TelemetryService implements Disposable {
     this.record(`sysml.${component}.operation`, {
       action, outcome, ...(durationMs === undefined ? {} : { durationMs }),
       ...(view === undefined ? {} : { view }),
+    });
+  }
+
+  /** Record one rate-limited model request sample with server-reported timing breakdown. */
+  modelOperation(outcome: Outcome, durationMs: number, timing?: ModelTiming): void {
+    this.record('sysml.language.operation', {
+      action: 'model', outcome, durationMs,
+      ...(timing ? {
+        parseTimeMs: timing.parseTimeMs,
+        modelBuildTimeMs: timing.modelBuildTimeMs,
+      } : {}),
     });
   }
 
@@ -188,12 +213,16 @@ export class TelemetryService implements Disposable {
       const target = this.target;
       if (!target || !event || !this.permitted(error) || this.requests.size >= 2) return;
       const now = this.now();
+      const isModelOperation = name === 'sysml.language.operation'
+        && event.properties.action === 'model';
+      if (isModelOperation && now - this.lastModelSampleAt < modelSampleIntervalMs) return;
       if (now - this.windowStart >= 60_000) {
         this.windowStart = now;
         this.usageCount = 0;
         this.errorCount = 0;
       }
       if (error ? this.errorCount >= 10 : this.usageCount >= 60) return;
+      if (isModelOperation) this.lastModelSampleAt = now;
       if (error) this.errorCount++;
       else this.usageCount++;
       const metadata = this.options.metadata;

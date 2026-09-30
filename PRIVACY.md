@@ -15,6 +15,9 @@ It defaults to `true`, cannot be enabled by workspace settings, and never affect
 
 - Allowlisted feature names, operation outcomes, timings, reviewed error codes, timestamps,
   schema/software versions, OS and host category.
+- High-frequency background model-snapshot operations are sampled at most once per minute per
+  extension host. Samples can include bounded parser/model-build timings without file identity,
+  size or content. Reviewed error codes remain separate and unsampled.
 - Usage only: random installation/session IDs and event sequence numbers. These are
   **pseudonymous, not anonymous**, and measure installations rather than people.
 - No model/source content, model names, paths, search terms, clipboard contents, raw

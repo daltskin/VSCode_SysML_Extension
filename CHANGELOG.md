@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Update `sysml-v2-lsp` to 0.32.0 for corrected namespace diagnostics and anonymous-element
+  identity, and require patched `brace-expansion` dependencies to clear current advisories.
+- Initialize the telemetry Workbook extension-version filter independently so its dynamic options
+  cannot be blocked by other required parameters, and exclude reserved `999.*` synthetic pilot
+  versions from all Workbook analytics. Use Workbook time parameters directly so localized date
+  expansions remain valid KQL.
+- Add version-adoption, environment, VS Code-version and release-regression panels, with visible
+  heading explanations and rounded derived values for easier scanning.
+- Limit high-frequency background model-operation telemetry to one sample per minute per extension
+  host so it cannot dominate ingestion or crowd out user-facing events; reviewed errors remain
+  separately reported. Add bounded parser/model-build timings to that existing sample without
+  collecting file identity, size or content.
+
 ## [0.51.0]
 
 ### Changed

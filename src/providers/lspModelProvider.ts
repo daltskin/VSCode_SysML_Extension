@@ -129,7 +129,7 @@ export class LspModelProvider {
 
         for (let attempt = 0; ; attempt++) {
             if (token?.isCancellationRequested) {
-                telemetry?.operation('language', 'model', 'cancelled', Date.now() - started);
+                telemetry?.modelOperation('cancelled', Date.now() - started);
                 return { version: 0, elements: [], relationships: [] };
             }
 
@@ -140,7 +140,7 @@ export class LspModelProvider {
             } catch (error) {
                 const cancelled = token?.isCancellationRequested
                     || (error instanceof Error && error.name === 'Canceled');
-                telemetry?.operation('language', 'model', cancelled ? 'cancelled' : 'failure',
+                telemetry?.modelOperation(cancelled ? 'cancelled' : 'failure',
                     Date.now() - started);
                 if (!cancelled) telemetry?.error('language', 'model', 'request-failed');
                 throw error;
@@ -169,7 +169,10 @@ export class LspModelProvider {
 
         // Cache the result for deduplication across consumers
         this._cache.set(uri, { version: result.version, result });
-        telemetry?.operation('language', 'model', 'success', Date.now() - started);
+        telemetry?.modelOperation('success', Date.now() - started, result.stats && {
+            parseTimeMs: result.stats.parseTimeMs,
+            modelBuildTimeMs: result.stats.modelBuildTimeMs,
+        });
 
         return result;
     }
