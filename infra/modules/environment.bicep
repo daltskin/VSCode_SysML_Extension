@@ -56,7 +56,7 @@ resource tables 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = [
 }]
 
 resource transformation 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
-  name: 'dcr-${suffix}'
+  name: 'dcr-${suffix}-v2'
   location: location
   tags: tags
   kind: 'WorkspaceTransforms'

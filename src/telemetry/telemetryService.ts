@@ -1,5 +1,5 @@
 import type {
-    Disposable, TelemetryLogger, TelemetryLoggerOptions, TelemetrySender,
+  Disposable, TelemetryLogger, TelemetryLoggerOptions, TelemetrySender,
 } from 'vscode';
 import type { UsageIdentityStore } from './usageIdentity';
 

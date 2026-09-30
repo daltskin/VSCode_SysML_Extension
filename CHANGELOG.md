@@ -15,7 +15,8 @@
 - Limit high-frequency background model-operation telemetry to one sample per minute per extension
   host so it cannot dominate ingestion or crowd out user-facing events; reviewed errors remain
   separately reported. Add bounded parser/model-build timings to that existing sample without
-  collecting file identity, size or content.
+  collecting file identity, size or content, using a versioned workspace transformation rule for
+  reliable activation.
 
 ## [0.51.0]
 
