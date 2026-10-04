@@ -4,9 +4,13 @@
 
 ### Changed
 
-- Update `sysml-v2-lsp` to 0.33.0, which identifies every declared element by a `symbolId`, reports
+- Includes `sysml-v2-lsp` to 0.33.0 changes, which identifies every declared element by a `symbolId`, reports
   flow and succession-flow usages, and leaves anonymous elements (`part : Engine;`,
   `connect a.p to b.p;`) without a name.
+- Update `sysml-v2-lsp` to 0.34.0, which reports only an element's own multiplicity (a definition
+  or connection no longer takes the multiplicity of a nested element or end, and a unit such as
+  `default 0 [kg]` is not a multiplicity) and keeps names that match unreserved keywords (`step`,
+  `function`, ...).
 
 ### Fixed
 
