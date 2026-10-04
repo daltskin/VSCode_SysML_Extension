@@ -73,19 +73,19 @@ Click an image to open it at full resolution.
 
 <table>
 <tr>
-<td align="center"><a href="assets/model_explorer.png"><strong>Model Explorer</strong></a><br><a href="assets/model_explorer.png"><img src="assets/model_explorer.png" width="400" alt="Camera package expanded in Model Explorer beside its SysML source"></a></td>
-<td align="center"><a href="assets/feature_explorer.png"><strong>Feature Explorer</strong></a><br><a href="assets/feature_explorer.png"><img src="assets/feature_explorer.png" width="400" alt="Resolved CameraSystem parts in Feature Explorer"></a></td>
+<td align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/model_explorer.png"><strong>Model Explorer</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/model_explorer.png"><img src="assets/model_explorer.png" width="400" alt="Camera package expanded in Model Explorer beside its SysML source"></a></td>
+<td align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/feature_explorer.png"><strong>Feature Explorer</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/feature_explorer.png"><img src="assets/feature_explorer.png" width="400" alt="Resolved CameraSystem parts in Feature Explorer"></a></td>
 </tr>
 <tr>
-<td align="center"><a href="assets/feature_inspector.png"><strong>Feature Inspector</strong></a><br><a href="assets/feature_inspector.png"><img src="assets/feature_inspector.png" width="400" alt="CameraSystem resolved feature table in Feature Inspector"></a></td>
-<td align="center"><a href="assets/model_dashboard.png"><strong>Model Dashboard</strong></a><br><a href="assets/model_dashboard.png"><img src="assets/model_dashboard.png" width="400" alt="Torch model statistics, type coverage, and complexity in Model Dashboard"></a></td>
+<td align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/feature_inspector.png"><strong>Feature Inspector</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/feature_inspector.png"><img src="assets/feature_inspector.png" width="400" alt="CameraSystem resolved feature table in Feature Inspector"></a></td>
+<td align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/model_dashboard.png"><strong>Model Dashboard</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/model_dashboard.png"><img src="assets/model_dashboard.png" width="400" alt="Torch model statistics, type coverage, and complexity in Model Dashboard"></a></td>
 </tr>
 <tr>
-<td align="center"><a href="assets/model_workbench.png"><strong>Requirements Workbench</strong></a><br><a href="assets/model_workbench.png"><img src="assets/model_workbench.png" width="400" alt="Torch requirements with editable documentation and deletion actions"></a></td>
-<td align="center"><a href="assets/workbench_elements.png"><strong>Element Editing</strong></a><br><a href="assets/workbench_elements.png"><img src="assets/workbench_elements.png" width="400" alt="Torch element table with identifiers, types, multiplicity, and documentation"></a></td>
+<td align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/model_workbench.png"><strong>Requirements Workbench</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/model_workbench.png"><img src="assets/model_workbench.png" width="400" alt="Torch requirements with editable documentation and deletion actions"></a></td>
+<td align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/workbench_elements.png"><strong>Element Editing</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/workbench_elements.png"><img src="assets/workbench_elements.png" width="400" alt="Torch element table with identifiers, types, multiplicity, and documentation"></a></td>
 </tr>
 <tr>
-<td colspan="2" align="center"><a href="assets/traceability_matrix.png"><strong>Traceability Matrix</strong></a><br><a href="assets/traceability_matrix.png"><img src="assets/traceability_matrix.png" width="800" alt="Satisfaction matrix showing uncovered requirements"></a></td>
+<td colspan="2" align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/traceability_matrix.png"><strong>Traceability Matrix</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/traceability_matrix.png"><img src="assets/traceability_matrix.png" width="800" alt="Satisfaction matrix showing uncovered requirements"></a></td>
 </tr>
 </table>
 
@@ -93,24 +93,24 @@ Click an image to open it at full resolution.
 
 <table>
 <tr>
-<td align="center"><strong>General</strong><br><a href="assets/general_view.png"><img src="assets/general_view.png" width="400" alt="Camera General diagram in VS Code Dark Modern"></a></td>
-<td align="center"><strong>Interconnection</strong><br><a href="assets/interconnection_view.png"><img src="assets/interconnection_view.png" width="400" alt="Smart-home parts, ports, and connections"></a></td>
+<td align="center"><strong>General</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/general_view.png"><img src="assets/general_view.png" width="400" alt="Camera General diagram in VS Code Dark Modern"></a></td>
+<td align="center"><strong>Interconnection</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/interconnection_view.png"><img src="assets/interconnection_view.png" width="400" alt="Smart-home parts, ports, and connections"></a></td>
 </tr>
 <tr>
-<td align="center"><strong>Action Flow</strong><br><a href="assets/action_flow_view.png"><img src="assets/action_flow_view.png" width="400" alt="Smart-home automatic lighting action flow"></a></td>
-<td align="center"><strong>State Transition</strong><br><a href="assets/state_view.png"><img src="assets/state_view.png" width="400" alt="Camera states and transition paths"></a></td>
+<td align="center"><strong>Action Flow</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/action_flow_view.png"><img src="assets/action_flow_view.png" width="400" alt="Smart-home automatic lighting action flow"></a></td>
+<td align="center"><strong>State Transition</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/state_view.png"><img src="assets/state_view.png" width="400" alt="Camera states and transition paths"></a></td>
 </tr>
 <tr>
-<td align="center"><strong>Sequence</strong><br><a href="assets/sequence_view.png"><img src="assets/sequence_view.png" width="400" alt="Camera interaction sequence with participants and messages"></a></td>
-<td align="center"><strong>Case</strong><br><a href="assets/case_view.png"><img src="assets/case_view.png" width="400" alt="Smart-home actors and use cases"></a></td>
+<td align="center"><strong>Sequence</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/sequence_view.png"><img src="assets/sequence_view.png" width="400" alt="Camera interaction sequence with participants and messages"></a></td>
+<td align="center"><strong>Case</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/case_view.png"><img src="assets/case_view.png" width="400" alt="Smart-home actors and use cases"></a></td>
 </tr>
 <tr>
-<td align="center"><strong>Package</strong><br><a href="assets/package_view.png"><img src="assets/package_view.png" width="400" alt="View Showcase package diagram"></a></td>
-<td align="center"><strong>Graph</strong><br><a href="assets/graph_view.png"><img src="assets/graph_view.png" width="400" alt="Smart-home model force-directed graph"></a></td>
+<td align="center"><strong>Package</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/package_view.png"><img src="assets/package_view.png" width="400" alt="View Showcase package diagram"></a></td>
+<td align="center"><strong>Graph</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/graph_view.png"><img src="assets/graph_view.png" width="400" alt="Smart-home model force-directed graph"></a></td>
 </tr>
 <tr>
-<td align="center"><strong>Tree</strong><br><a href="assets/tree_view.png"><img src="assets/tree_view.png" width="400" alt="Smart-home tree close-up showing LightingSystem, AutomaticLighting, and nested action steps"></a></td>
-<td align="center"><strong>Hierarchy</strong><br><a href="assets/hierarchy_view.png"><img src="assets/hierarchy_view.png" width="400" alt="Camera hierarchical block diagram"></a></td>
+<td align="center"><strong>Tree</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/tree_view.png"><img src="assets/tree_view.png" width="400" alt="Smart-home tree close-up showing LightingSystem, AutomaticLighting, and nested action steps"></a></td>
+<td align="center"><strong>Hierarchy</strong><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/hierarchy_view.png"><img src="assets/hierarchy_view.png" width="400" alt="Camera hierarchical block diagram"></a></td>
 </tr>
 </table>
 
