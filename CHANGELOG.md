@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.53.0]
+
 ### Changed
 
 - Includes `sysml-v2-lsp` to 0.33.0 changes, which identifies every declared element by a `symbolId`, reports
