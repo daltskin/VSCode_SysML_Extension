@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Use absolute URLs for README screenshot click-through links so they no longer break on the
+  VS Code Marketplace, which only rewrites relative image sources.
+
 ## [0.52.0]
 
 ### Fixed
