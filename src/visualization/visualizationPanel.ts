@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { LspModelProvider, toVscodeRange } from '../providers/lspModelProvider';
+import { displayNameOf, displayNamesById, elementKey, isAnonymousElement, relationshipSource } from '../providers/modelNames';
 import type { SysMLElementDTO } from '../providers/sysmlModelTypes';
 import { telemetry } from '../telemetry';
 import type { SysMLElement } from '../types/sysmlTypes';
@@ -575,7 +576,11 @@ export class VisualizationPanel {
      * or from a `typing` relationship — matching the ANTLR parser's
      * `(element as any).typing` property that the webview views rely on.
      */
-    private convertDTOElementsToJSON(elements: SysMLElementDTO[], parentName?: string): unknown[] {
+    private convertDTOElementsToJSON(
+        elements: SysMLElementDTO[],
+        parentName?: string,
+        displayNames: ReadonlyMap<string, string> = displayNamesById(elements),
+    ): unknown[] {
         // Filter out self-referencing package children: the LSP server
         // sometimes includes the root package as its own child.
         const filtered = parentName
@@ -585,6 +590,7 @@ export class VisualizationPanel {
         return filtered.map(el => {
             const attrs = el.attributes ?? {};
             const rels = el.relationships ?? [];
+            const name = displayNameOf(el);
 
             // Resolve typing the same way the ANTLR parser does:
             //   1. partType / portType attribute (set by the LSP server)
@@ -599,17 +605,19 @@ export class VisualizationPanel {
             const typing: string | undefined = typingTargets[0] ?? undefined;
 
             return {
-                name: el.name,
+                name,
                 type: el.type,
-                id: el.name,
+                // Anonymous siblings can share a display name (`: Engine`); their symbolId is unique.
+                id: el.symbolId && isAnonymousElement(el) ? el.symbolId : name,
+                symbolId: el.symbolId,
                 attributes: attrs,
                 properties: {},
                 typing,
                 typings: typingTargets,
-                children: this.convertDTOElementsToJSON(el.children ?? [], el.name),
+                children: this.convertDTOElementsToJSON(el.children ?? [], el.name, displayNames),
                 relationships: rels.map(r => ({
                     type: r.type,
-                    source: r.source,
+                    source: relationshipSource(r, displayNames),
                     target: r.target,
                 })),
             };
@@ -628,12 +636,12 @@ export class VisualizationPanel {
             const key = `${el.type}::${el.name}`;
             if (el.type === 'package' && mergedMap.has(key)) {
                 const existing = mergedMap.get(key) ?? el;
-                // Merge children (de-duplicate by name+type)
+                // Merge children (de-duplicate by name+type; anonymous children by symbolId)
                 const childKeys = new Set(
-                    (existing.children ?? []).map(c => `${c.type}::${c.name}`)
+                    (existing.children ?? []).map(elementKey)
                 );
                 for (const child of el.children ?? []) {
-                    const ck = `${child.type}::${child.name}`;
+                    const ck = elementKey(child);
                     if (!childKeys.has(ck)) {
                         existing.children = existing.children ?? [];
                         existing.children.push(child);

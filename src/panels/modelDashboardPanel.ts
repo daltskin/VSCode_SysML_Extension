@@ -25,7 +25,7 @@ interface ComplexityData {
     unusedDefinitions: number;
     documentationCoverage: number;
     avgChildrenPerDef?: number;
-    hotspots?: { qualifiedName: string; kind: string; childCount: number; depth: number; typeRefs: number; hasDoc: boolean; score: number }[];
+    hotspots?: { qualifiedName: string | null; kind: string; childCount: number; depth: number; typeRefs: number; hasDoc: boolean; score: number }[];
 }
 
 interface DashboardData {
@@ -1156,10 +1156,11 @@ ${hotspots.length > 0 ? `
             ${hotspots.map((h, i) => {
                 const scoreColor = h.score <= 20 ? 'var(--success)'
                     : h.score <= 50 ? 'var(--warning)' : 'var(--error)';
+                const hotspotName = h.qualifiedName ?? `(anonymous ${h.kind})`;
                 return `
             <tr>
                 <td class="hotspot-rank">${i + 1}</td>
-                <td class="hotspot-name" title="${this._esc(h.qualifiedName)}">${this._esc(h.qualifiedName)}</td>
+                <td class="hotspot-name" title="${this._esc(hotspotName)}">${this._esc(hotspotName)}</td>
                 <td style="color: var(--subtle);">${this._esc(h.kind)}</td>
                 <td style="text-align: center;">${h.childCount}</td>
                 <td style="text-align: center;">${h.typeRefs}</td>

@@ -12,6 +12,8 @@ import * as vscode from 'vscode';
 export interface SysMLElement {
     type: string;
     name: string;
+    /** Unique identifier from sysml-v2-lsp 0.33+, used to tell anonymous elements apart. */
+    symbolId?: string;
     range: vscode.Range;
     children: SysMLElement[];
     attributes: Map<string, string | number | boolean>;

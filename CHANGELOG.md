@@ -2,8 +2,19 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update `sysml-v2-lsp` to 0.33.0, which identifies every declared element by a `symbolId`, reports
+  flow and succession-flow usages, and leaves anonymous elements (`part : Engine;`,
+  `connect a.p to b.p;`) without a name.
+
 ### Fixed
 
+- Show anonymous elements by their `displayName` in the Model Explorer and diagrams (e.g.
+  `: Engine[2]`, `vacant→occupied`) instead of blank labels, without repeating the type already
+  in that name, and keep anonymous siblings distinct by `symbolId` when merging packages and
+  laying out diagram nodes. Relationships declared by an anonymous element keep a visible source.
+- Show anonymous complexity hotspots on the Model Dashboard instead of an empty name.
 - Use absolute URLs for README screenshot click-through links so they no longer break on the
   VS Code Marketplace, which only rewrites relative image sources.
 
