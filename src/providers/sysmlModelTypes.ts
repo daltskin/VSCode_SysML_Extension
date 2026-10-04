@@ -69,7 +69,9 @@ export interface SysMLModelResult {
             unusedDefinitions: number;
             documentationCoverage: number;
             hotspots: {
-                qualifiedName: string;
+                /** null for an element without a qualified name (sysml-v2-lsp 0.33+). */
+                qualifiedName: string | null;
+                symbolId?: string;
                 kind: string;
                 childCount: number;
                 depth: number;
@@ -97,7 +99,12 @@ export interface RangeDTO {
 
 export interface SysMLElementDTO {
     type: string;
+    /** Empty for an anonymous element (sysml-v2-lsp 0.33+); show `displayName` instead. */
     name: string;
+    /** Text to show: the name, or for an anonymous element e.g. `: Engine[2]` or `a.p→b.p` (sysml-v2-lsp 0.33+). */
+    displayName?: string;
+    /** Unique, reload-stable identifier (sysml-v2-lsp 0.33+); changes on rename. */
+    symbolId?: string;
     range: RangeDTO;
     children: SysMLElementDTO[];
     attributes: Record<string, string | number | boolean>;
@@ -111,7 +118,12 @@ export interface SysMLElementDTO {
 
 export interface RelationshipDTO {
     type: string;
-    source: string;
+    /** Empty for an anonymous source, or absent for shorthand satisfy/verify (sysml-v2-lsp 0.33+); see `sourceId`. */
+    source?: string;
+    /** `symbolId` of the source element when it declares the relationship (sysml-v2-lsp 0.33+). */
+    sourceId?: string;
+    /** `symbolId` of the element that is the relationship itself, e.g. a connection (sysml-v2-lsp 0.33+). */
+    symbolId?: string;
     target: string;
     name?: string;
 }

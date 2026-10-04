@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { BaseLanguageClient } from 'vscode-languageclient';
 import { telemetry } from '../telemetry';
+import { displayNameOf } from './modelNames';
 import {
     PositionDTO,
     RangeDTO,
@@ -206,7 +207,8 @@ export class LspModelProvider {
 
     private _findRecursive(name: string, elements: SysMLElementDTO[]): SysMLElementDTO | undefined {
         for (const el of elements) {
-            if (el.name === name) return el;
+            // Views show anonymous elements by display name, so navigation requests use it too.
+            if (el.name === name || (!el.name && displayNameOf(el) === name)) return el;
             if (el.children?.length) {
                 const found = this._findRecursive(name, el.children);
                 if (found) return found;

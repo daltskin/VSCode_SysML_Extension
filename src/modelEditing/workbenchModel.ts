@@ -136,7 +136,7 @@ export function buildSnapshot(documents: ModelDocument[]): ModelSnapshot {
                 const local = rows.filter(row => row.uri === document.uri && row.name === reference);
                 return local.length === 1 ? local[0] : undefined;
             };
-            const source = resolveSummary(relationship.source);
+            const source = resolveSummary(relationship.source ?? '');
             const target = resolveSummary(relationship.target);
             if (!relationship.source && links.some(link => link.uri === document.uri
                 && link.kind === relationship.type && (target ? link.targetId === target.id

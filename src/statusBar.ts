@@ -30,7 +30,7 @@ export interface ModelStats {
         couplingCount: number;
         unusedDefinitions: number;
         documentationCoverage: number;
-        hotspots: { qualifiedName: string; kind: string; childCount: number; depth: number; typeRefs: number; hasDoc: boolean; score: number }[];
+        hotspots: { qualifiedName: string | null; kind: string; childCount: number; depth: number; typeRefs: number; hasDoc: boolean; score: number }[];
     };
 }
 

@@ -1,34 +1,43 @@
 import * as vscode from 'vscode';
 import { LspModelProvider, toVscodeRange } from '../providers/lspModelProvider';
-import type { SysMLElementDTO } from '../providers/sysmlModelTypes';
+import { displayNameOf, displayNamesById, elementKey, isAnonymousElement, relationshipSource } from '../providers/modelNames';
+import type { SysMLElementDTO, SysMLModelResult } from '../providers/sysmlModelTypes';
 import type { Relationship, SysMLElement } from '../types/sysmlTypes';
 
+type ModelStats = NonNullable<SysMLModelResult['stats']>;
+
 /**
- * Convert an `SysMLElementDTO` (plain objects, Record attributes) into a
- * `SysMLElement` (vscode.Range, Map attributes) so the tree-item code
- * can work identically regardless of source.
+ * Convert `SysMLElementDTO`s (plain objects, Record attributes) into
+ * `SysMLElement`s (vscode.Range, Map attributes) so the tree-item code
+ * can work identically regardless of source. Anonymous elements take their
+ * `displayName` as their name.
  */
-function dtoToSysMLElement(dto: SysMLElementDTO): SysMLElement {
-    const attrs = new Map<string, string | number | boolean>();
-    if (dto.attributes) {
-        for (const [k, v] of Object.entries(dto.attributes)) {
-            attrs.set(k, v);
+export function dtosToSysMLElements(dtos: readonly SysMLElementDTO[]): SysMLElement[] {
+    const displayNames = displayNamesById(dtos);
+    const convert = (dto: SysMLElementDTO): SysMLElement => {
+        const attrs = new Map<string, string | number | boolean>();
+        if (dto.attributes) {
+            for (const [k, v] of Object.entries(dto.attributes)) {
+                attrs.set(k, v);
+            }
         }
-    }
-    return {
-        type: dto.type,
-        name: dto.name,
-        range: toVscodeRange(dto.range),
-        children: (dto.children ?? []).map(dtoToSysMLElement),
-        attributes: attrs,
-        relationships: (dto.relationships ?? []).map(r => ({
-            type: r.type,
-            source: r.source,
-            target: r.target,
-            name: r.name,
-        })),
-        errors: dto.errors,
+        return {
+            type: dto.type,
+            name: displayNameOf(dto),
+            symbolId: dto.symbolId,
+            range: toVscodeRange(dto.range),
+            children: (dto.children ?? []).map(convert),
+            attributes: attrs,
+            relationships: (dto.relationships ?? []).map(r => ({
+                type: r.type,
+                source: relationshipSource(r, displayNames),
+                target: r.target,
+                name: r.name,
+            })),
+            errors: dto.errors,
+        };
     };
+    return dtos.map(convert);
 }
 
 export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -58,7 +67,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
     private _workspaceViewMode: 'byFile' | 'bySemantic' = 'bySemantic';
 
     /** Stats from the most recent LSP `sysml/model` response. */
-    private _lastStats: { totalElements: number; resolvedElements: number; unresolvedElements: number; parseTimeMs: number; lexTimeMs?: number; parseOnlyTimeMs?: number; modelBuildTimeMs: number; complexity?: { complexityIndex: number; rating: string; definitions: number; usages: number; maxDepth: number; avgChildrenPerDef: number; couplingCount: number; unusedDefinitions: number; documentationCoverage: number; hotspots: { qualifiedName: string; kind: string; childCount: number; depth: number; typeRefs: number; hasDoc: boolean; score: number }[] } } | undefined;
+    private _lastStats: ModelStats | undefined;
 
     constructor(private _lspModelProvider: LspModelProvider) {}
 
@@ -128,7 +137,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     /** Return stats from the most recent LSP model response, if available. */
-    getLastStats(): { totalElements: number; resolvedElements: number; unresolvedElements: number; parseTimeMs: number; lexTimeMs?: number; parseOnlyTimeMs?: number; modelBuildTimeMs: number; complexity?: { complexityIndex: number; rating: string; definitions: number; usages: number; maxDepth: number; avgChildrenPerDef: number; couplingCount: number; unusedDefinitions: number; documentationCoverage: number; hotspots: { qualifiedName: string; kind: string; childCount: number; depth: number; typeRefs: number; hasDoc: boolean; score: number }[] } } | undefined {
+    getLastStats(): ModelStats | undefined {
         return this._lastStats;
     }
 
@@ -195,7 +204,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
                     if (result.elements?.length) {
                         this.workspaceFileData.set(uri.toString(), {
                             uri,
-                            elements: (result.elements ?? []).map(dtoToSysMLElement),
+                            elements: dtosToSysMLElements(result.elements ?? []),
                         });
                     }
                     if (result.stats) {
@@ -300,7 +309,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
             }
 
             // Convert DTOs → SysMLElement so tree items work unchanged
-            this.rootElements = (result.elements ?? []).map(dtoToSysMLElement);
+            this.rootElements = dtosToSysMLElements(result.elements ?? []);
 
             try {
                 const { getOutputChannel } = require('../extension');
@@ -487,11 +496,11 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
         for (const [uriStr, data] of this.workspaceFileData) {
             const matching: vscode.TreeItem[] = [];
             for (const el of data.elements) {
-                const key = `${el.type}::${el.name}`;
+                const key = elementKey(el);
                 const match = rootItems.find(item => {
                     const mti = item as ModelTreeItem;
                     if (mti.itemType !== 'sysml-element') return false;
-                    return `${mti.element.type}::${mti.element.name}` === key;
+                    return elementKey(mti.element) === key;
                 });
                 if (match && !matching.includes(match)) {
                     matching.push(match);
@@ -540,10 +549,10 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
      * (de-duplicated by name+type), attributes and relationships are unioned.
      */
     private static mergeTwo(a: SysMLElement, b: SysMLElement): SysMLElement {
-        // Merge children — avoid duplicates by name+type
-        const childKeys = new Set(a.children.map(c => `${c.type}::${c.name}`));
+        // Merge children — avoid duplicates by name+type (anonymous children by symbolId)
+        const childKeys = new Set(a.children.map(elementKey));
         for (const child of b.children) {
-            const ck = `${child.type}::${child.name}`;
+            const ck = elementKey(child);
             if (!childKeys.has(ck)) {
                 a.children.push(child);
                 childKeys.add(ck);
@@ -575,6 +584,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
         return {
             type: el.type,
             name: el.name,
+            symbolId: el.symbolId,
             range: el.range,
             children: [...el.children],
             attributes: new Map(el.attributes),
@@ -679,12 +689,6 @@ export class ModelTreeItem extends vscode.TreeItem {
 
         this.elementUri = uri;
 
-        // Debug: trace unnamed elements
-        if (element.name === 'unnamed' && element.type === 'connection') {
-            // eslint-disable-next-line no-console
-            console.log(`[TreeView] Connection at line ${element.range?.start?.line} showing as unnamed`);
-        }
-
         // ── Extract attributes for inline decorations ──
         const partType = element.attributes.get('partType') as string | undefined;
         const portType = element.attributes.get('portType') as string | undefined;
@@ -697,12 +701,15 @@ export class ModelTreeItem extends vscode.TreeItem {
         const errorCount = element.errors?.length ?? 0;
 
         // ── Build enriched label: "name : Type [mult]" ──
+        // An anonymous element's display name already includes its type (`: Engine[2]`).
         let labelText = element.name;
-        if (typeName) {
-            labelText += ` : ${typeName}`;
-        }
-        if (multiplicity) {
-            labelText += ` [${multiplicity}]`;
+        if (!isAnonymousElement(element)) {
+            if (typeName) {
+                labelText += ` : ${typeName}`;
+            }
+            if (multiplicity) {
+                labelText += ` [${multiplicity}]`;
+            }
         }
         this.label = labelText;
 
