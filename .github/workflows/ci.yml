@@ -58,6 +58,7 @@ jobs:
 
   web-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [lint, unit-tests]
     steps:
       - uses: actions/checkout@v7
@@ -67,6 +68,9 @@ jobs:
 
       - name: Build web bundle
         run: npm run build:web
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
 
       - name: Web Integration Tests (Browser Host)
         run: xvfb-run -a npm run test:web
