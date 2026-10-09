@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Resolve ref
         id: ref
@@ -52,7 +52,7 @@ jobs:
         run: xvfb-run -a npm test
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [test]
 
     steps:
