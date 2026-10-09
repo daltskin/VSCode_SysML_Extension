@@ -40,6 +40,8 @@
   discovery available independently; release completed, superseded, and disposed
   force simulations.
 
+## [0.54.0]
+
 ## [0.53.0]
 
 ### Changed
