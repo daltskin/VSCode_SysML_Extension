@@ -1,31 +1,33 @@
-# Camera Model
+# Markdown Examples
+
+Yes, this *is* **markdown** with `sysml-v2` diagram support.  Examples below:
 
 ## Sequence
 
 ```sysmlv2-view
 model: Camera Example/camera-sequence.sysml
-diagram: sequence
+view: SequenceView
 ```
 
 ## Action Flow
 
 ```sysmlv2-view
 model: Camera Example/camera-activity.sysml
-diagram: activity
+view: ActionFlowView
 ```
 
 ## State Transitions
 
 ```sysmlv2-view
 model: Camera Example/camera-states.sysml
-diagram: state
+view: StateTransitionView
 ```
 
 ## Interconnections
 
 ```sysmlv2-view
 model: Camera Example/camera-ibd.sysml
-diagram: interconnection
+view: InterconnectionView
 ```
 
 ## Scoped Table
@@ -40,5 +42,18 @@ view: Parts Table
 ```sysmlv2-view
 model: view-showcase.sysml
 view: General Overview
-diagram: general
+```
+
+## Graph View
+
+```sysmlv2-view
+model: smart-home.sysml
+view: graph
+```
+
+## Case View
+
+```sysmlv2-view
+model: smart-home.sysml
+view: usecase
 ```

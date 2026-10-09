@@ -4,10 +4,14 @@ import { isMap, isScalar, parseDocument } from 'yaml';
 export interface DiagramFence {
     readonly model: string;
     readonly view?: string;
-    readonly diagram?: string;
 }
 
-export const DIAGRAM_TYPES: Readonly<Record<string, string>> = {
+/** Supported standard view definitions, Visualizer views, and renderer aliases. */
+export const VIEW_TYPES: Readonly<Record<string, string>> = {
+    GeneralView: 'elk', InterconnectionView: 'ibd', ActionFlowView: 'activity',
+    StateTransitionView: 'state', SequenceView: 'sequence', BrowserView: 'tree',
+    GridView: 'table',
+    CaseView: 'usecase', PackageView: 'package',
     general: 'elk', elk: 'elk', interconnection: 'ibd', ibd: 'ibd',
     sequence: 'sequence', activity: 'activity', state: 'state',
     usecase: 'usecase', case: 'usecase', tree: 'tree', browser: 'tree',
@@ -20,10 +24,10 @@ export function parseFence(source: string): DiagramFence {
     if (source.length > 4096) throw new Error('SysML fence exceeds 4 KB.');
     const document = parseDocument(source, { uniqueKeys: true, schema: 'failsafe' });
     if (document.errors.length) throw new Error(document.errors[0].message);
-    if (!isMap(document.contents)) throw new Error('Expected model, view, and diagram fields.');
+    if (!isMap(document.contents)) throw new Error('Expected model and view fields.');
     const fields: Record<string, string> = {};
     for (const item of document.contents.items) {
-        if (!isScalar(item.key) || !['model', 'view', 'diagram'].includes(String(item.key.value))) {
+        if (!isScalar(item.key) || !['model', 'view'].includes(String(item.key.value))) {
             throw new Error('Unknown SysML fence field.');
         }
         if (!isScalar(item.value) || typeof item.value.value !== 'string'
@@ -33,10 +37,7 @@ export function parseFence(source: string): DiagramFence {
         fields[String(item.key.value)] = item.value.value.trim();
     }
     if (!fields.model) throw new Error('A model path is required.');
-    if (fields.diagram && !Object.hasOwn(DIAGRAM_TYPES, fields.diagram)) {
-        throw new Error(`Unknown diagram type: ${fields.diagram}`);
-    }
-    return { model: fields.model, view: fields.view, diagram: fields.diagram };
+    return { model: fields.model, view: fields.view };
 }
 
 /** Resolve relative model paths without allowing URI or workspace boundary escapes. */

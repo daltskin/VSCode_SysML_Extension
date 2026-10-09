@@ -5,7 +5,8 @@
 ### Added
 
 - Render referenced SysML/KerML models in built-in Markdown preview with `sysmlv2-view`
-  YAML fences, named view scoping, all Visualizer diagram types, and read-only pan/zoom.
+  YAML fences, named view scoping, standard SysML view names and Visualizer renderer views
+  such as `graph`, and read-only pan/zoom.
 - Share the Visualizer's snapshot conversion, shell, and renderers with Markdown preview;
   lazy-load local assets, deduplicate model loads, and batch refreshes after model changes.
 - Export Markdown fences to adjacent SVG images and a portable Markdown copy using

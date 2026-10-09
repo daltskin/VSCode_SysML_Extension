@@ -148,19 +148,22 @@ to the saved Markdown document and must stay inside a workspace folder.
 ````markdown
 ```sysmlv2-view
 model: ../samples/Camera Example/camera-sequence.sysml
-diagram: sequence
+view: SequenceView
 ```
 ````
 
-`model` is required. Optional `view` selects a named SysML view usage, including its expose
-targets and filters; qualify ambiguous names with `Package::View`. Optional `diagram`
-overrides the view's rendering directive and definition type. With neither, the General
-View is used.
+`model` is required. `view` is optional and is either the name of a view usage in the model,
+including its expose targets and filters (qualify ambiguous names with `Package::View`), or a
+standard view definition from the SysML v2 specification: `GeneralView`, `InterconnectionView`,
+`ActionFlowView`, `StateTransitionView`, `SequenceView`, `BrowserView`, and `GridView`. A model
+view takes precedence over a type name. The Visualizer's extra diagrams are also available:
+`CaseView`, `PackageView`, `graph`, `hierarchy`, and `textual`, along with renderer aliases such
+as `usecase`, `tree`, and `table`. `GeometryView` is not currently supported by the renderer.
+Without `view`, the General View is used.
 
-Supported diagrams: `general`, `interconnection`, `sequence`, `activity`, `state`, `usecase`,
-`tree`, `graph`, `hierarchy`, `package`, `table`, and `textual`. Diagrams share the Visualizer's
-renderers, update when referenced models change, and allow pan/zoom without model editing.
-Unknown/duplicate fields and missing models/views appear as inline errors.
+Diagrams share the Visualizer's renderers, update when referenced models change, and allow
+pan/zoom without model editing. Unknown/duplicate fields and missing models/views appear as
+inline errors.
 
 Preview limits are 2 MB per model/payload, 1,000 elements, and 64 nesting levels. Larger
 models show a link to open the Model Visualizer.
@@ -170,7 +173,7 @@ editor. Choose an output Markdown file; the command saves adjacent SVGs and repl
 with image references in the copy, leaving the original document and models unchanged.
 List and blockquote containers are preserved.
 
-Try [the sample document](samples/markdown-diagrams.md). Developers can run
+Try [the sample document](samples/markdown-views.md). Developers can run
 `npm run preview:markdown` for a local browser harness backed by the real language server.
 
 ### Commands (Ctrl+Shift+P)

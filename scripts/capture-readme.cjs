@@ -231,7 +231,7 @@ async function main() {
             return;
         }
         if (only === 'markdown_preview') {
-            const markdown = 'markdown-diagrams.md';
+            const markdown = 'markdown-views.md';
             await open(markdown);
             await command('workbench.action.closeSidebar');
             await command('markdown.showPreviewToSide');

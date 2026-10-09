@@ -297,9 +297,9 @@ suite('Markdown diagram fences', () => {
         namespace.children[0].attributes.partType = 'Custom';
         assert.throws(() => selectView([namespace], { model: 'a.sysml', view: 'Pkg::chosen' }), /Cyclic/);
     });
-    test('accepts quoted paths, comments, and supported diagram types', () => {
-        assert.deepStrictEqual(parseFence('model: "../Camera Example/Camera.sysml"\nview: takePicture\ndiagram: sequence # diagram'), {
-            model: '../Camera Example/Camera.sysml', view: 'takePicture', diagram: 'sequence',
+    test('accepts quoted paths and comments', () => {
+        assert.deepStrictEqual(parseFence('model: "../Camera Example/Camera.sysml"\nview: SequenceView # view'), {
+            model: '../Camera Example/Camera.sysml', view: 'SequenceView',
         });
     });
 
@@ -307,8 +307,7 @@ suite('Markdown diagram fences', () => {
         for (const source of [
             '', 'view: demo', 'model: a.sysml\nextra: true',
             'model: a.sysml\nmodel: b.sysml', 'model: [a.sysml]',
-            'model: *alias', 'model: !!str a.sysml', 'model: a.sysml\ndiagram: invalid',
-            'model: a.sysml\ndiagram: __proto__',
+            'model: *alias', 'model: !!str a.sysml', 'model: a.sysml\ndiagram: sequence',
         ]) assert.throws(() => parseFence(source), source);
     });
 
@@ -334,12 +333,20 @@ suite('Markdown diagram fences', () => {
         } finally { vscode.Uri.joinPath = original; }
     });
 
-    test('diagram precedence is explicit, rendering, definition type, general', () => {
+    test('view resolves a model view usage, else a standard or extension view type', () => {
         const view = element('diagram', 'view', {
             partType: 'StandardViewDefinitions::SequenceView', viewRendering: 'Views::asElementTable',
             exposeTargets: 'System, System::*', viewFilters: '@PartUsage',
         });
-        assert.strictEqual(selectView([view], { model: 'a.sysml', view: 'diagram', diagram: 'activity' }).currentView, 'activity');
+        assert.strictEqual(selectView([], { model: 'a.sysml', view: 'ActionFlowView' }).currentView, 'activity');
+        assert.strictEqual(selectView([], { model: 'a.sysml', view: 'SequenceView' }).currentView, 'sequence');
+        assert.strictEqual(selectView([], { model: 'a.sysml', view: 'GridView' }).currentView, 'table');
+        assert.strictEqual(selectView([], { model: 'a.sysml', view: 'graph' }).currentView, 'graph');
+        assert.strictEqual(selectView([], { model: 'a.sysml', view: 'hierarchy' }).currentView, 'hierarchy');
+        assert.strictEqual(selectView([], { model: 'a.sysml', view: 'sequence' }).currentView, 'sequence');
+        assert.throws(() => selectView([], { model: 'a.sysml', view: 'GeometryView' }), /not supported/);
+        assert.strictEqual(selectView([view], { model: 'a.sysml', view: 'SequenceView' }).selectedViewScope, undefined);
+        assert.throws(() => selectView([], { model: 'a.sysml', view: 'NotAView' }), /View not found/);
         assert.strictEqual(selectView([view], { model: 'a.sysml', view: 'diagram' }).currentView, 'table');
         delete view.attributes.viewRendering;
         assert.strictEqual(selectView([view], { model: 'a.sysml', view: 'diagram' }).currentView, 'sequence');
@@ -495,7 +502,7 @@ suite('Native Markdown preview integration', () => {
         const folder = vscode.workspace.workspaceFolders?.[0];
         assert.ok(folder, 'Integration test requires the repository workspace.');
         const uri = vscode.Uri.joinPath(folder.uri, '.markdown-preview-integration.md');
-        const content = '```sysmlv2-view\nmodel: Camera Example/camera-sequence.sysml\ndiagram: sequence\n```\n'
+        const content = '```sysmlv2-view\nmodel: Camera Example/camera-sequence.sysml\nview: SequenceView\n```\n'
             + '\n```sysmlv2-view\nmodel: Camera Example/camera-sequence.sysml\nview: missing-view\n```\n';
         try {
             await vscode.workspace.fs.writeFile(uri, new globalThis.TextEncoder().encode(content));

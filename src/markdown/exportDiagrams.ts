@@ -80,7 +80,7 @@ export function registerMarkdownExport(
                 }
                 payloads.push({
                     ...modelSnapshot(model), ...selectView(model.elements ?? [], fence),
-                    explicitDiagram: !!fence.diagram, readOnly: true, exportOnRender: true,
+                    readOnly: true, exportOnRender: true,
                     exportRequestId: payloads.length + 1,
                 });
             }

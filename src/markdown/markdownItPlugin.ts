@@ -49,10 +49,10 @@ export function installMarkdownPlugin(
             };
             visit(entry.value.elements ?? []);
             const payload = JSON.stringify({
-                ...modelSnapshot(entry.value), ...selected, explicitDiagram: !!fence.diagram,
+                ...modelSnapshot(entry.value), ...selected,
             });
             if (payload.length > MAX_MODEL_BYTES) throw new Error('Diagram payload exceeds 2 MB.');
-            return `<div class="sysml-md" role="figure" aria-label="${escapeHtml(fence.view ?? fence.diagram ?? 'SysML diagram')}" data-payload="${escapeHtml(payload)}"></div>`;
+            return `<div class="sysml-md" role="figure" aria-label="${escapeHtml(fence.view ?? 'SysML diagram')}" data-payload="${escapeHtml(payload)}"></div>`;
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unable to render SysML diagram.';
             if (modelUri && /(?:preview .*limit|exceeds 2 MB|2 MB preview limit)/i.test(message)) {

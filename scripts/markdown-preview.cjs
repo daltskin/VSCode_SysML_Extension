@@ -15,6 +15,13 @@ const { diagramShell } = require('../out/visualization/core/diagramShell');
 const { modelSnapshot } = require('../out/visualization/core/modelSnapshot');
 const { selectView } = require('../out/visualization/core/viewScope');
 
+const FENCE_VIEWS = {
+    general: 'GeneralView', interconnection: 'InterconnectionView', sequence: 'SequenceView',
+    activity: 'ActionFlowView', state: 'StateTransitionView', usecase: 'CaseView',
+    tree: 'BrowserView', package: 'PackageView', table: 'GridView',
+};
+const fenceView = name => FENCE_VIEWS[name] || name;
+
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.PORT || 45189);
 const child = fork(require('sysml-v2-lsp').serverPath, ['--node-ipc'], { silent: true });
@@ -81,7 +88,7 @@ function visualizerHtml(mode, entry, sample, url) {
         html = diagramShell(resourceHost, URI.file(root));
     } else throw new Error('Renderer must be baseline or current.');
     payload = { ...payload, ...selectView(entry.value.elements ?? [], {
-        model: sample, diagram: url.searchParams.get('diagrams') || 'general',
+        model: sample, view: url.searchParams.get('view') || fenceView(url.searchParams.get('diagrams') || 'general'),
     }) };
     const nonce = /<script nonce="([^"]+)"/.exec(html)?.[1];
     if (!nonce) throw new Error('Renderer script nonce is missing.');
@@ -114,7 +121,7 @@ async function start() {
                 const diagrams = (url.searchParams.get('diagrams') || 'general,sequence,activity,state,interconnection').split(',');
                 const view = url.searchParams.get('view');
                 const fence = url.searchParams.has('empty') ? 'Ordinary Markdown.' : diagrams.map(diagram => '```sysmlv2-view\nmodel: ' + JSON.stringify('../samples/' + sample)
-                    + '\ndiagram: ' + diagram + (view ? '\nview: ' + view : '') + '\n```').join('\n\n');
+                    + '\nview: ' + (view || fenceView(diagram)) + '\n```').join('\n\n');
                 const environment = { currentDocument: URI.file(path.join(root, 'docs/demo.md')).toString() };
                 const uri = URI.file(path.join(root, 'samples', sample)).toString();
                 if (!URI.parse(uri).fsPath.startsWith(path.join(root, 'samples') + path.sep)) throw new Error('Invalid sample');

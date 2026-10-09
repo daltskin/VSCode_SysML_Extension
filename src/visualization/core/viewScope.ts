@@ -1,4 +1,4 @@
-import { DiagramFence, DIAGRAM_TYPES } from '../../markdown/fenceParser';
+import { DiagramFence, VIEW_TYPES } from '../../markdown/fenceParser';
 import { SysMLElementDTO } from '../../providers/sysmlModelTypes';
 
 export interface ViewScope {
@@ -9,21 +9,16 @@ export interface ViewScope {
     readonly viewType?: string;
 }
 
-const VIEW_TYPES: Readonly<Record<string, string>> = {
-    GeneralView: 'elk', InterconnectionView: 'ibd', ActionFlowView: 'activity',
-    StateTransitionView: 'state', SequenceView: 'sequence', BrowserView: 'tree',
-    CaseView: 'usecase', PackageView: 'package',
-};
 const RENDERINGS: Readonly<Record<string, string>> = {
     asTreeDiagram: 'tree', asInterconnectionDiagram: 'ibd',
     asTextualNotation: 'textual', asElementTable: 'table',
 };
 
-/** Select a named view and diagram; filtering is applied by the shared renderer. */
+/** Select a model view usage, else a standard/extension view type; filtering is applied by the shared renderer. */
 export function selectView(
     elements: readonly SysMLElementDTO[],
     fence: DiagramFence,
-): { currentView: string; selectedViewScope?: ViewScope } {
+): { currentView: string; explicitDiagram: boolean; selectedViewScope?: ViewScope } {
     const matches: { element: SysMLElementDTO; qualified: string }[] = [];
     const definitions = new Map<string, SysMLElementDTO>();
     const visit = (members: readonly SysMLElementDTO[], parent = ''): void => {
@@ -39,6 +34,12 @@ export function selectView(
         }
     };
     visit(elements);
+    if (fence.view === 'GeometryView' && !matches.length) {
+        throw new Error('GeometryView is not supported by the current renderer.');
+    }
+    if (fence.view && !matches.length && Object.hasOwn(VIEW_TYPES, fence.view)) {
+        return { currentView: VIEW_TYPES[fence.view], explicitDiagram: true };
+    }
     if (fence.view && matches.length !== 1) {
         throw new Error(matches.length ? `Ambiguous view: ${fence.view}. Use its qualified name.`
             : `View not found: ${fence.view}`);
@@ -81,8 +82,9 @@ export function selectView(
         .split(',').map(target => target.trim()).filter(Boolean);
     const rendering = String(attributes.viewRendering ?? '');
     return {
-        currentView: (fence.diagram ? DIAGRAM_TYPES[fence.diagram] : undefined)
-            ?? RENDERINGS[shortName(rendering)] ?? VIEW_TYPES[shortName(inherited.viewType)] ?? 'elk',
+        currentView: RENDERINGS[shortName(rendering)]
+            ?? VIEW_TYPES[shortName(inherited.viewType)] ?? 'elk',
+        explicitDiagram: false,
         selectedViewScope: element ? {
             name: element.name,
             exposeTargets: split(attributes.exposeTargets),
