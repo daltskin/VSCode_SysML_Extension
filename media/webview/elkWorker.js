@@ -12,11 +12,19 @@ function ensureElkInitialized(elkUri) {
   if (!elkUri) {
     throw new Error('ELK worker missing elkUri during initialization');
   }
-  importScripts(elkUri);
-  if (typeof ELK !== 'function') {
-    throw new Error('ELK library failed to load inside worker');
+  const messageHandler = self.onmessage;
+  const previousDocument = self.document;
+  self.document = {};
+  try {
+    importScripts(elkUri);
+    if (typeof ELK !== 'function') {
+      throw new Error('ELK library failed to load inside worker');
+    }
+    elkInstance = new ELK();
+  } finally {
+    self.document = previousDocument;
+    self.onmessage = messageHandler;
   }
-  elkInstance = new ELK();
   isInitialized = true;
 }
 

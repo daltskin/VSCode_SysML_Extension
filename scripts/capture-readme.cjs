@@ -61,10 +61,10 @@ async function main() {
             }
             throw new Error(`Webview did not load: ${selector}`);
         };
-        const capture = async (name, sample) => {
+        const capture = async (name, sample, idle = { x: page.viewportSize().width - 10, y: 10 }) => {
             await command('workbench.action.closePanel');
             await command('notifications.clearAll');
-            await page.mouse.move(page.viewportSize().width - 10, 10);
+            await page.mouse.move(idle.x, idle.y);
             await page.locator('.monaco-workbench.vs-dark').waitFor();
             await page.evaluate(() => { globalThis.captureHighlightClearSince = 0; });
             await page.waitForFunction(() => {
@@ -228,6 +228,17 @@ async function main() {
             await diagram.locator('#view-dropdown-btn').click();
             await diagram.locator('.view-dropdown-item[data-view="sequence"]').waitFor();
             await capture('visualiser', sample);
+            return;
+        }
+        if (only === 'markdown_preview') {
+            const markdown = 'markdown-diagrams.md';
+            await open(markdown);
+            await command('workbench.action.closeSidebar');
+            await command('markdown.showPreviewToSide');
+            const preview = await findFrame('.sequence-participant');
+            await preview.locator('.sequence-participant').first().waitFor();
+            await page.waitForTimeout(3000);
+            await capture('markdown_preview', markdown, { x: 800, y: 975 });
             return;
         }
         if (only && only !== 'tools') return;

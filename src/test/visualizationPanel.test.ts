@@ -188,7 +188,7 @@ suite('State Transition Extraction', () => {
 
     test('routes opposite transitions in separate lanes (issue #98)', () => {
         const source = require('fs').readFileSync(
-            path.resolve(__dirname, '../../src/visualization/visualizationPanel.ts'), 'utf8',
+            path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf8',
         ) as string;
         const edgeStart = source.indexOf('function calculateEdgePath(');
         const edgeEnd = source.indexOf('// Draw all transitions', edgeStart);

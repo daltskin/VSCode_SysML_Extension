@@ -163,11 +163,33 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
         this._onDidChangeTreeData.fire();
     }
 
+    private workspaceLoad?: {
+        key: string;
+        token?: vscode.CancellationToken;
+        promise: Promise<void>;
+    };
+
     /**
      * Load and display the aggregated model from all workspace SysML files.
      * Each file becomes a top-level node in the explorer.
      */
-    async loadWorkspaceModel(fileUris: vscode.Uri[], cancellationToken?: vscode.CancellationToken): Promise<void> {
+    loadWorkspaceModel(fileUris: vscode.Uri[], cancellationToken?: vscode.CancellationToken): Promise<void> {
+        const key = JSON.stringify(fileUris.map(uri => uri.toString()).sort());
+        if (this.workspaceLoad?.key === key && this.workspaceLoad.token === cancellationToken) {
+            return this.workspaceLoad.promise;
+        }
+        const load = {
+            key,
+            token: cancellationToken,
+            promise: this.performWorkspaceLoad(fileUris, cancellationToken).finally(() => {
+                if (this.workspaceLoad === load) this.workspaceLoad = undefined;
+            }),
+        };
+        this.workspaceLoad = load;
+        return load.promise;
+    }
+
+    private async performWorkspaceLoad(fileUris: vscode.Uri[], cancellationToken?: vscode.CancellationToken): Promise<void> {
         this.workspaceMode = true;
         this.workspaceFileUris = fileUris;
         this.currentDocument = undefined;

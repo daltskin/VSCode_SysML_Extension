@@ -555,6 +555,43 @@ suite('Parse Lifecycle — Activation patterns', () => {
         assert.strictEqual(items.length, 1, 'Should have elements from the second file');
     });
 
+    test('concurrent identical workspace loads share requests but later refreshes reload', async () => {
+        const lsp = createControllableLspProvider(makeElements(['A']));
+        const gate = lsp.useGate();
+        const provider = new ModelExplorerProvider(lsp);
+        const files = [vscode.Uri.parse('file:///ws/a.sysml'), vscode.Uri.parse('file:///ws/b.sysml')];
+        const first = provider.loadWorkspaceModel(files);
+        const second = provider.loadWorkspaceModel([...files].reverse());
+        const callsWhileLoading = lsp.callCount;
+        gate.open();
+        await Promise.all([first, second]);
+        assert.strictEqual(callsWhileLoading, 2, 'Overlapping scans should fetch each file once.');
+        assert.strictEqual(first, second, 'Identical scans should share their completion promise.');
+        await provider.loadWorkspaceModel(files);
+        assert.strictEqual(lsp.callCount, 4, 'A subsequent refresh must fetch fresh models.');
+    });
+
+    test('workspace loads with different cancellation tokens are not joined', async () => {
+        const lsp = createControllableLspProvider(makeElements(['A']));
+        const gate = lsp.useGate();
+        const provider = new ModelExplorerProvider(lsp);
+        const files = [vscode.Uri.parse('file:///ws/a.sysml')];
+        const firstCancellation = new vscode.CancellationTokenSource();
+        const secondCancellation = new vscode.CancellationTokenSource();
+        try {
+            const first = provider.loadWorkspaceModel(files, firstCancellation.token);
+            const second = provider.loadWorkspaceModel(files, secondCancellation.token);
+            firstCancellation.cancel();
+            gate.open();
+            await Promise.all([first, second]);
+            assert.notStrictEqual(first, second);
+            assert.strictEqual(lsp.callCount, 2, 'Independent cancellation must remain supported.');
+        } finally {
+            firstCancellation.dispose();
+            secondCancellation.dispose();
+        }
+    });
+
     test('C5: workspace mode load does not interleave with single-file load', async () => {
         const lsp = createControllableLspProvider(makeElements(['A']));
         const provider = new ModelExplorerProvider(lsp);

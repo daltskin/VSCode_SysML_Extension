@@ -1,0 +1,25 @@
+.sysml-md {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 480px;
+    min-width: 0;
+    margin: 16px 0;
+    overflow: hidden;
+    border: 1px solid var(--vscode-panel-border, #aaa);
+    border-radius: 4px;
+}
+.sysml-md-loading, .sysml-md-error {
+    box-sizing: border-box;
+    padding: 16px;
+    color: var(--vscode-descriptionForeground);
+}
+.sysml-md-error {
+    height: auto;
+    min-height: 64px;
+    color: var(--vscode-errorForeground);
+}
+@media (max-width: 480px) {
+    .sysml-md { height: 360px; }
+    .sysml-md-error { height: auto; }
+}

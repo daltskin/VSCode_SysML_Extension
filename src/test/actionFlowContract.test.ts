@@ -104,7 +104,7 @@ suite('Action Flow View Contract — control nodes (issue #62)', () => {
 suite('Action Flow View Contract — declared successions (issue #85)', () => {
     test('does not fabricate declaration-order edges when flows are absent', () => {
         const source = fs.readFileSync(
-            path.join(__dirname, '..', 'visualization', 'visualizationPanel.js'),
+            path.join(__dirname, '..', '..', 'media', 'diagram-runtime', 'runtime.js'),
             'utf8',
         );
 
