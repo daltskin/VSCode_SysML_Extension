@@ -15,10 +15,16 @@ async function main() {
         fs.mkdirSync(userDataDir, { recursive: true });
         fs.mkdirSync(extensionsDir, { recursive: true });
 
+        // Markdown preview integration needs a workspace folder containing the sample model.
+        const workspaceDir = path.join(testRoot, 'workspace');
+        fs.cpSync(path.join(extensionDevelopmentPath, 'samples', 'Camera Example'),
+            path.join(workspaceDir, 'Camera Example'), { recursive: true });
+
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
             launchArgs: [
+                workspaceDir,
                 '--user-data-dir', userDataDir,
                 '--extensions-dir', extensionsDir,
             ],

@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -34,7 +34,7 @@ jobs:
         run: npx eslint src/
 
   unit-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -45,7 +45,7 @@ jobs:
         run: npm run test:unit
 
   integration-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [lint, unit-tests]
     steps:
       - uses: actions/checkout@v7
@@ -57,7 +57,8 @@ jobs:
         run: xvfb-run -a npm test
 
   web-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     needs: [lint, unit-tests]
     steps:
       - uses: actions/checkout@v7
@@ -67,6 +68,9 @@ jobs:
 
       - name: Build web bundle
         run: npm run build:web
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
 
       - name: Web Integration Tests (Browser Host)
         run: xvfb-run -a npm run test:web

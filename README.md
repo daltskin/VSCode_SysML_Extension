@@ -87,6 +87,9 @@ Click an image to open it at full resolution.
 <tr>
 <td colspan="2" align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/traceability_matrix.png"><strong>Traceability Matrix</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/traceability_matrix.png"><img src="assets/traceability_matrix.png" width="800" alt="Satisfaction matrix showing uncovered requirements"></a></td>
 </tr>
+<tr>
+<td colspan="2" align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/markdown_preview.png"><strong>Diagrams in Markdown</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/markdown_preview.png"><img src="assets/markdown_preview.png" width="800" alt="Markdown source with sysmlv2-view fences beside the rendered sequence diagram preview"></a></td>
+</tr>
 </table>
 
 ### Diagram Views
@@ -137,6 +140,42 @@ package MySystem {
 }
 ```
 
+### Diagrams in Markdown
+
+Use `sysmlv2-view` fences in VS Code's built-in Markdown preview. Model paths are relative
+to the saved Markdown document and must stay inside a workspace folder.
+
+````markdown
+```sysmlv2-view
+model: ../samples/Camera Example/camera-sequence.sysml
+view: SequenceView
+```
+````
+
+`model` is required. `view` is optional and is either the name of a view usage in the model,
+including its expose targets and filters (qualify ambiguous names with `Package::View`), or a
+standard view definition from the SysML v2 specification: `GeneralView`, `InterconnectionView`,
+`ActionFlowView`, `StateTransitionView`, `SequenceView`, `BrowserView`, and `GridView`. A model
+view takes precedence over a type name. The Visualizer's extra diagrams are also available:
+`CaseView`, `PackageView`, `graph`, `hierarchy`, and `textual`, along with renderer aliases such
+as `usecase`, `tree`, and `table`. `GeometryView` is not currently supported by the renderer.
+Without `view`, the General View is used.
+
+Diagrams share the Visualizer's renderers, update when referenced models change, and allow
+pan/zoom without model editing. Unknown/duplicate fields and missing models/views appear as
+inline errors.
+
+Preview limits are 2 MB per model/payload, 1,000 elements, and 64 nesting levels. Larger
+models show a link to open the Model Visualizer.
+
+For GitHub or PDF workflows, run **SysML: Export Markdown Diagrams to SVG** from the Markdown
+editor. Choose an output Markdown file; the command saves adjacent SVGs and replaces fences
+with image references in the copy, leaving the original document and models unchanged.
+List and blockquote containers are preserved.
+
+Try [the sample document](samples/markdown-views.md). Developers can run
+`npm run preview:markdown` for a local browser harness backed by the real language server.
+
 ### Commands (Ctrl+Shift+P)
 
 | Command                                        | Description                                                         |
@@ -146,6 +185,7 @@ package MySystem {
 | `SysML: Validate SysML Model`                  | Run validation on the current file                                  |
 | `SysML: Format SysML Document`                 | Format the current SysML file                                       |
 | `SysML: Export Visualization (PNG/SVG)`        | Export the current diagram as PNG or SVG                            |
+| `SysML: Export Markdown Diagrams to SVG`       | Save a portable Markdown copy with adjacent SVG diagrams            |
 | `SysML: Change Visualizer View`                | Switch between diagram views (General, IBD, Activity, etc.)         |
 | `SysML: Refresh Visualization`                 | Re-render the current diagram                                       |
 | `SysML: Jump to Definition`                    | Navigate to the definition of the symbol under cursor               |

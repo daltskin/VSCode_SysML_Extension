@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+### Added
+
+- Render referenced SysML/KerML models in built-in Markdown preview with `sysmlv2-view`
+  YAML fences, named view scoping, standard SysML view names and Visualizer renderer views
+  such as `graph`, and read-only pan/zoom.
+- Share the Visualizer's snapshot conversion, shell, and renderers with Markdown preview;
+  lazy-load local assets, deduplicate model loads, and batch refreshes after model changes.
+- Export Markdown fences to adjacent SVG images and a portable Markdown copy using
+  **SysML: Export Markdown Diagrams to SVG**.
+- Bound preview model size/depth/element counts, reject workspace escapes and symbolic
+  links, isolate fence errors, and link oversized models to the Model Visualizer.
+- Add a multi-view sample document and a real-LSP browser preview harness.
+- Add a 56-case visual parity gate against the pre-refactor Visualizer, comparing
+  model payloads, SVG, CSS, and screenshots across light/dark desktop/mobile views.
+
+### Fixed
+
+- Discover diagrams inserted during native Markdown preview hydration and dispose
+  the content observer when the preview closes.
+- Coalesce identical in-flight Model Explorer workspace loads to avoid duplicate
+  model requests and repeated completion log entries during editor changes.
+- Honor explicit diagram selection over view rendering directives and preserve empty
+  expose/filter results rather than falling back to the entire model.
+- Render view names as text instead of HTML, and offload Visualizer ELK layouts to the
+  existing worker while Markdown layouts run on the main thread.
+- Preserve the scoped-view dropdown arrow and toolbar spacing when rendering names safely.
+- Reject symbolic links in export destinations and preserve list/blockquote containers
+  when replacing fences with image references.
+- Apply named scopes to sequence/activity DTOs and resolve custom view inheritance
+  in its defining namespace, rejecting cycles and ambiguous definitions.
+- Preserve unchanged diagrams across Markdown prose edits, coalesce model reloads,
+  and cancel superseded work with at most one active load per model.
+- Correlate SVG responses to export requests and wait for force layouts and fitting
+  transitions to settle; queue updates received while rendering.
+- Defer the LSP and full SysML host for ordinary Markdown while keeping desktop MCP
+  discovery available independently; release completed, superseded, and disposed
+  force simulations.
+
 ## [0.54.0]
 
 ## [0.53.0]

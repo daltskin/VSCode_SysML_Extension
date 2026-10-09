@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { FeatureExplorerProvider } from './explorer/featureExplorerProvider';
 import { ModelExplorerProvider, ModelTreeItem } from './explorer/modelExplorerProvider';
 import { SysRunnerPanel } from './game/sysRunnerPanel';
-import { startLanguageClient, stopLanguageClient } from './lsp/client';
+import { getLanguageClient, startLanguageClient, stopLanguageClient } from './lsp/client';
+import { registerMarkdownPreview } from './markdown/markdownPreview';
 import { FeatureInspectorPanel } from './panels/featureInspectorPanel';
 import { ModelDashboardPanel } from './panels/modelDashboardPanel';
 import { ModelWorkbenchPanel } from './panels/modelWorkbenchPanel';
@@ -83,7 +84,6 @@ export function notifyServerParseDone(uri?: string): void {
  */
 async function registerMcpServer(
     context: vscode.ExtensionContext,
-    outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
     const mcpServerUri = vscode.Uri.joinPath(
         context.extensionUri,
@@ -93,7 +93,7 @@ async function registerMcpServer(
     try {
         await vscode.workspace.fs.stat(mcpServerUri);
     } catch {
-        outputChannel.appendLine(`Warning: MCP server not found at ${mcpServerUri.fsPath}`);
+        outputChannel?.appendLine(`Warning: MCP server not found at ${mcpServerUri.fsPath}`);
         return;
     }
 
@@ -112,10 +112,57 @@ async function registerMcpServer(
             ],
         }),
     );
-    outputChannel.appendLine(`MCP server registered: ${mcpServerUri.fsPath}`);
+    outputChannel?.appendLine(`MCP server registered: ${mcpServerUri.fsPath}`);
 }
 
 export function activate(context: vscode.ExtensionContext) {
+    if (vscode.env.uiKind === vscode.UIKind.Desktop) {
+        void registerMcpServer(context);
+    }
+    let initialized = false;
+    const placeholders: vscode.Disposable[] = [];
+    const initialize = (): void => {
+        if (initialized) return;
+        initialized = true;
+        for (const registration of placeholders) registration.dispose();
+        initializeSysML(context);
+    };
+    const getProvider = (): LspModelProvider => {
+        initialize();
+        return lspModelProvider;
+    };
+    const markdownPreview = registerMarkdownPreview(context, getProvider, async () => {
+        initialize();
+        await getLanguageClient()?.start();
+    });
+    const commands = context.extension.packageJSON.contributes?.commands as
+        { command: string }[] | undefined;
+    for (const contribution of commands ?? []) {
+        if (contribution.command === 'sysml.exportMarkdownDiagrams') continue;
+        placeholders.push(vscode.commands.registerCommand(contribution.command, (...args: unknown[]) => {
+            initialize();
+            return vscode.commands.executeCommand(contribution.command, ...args);
+        }));
+    }
+    for (const view of ['sysmlModelExplorer', 'sysmlFeatureExplorer']) {
+        placeholders.push(vscode.window.registerTreeDataProvider<vscode.TreeItem>(view, {
+            getTreeItem: item => item,
+            getChildren: () => { initialize(); return []; },
+        }));
+    }
+    const isSysML = (document: vscode.TextDocument): boolean =>
+        document.languageId === 'sysml' || document.languageId === 'kerml';
+    context.subscriptions.push(...placeholders,
+        vscode.workspace.onDidOpenTextDocument(document => { if (isSysML(document)) initialize(); }),
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            if (editor && isSysML(editor.document)) initialize();
+        }),
+    );
+    if (vscode.workspace.textDocuments.some(isSysML)) initialize();
+    return markdownPreview;
+}
+
+function initializeSysML(context: vscode.ExtensionContext): void {
     const activationStarted = Date.now();
     initializeTelemetry(context);
     registerIssueReport(context);
@@ -125,16 +172,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     outputChannel.appendLine('SysML v2.0 extension is now active');
     outputChannel.show(true);  // Auto-show so the user can see LSP status
-
-    // ─── MCP Server (register FIRST — independent of LSP) ─────────
-    // The MCP server is a standalone Node stdio process, so it is only
-    // available in the desktop extension host. On the web (vscode.dev)
-    // there is no Node runtime to spawn it, so registration is skipped.
-    if (vscode.env.uiKind === vscode.UIKind.Desktop) {
-        void registerMcpServer(context, outputChannel);
-    } else {
-        outputChannel.appendLine('MCP server skipped (not supported in web extension host)');
-    }
 
     // ─── LSP Client ────────────────────────────────────────────────
     // The language server (sysml-v2-lsp) provides all core language

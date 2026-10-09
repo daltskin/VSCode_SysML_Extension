@@ -28,6 +28,7 @@
     "mbse"
   ],
   "activationEvents": [
+    "onLanguage:markdown",
     "onLanguage:sysml",
     "workspaceContains:**/*.sysml",
     "onMcpServerDefinitionProvider:sysml-v2-mcp",
@@ -50,6 +51,13 @@
     "onCommand:sysml.visualizePackage"
   ],
   "contributes": {
+    "markdown.markdownItPlugins": true,
+    "markdown.previewScripts": [
+      "./media/markdown-preview/bootstrap.js"
+    ],
+    "markdown.previewStyles": [
+      "./media/markdown-preview/preview.css"
+    ],
     "languages": [
       {
         "id": "sysml",
@@ -78,6 +86,12 @@
       }
     ],
     "commands": [
+      {
+        "command": "sysml.exportMarkdownDiagrams",
+        "title": "Export Markdown Diagrams to SVG",
+        "category": "SysML",
+        "icon": "$(save)"
+      },
       {
         "command": "sysml.reportIssue",
         "title": "SysML: Report Issue",
@@ -520,8 +534,10 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && npm run build:web -- --production && npm run build:webview-assets",
-    "compile": "tsc -p ./ && node scripts/telemetry-config.cjs",
+    "compile": "tsc -p ./ && node scripts/telemetry-config.cjs && node scripts/build-diagram-shell.cjs",
     "preview:workbench": "npm run compile && node scripts/workbench-preview.cjs",
+    "preview:markdown": "npm run compile && node scripts/markdown-preview.cjs",
+    "test:visual-parity": "npm run compile && node scripts/compare-diagrams.cjs",
     "watch": "tsc -watch -p ./",
     "build:web": "node ./esbuild.web.mjs",
     "watch:web": "node ./esbuild.web.mjs --watch",
@@ -543,6 +559,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/markdown-it": "^14.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.6.2",
     "@types/papaparse": "^5.5.2",
@@ -563,13 +580,18 @@
     "eslint": "^10.11.0",
     "glob": "^13.0.6",
     "mocha": "^12.0.2",
+    "pixelmatch": "^8.0.0",
+    "playwright": "^1.64.0",
+    "pngjs": "^7.0.0",
     "rimraf": "^6.1.3",
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "markdown-it": "^15.0.2",
     "papaparse": "^5.7.0",
-    "sysml-v2-lsp": "0.34.0",
-    "vscode-languageclient": "^10.1.1"
+    "sysml-v2-lsp": "0.35.0",
+    "vscode-languageclient": "^10.1.1",
+    "yaml": "^2.9.1"
   },
   "overrides": {
     "brace-expansion": "^5.0.12",

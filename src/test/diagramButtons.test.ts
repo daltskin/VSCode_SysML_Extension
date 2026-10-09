@@ -35,7 +35,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         assert.ok(source.includes('id="legend-btn"'), 'Should have legend button');
         assert.ok(source.includes('id="legend-popup"'), 'Should have legend popup');
@@ -47,7 +49,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         assert.ok(source.includes('id="about-btn"'), 'Should have about button');
         assert.ok(source.includes('id="about-popup"'), 'Should have about popup');
@@ -60,7 +64,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         assert.ok(source.includes('id="fit-btn"'), 'Should have fit-to-view button');
     });
@@ -70,7 +76,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         assert.ok(
             source.includes('id="element-filter"'),
@@ -91,7 +99,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         assert.ok(source.includes('id="export-btn"'), 'Should have export button');
         assert.ok(source.includes('id="export-menu"'), 'Should have export dropdown menu');
@@ -102,7 +112,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         // Check for view buttons/dropdown items
         const viewIds = [
@@ -131,7 +143,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         assert.ok(
             source.includes('id="dashboard-btn"'),
@@ -148,7 +162,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         assert.ok(source.includes('id="about-rate-link"'), 'Should have rate link button');
         assert.ok(source.includes('id="about-repo-link"'), 'Should have GitHub repo link button');
@@ -159,7 +175,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         assert.ok(
             source.includes('id="legend-header"'),
@@ -176,7 +194,9 @@ suite('Diagram Legend & Buttons Test Suite', () => {
         const panelPath = path.resolve(
             __dirname, '../../src/visualization/visualizationPanel.ts',
         );
-        const source = fs.readFileSync(panelPath, 'utf-8');
+        const source = fs.readFileSync(panelPath, 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../src/visualization/core/diagramShell.ts'), 'utf-8')
+            + fs.readFileSync(path.resolve(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf-8');
 
         const expectedMessages = [
             'webviewLog',
