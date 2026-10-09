@@ -130,7 +130,8 @@ suite('Markdown diagram fences', () => {
         assert.strictEqual(apply(data).sequenceDiagrams.length, 0);
         assert.strictEqual(apply(data).activityDiagrams.length, 0);
     });
-    test('export rejects symlink files and directory components before writing', async () => {
+    test('export rejects symlink files and directory components before writing', async function () {
+        if (!(vscode as unknown as { _isMock?: boolean })._isMock) { this.skip(); }
         const originalStat = vscode.workspace.fs.stat;
         const originalJoin = vscode.Uri.joinPath;
         try {
@@ -237,7 +238,8 @@ suite('Markdown diagram fences', () => {
         assert.strictEqual(closed, true);
     });
 
-    test('large-model fallback bypasses only size limits, never symbolic-link checks', async () => {
+    test('large-model fallback bypasses only size limits, never symbolic-link checks', async function () {
+        if (!(vscode as unknown as { _isMock?: boolean })._isMock) { this.skip(); }
         const originalFolder = vscode.workspace.getWorkspaceFolder;
         const originalStat = vscode.workspace.fs.stat;
         const originalOpen = vscode.workspace.openTextDocument;
@@ -454,7 +456,8 @@ suite('Markdown diagram cache', () => {
         } finally { cache.dispose(); }
     });
 
-    test('renders loading, payload, and isolated errors through markdown-it', async () => {
+    test('renders loading, payload, and isolated errors through markdown-it', async function () {
+        if (!(vscode as unknown as { _isMock?: boolean })._isMock) { this.skip(); }
         const workspace = vscode.workspace as unknown as { workspaceFolders: { uri: vscode.Uri }[]; textDocuments: vscode.TextDocument[] };
         const previousRoots = workspace.workspaceFolders;
         const previousDocuments = workspace.textDocuments;
@@ -491,7 +494,7 @@ suite('Native Markdown preview integration', () => {
         this.timeout(45000);
         const folder = vscode.workspace.workspaceFolders?.[0];
         assert.ok(folder, 'Integration test requires the repository workspace.');
-        const uri = vscode.Uri.joinPath(folder.uri, 'samples', '.markdown-preview-integration.md');
+        const uri = vscode.Uri.joinPath(folder.uri, '.markdown-preview-integration.md');
         const content = '```sysmlv2-view\nmodel: Camera Example/camera-sequence.sysml\ndiagram: sequence\n```\n'
             + '\n```sysmlv2-view\nmodel: Camera Example/camera-sequence.sysml\nview: missing-view\n```\n';
         try {
