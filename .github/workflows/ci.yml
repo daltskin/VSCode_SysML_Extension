@@ -44,6 +44,9 @@ jobs:
       - name: Unit Tests
         run: npm run test:unit
 
+      - name: Release notes validation tests
+        run: node --test scripts/release-notes.test.cjs
+
   integration-tests:
     runs-on: ubuntu-24.04
     needs: [lint, unit-tests]

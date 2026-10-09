@@ -81,6 +81,18 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.TAG }}
 
+      - name: Extract and require release notes
+        id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          NOTES=$(node scripts/release-notes.cjs "$VERSION")
+          {
+            echo "notes<<CHANGELOG_EOF"
+            echo "$NOTES"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Set package.json version
         run: |
           CURRENT=$(node -p "require('./package.json').version")
@@ -96,33 +108,6 @@ jobs:
 
       - name: Verify VSIX version
         run: test -f "sysml-v2-support-${{ steps.version.outputs.VERSION }}.vsix"
-
-      - name: Extract release notes from CHANGELOG.md
-        id: changelog
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          # Extract the section for this version from CHANGELOG.md
-          # Matches from "## [<version>]" up to the next "## [" heading or end of file
-          NOTES=$(awk -v ver="$VERSION" '
-            BEGIN { found=0 }
-            /^## \[/ {
-              if (found) exit
-              if (index($0, "## [" ver "]")) { found=1; next }
-            }
-            found { print }
-          ' CHANGELOG.md)
-
-          if [ -z "$NOTES" ]; then
-            echo "::warning::No changelog entry found for version $VERSION, using fallback"
-            NOTES="No changelog entry for this version."
-          fi
-
-          # Write multiline output using delimiter
-          {
-            echo "notes<<CHANGELOG_EOF"
-            echo "$NOTES"
-            echo "CHANGELOG_EOF"
-          } >> "$GITHUB_OUTPUT"
 
       - name: Delete existing release (if any)
         env:

@@ -7,6 +7,8 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: '@types/vscode'
     groups:
       # Group all minor + patch production deps into one PR
       production-minor-patch:
