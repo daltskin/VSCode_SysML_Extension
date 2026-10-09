@@ -44,6 +44,12 @@ jobs:
             exit 1
           fi
 
+      - name: Require unreleased notes
+        run: node scripts/release-notes.cjs Unreleased
+
+      - name: Release notes validation tests
+        run: node --test scripts/release-notes.test.cjs
+
       - name: Compile & test
         run: |
           npm run compile

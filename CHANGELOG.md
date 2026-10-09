@@ -17,8 +17,14 @@
 - Add a 56-case visual parity gate against the pre-refactor Visualizer, comparing
   model payloads, SVG, CSS, and screenshots across light/dark desktop/mobile views.
 
+### Changed
+
+- Update `vscode-languageclient` to 10.1.2, Node typings to 26.6.4, and Mocha to 12.0.3.
+
 ### Fixed
 
+- Keep VS Code typings aligned with the supported minimum by excluding them from Dependabot updates.
+- Block release preparation and publishing when the required changelog section has no release notes.
 - Discover diagrams inserted during native Markdown preview hydration and dispose
   the content observer when the preview closes.
 - Coalesce identical in-flight Model Explorer workspace loads to avoid duplicate
