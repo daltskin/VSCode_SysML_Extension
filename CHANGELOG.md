@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.55.0]
+
 ### Added
 
 - Render referenced SysML/KerML models in built-in Markdown preview with `sysmlv2-view`
