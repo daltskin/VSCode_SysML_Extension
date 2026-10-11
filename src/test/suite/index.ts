@@ -29,6 +29,9 @@ export function run(): Promise<void> {
                 return;
             }
 
+            filteredFiles.sort((first, second) =>
+                Number(path.basename(second) === 'integration.test.js')
+                - Number(path.basename(first) === 'integration.test.js'));
             filteredFiles.forEach(f => mocha.addFile(path.resolve(testsRoot, f)));
 
             try {

@@ -105,7 +105,8 @@ suite('ModelDashboardPanel', () => {
 
     // ── Singleton lifecycle ──────────────────────────────────────
 
-    test('opens only the selected document before requesting its complexity data', async () => {
+    test('opens only the selected document before requesting its complexity data', async function() {
+        if ((vscode as any)._isMock !== true) return this.skip();
         const originalOpen = vscode.workspace.openTextDocument;
         const originalDocuments = vscode.workspace.textDocuments;
         const selected = createFakeSysmlDocument('file:///selected.sysml');
@@ -177,7 +178,8 @@ suite('ModelDashboardPanel', () => {
         });
     }
 
-    test('package discovery reads unopened files without opening language-server documents', async () => {
+    test('package discovery reads unopened files without opening language-server documents', async function() {
+        if ((vscode as any)._isMock !== true) return this.skip();
         const originalReadFile = vscode.workspace.fs.readFile;
         const originalOpen = vscode.workspace.openTextDocument;
         let reads = 0;
@@ -203,7 +205,8 @@ suite('ModelDashboardPanel', () => {
         }
     });
 
-    test('package discovery uses unsaved open-document text without disk reads', async () => {
+    test('package discovery uses unsaved open-document text without disk reads', async function() {
+        if ((vscode as any)._isMock !== true) return this.skip();
         const originalDocuments = vscode.workspace.textDocuments;
         const originalReadFile = vscode.workspace.fs.readFile;
         const document = createFakeSysmlDocument('file:///unsaved.sysml');

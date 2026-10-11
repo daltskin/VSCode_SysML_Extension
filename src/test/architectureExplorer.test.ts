@@ -113,7 +113,8 @@ suite('Model loading performance safeguards', () => {
             assert.equal(requests, 2);
         } finally { cancellation.dispose(); }
     });
-    test('document versions prevent stale cache reuse', async () => {
+    test('document versions prevent stale cache reuse', async function() {
+        if ((vscode as any)._isMock !== true) return this.skip();
         const original = vscode.workspace.textDocuments;
         const document = { uri: vscode.Uri.parse('file:///versioned.sysml'), version: 1,
             getText: () => '' };
@@ -143,7 +144,8 @@ suite('Model loading performance safeguards', () => {
 });
 
 suite('Shared resource controls', () => {
-    test('workspace discovery skips server-excluded directories and honors overrides', async () => {
+    test('workspace discovery skips server-excluded directories and honors overrides', async function() {
+        if ((vscode as any)._isMock !== true) return this.skip();
         const originalFind = vscode.workspace.findFiles;
         const originalFolders = vscode.workspace.workspaceFolders;
         const uris = ['main.sysml', 'types.kerml', 'temp/ignored.sysml', 'tests/ignored.sysml']
