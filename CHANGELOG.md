@@ -15,6 +15,8 @@
 
 ### Changed
 
+- Run native-host startup tests before document-opening suites and keep writable-API
+  mock tests in the unit host to avoid read-only VS Code API failures in CI.
 - Standardize model actions as Visualize Model, Inspect Model Metrics, Edit Model,
   and Analyze Model Relationships without changing command IDs.
 - Default preloading to `always` and initialize folder/workspace models without an
