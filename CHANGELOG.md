@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.56.0]
+
 ### Added
 
 - Add a local Architecture Explorer for removal impact, affected requirements,
