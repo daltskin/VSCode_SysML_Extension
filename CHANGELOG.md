@@ -15,6 +15,8 @@
 
 ### Changed
 
+- Update `sysml-v2-lsp` to 0.36.0 for connector resolution, quoted-name and
+  inheritance fixes, and decoded workspace-folder logging.
 - Run native-host startup tests before document-opening suites and keep writable-API
   mock tests in the unit host to avoid read-only VS Code API failures in CI.
 - Standardize model actions as Visualize Model, Inspect Model Metrics, Edit Model,
