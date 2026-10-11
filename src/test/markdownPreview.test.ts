@@ -253,7 +253,7 @@ suite('Markdown diagram fences', () => {
                 size: 3 * 1024 * 1024, ctime: 0, mtime: 0 });
             vscode.workspace.openTextDocument = async () => ({ getText: () => 'model' }) as vscode.TextDocument;
             const uri = URI.parse('vscode-remote://host/workspace/models/example.sysml');
-            await assert.rejects(openPreviewModel(uri), /2 MB/);
+            await assert.rejects(openPreviewModel(uri), /previewBytes.*internal safety guard/);
             assert.strictEqual((await openPreviewModel(uri, false)).getText(), 'model');
             linked = true;
             await assert.rejects(openPreviewModel(uri, false), /Symbolic links/);

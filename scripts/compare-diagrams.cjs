@@ -40,7 +40,7 @@ async function capture(page, renderer, example, configuration) {
     if (example.view) query.set('view', example.view);
     const response = await page.goto(`http://127.0.0.1:${port}/?${query}`);
     if (!response.ok()) throw new Error(await response.text());
-    await page.addStyleTag({ content: '*{animation:none!important;transition:none!important;caret-color:transparent!important}' });
+    await page.addStyleTag({ content: '*{animation:none!important;transition:none!important;caret-color:transparent!important}#architecture-btn{display:none!important}' });
     await page.waitForFunction(() => !!document.querySelector('#loading-overlay.hidden')
         && !!document.querySelector('#visualization svg text'), null, { timeout: 30000 });
     await page.waitForFunction(() => {

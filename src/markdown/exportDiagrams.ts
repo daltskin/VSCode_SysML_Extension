@@ -1,6 +1,8 @@
 import MarkdownIt from 'markdown-it';
 import * as vscode from 'vscode';
 import { LspModelProvider } from '../providers/lspModelProvider';
+import { checkCancelled, checkFileBudgets, internalSafetyLimits, withModelProgress } from '../resourceLimits';
+import { telemetry } from '../telemetry';
 import { diagramShell } from '../visualization/core/diagramShell';
 import { modelSnapshot } from '../visualization/core/modelSnapshot';
 import { selectView } from '../visualization/core/viewScope';
@@ -47,8 +49,10 @@ export function registerMarkdownExport(
     ready: () => Promise<void>,
 ): void {
     context.subscriptions.push(vscode.commands.registerCommand('sysml.exportMarkdownDiagrams', async () => {
+        const started = Date.now();
         const document = vscode.window.activeTextEditor?.document;
         if (!document || document.languageId !== 'markdown') {
+            telemetry?.operation('markdown', 'export', 'rejected', Date.now() - started);
             void vscode.window.showErrorMessage('Open a Markdown document containing sysmlv2-view fences.');
             return;
         }
@@ -62,20 +66,29 @@ export function registerMarkdownExport(
                 defaultUri: vscode.Uri.joinPath(document.uri, '..', `${stem}.export.md`),
                 filters: { Markdown: ['md'] }, title: 'Export Markdown with SVG diagrams',
             });
-            if (!target) return;
+            if (!target) {
+                telemetry?.operation('markdown', 'export', 'cancelled', Date.now() - started);
+                return;
+            }
+            await withModelProgress('Exporting SysML diagrams', async (loadProgress, cancellation) => {
             if (target.toString() === document.uri.toString()) throw new Error('Choose a different file to preserve the source Markdown.');
             await assertSafeOutputPath(target);
             const models = new Map<string, Awaited<ReturnType<LspModelProvider['getModel']>>>();
             const payloads: Record<string, unknown>[] = [];
             await ready();
+            const modelUris = fences.map(block => resolveModelUri(parseFence(block.content).model, document.uri,
+                vscode.workspace.workspaceFolders?.map(folder => folder.uri) ?? []));
+            await checkFileBudgets([...new Map(modelUris.map(uri => [uri.toString(), uri])).values()], cancellation);
             for (const block of fences) {
+                checkCancelled(cancellation);
                 const fence = parseFence(block.content);
                 const uri = resolveModelUri(fence.model, document.uri,
                     vscode.workspace.workspaceFolders?.map(folder => folder.uri) ?? []);
                 await openPreviewModel(uri);
                 let model = models.get(uri.toString());
                 if (!model) {
-                    model = await getProvider().getModel(uri.toString());
+                    loadProgress.report({ message: vscode.workspace.asRelativePath(uri) });
+                    model = await getProvider().getModel(uri.toString(), undefined, cancellation);
                     models.set(uri.toString(), model);
                 }
                 payloads.push({
@@ -110,15 +123,15 @@ export function registerMarkdownExport(
             });
             const closed = exportPanel.onDidDispose(() => pending?.reject(new Error('Export cancelled.')));
             try {
-                await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification,
-                    title: 'Exporting SysML diagrams', cancellable: true }, async (progress, token) => {
-                    const cancelled = token.onCancellationRequested(() => pending?.reject(new Error('Export cancelled.')));
+                await withModelProgress('Rendering SysML diagrams', async (progress, token) => {
+                    const cancelled = token.onCancellationRequested(() => pending?.reject(new vscode.CancellationError()));
                     try {
                         for (let index = 0; index < payloads.length; index++) {
-                            if (token.isCancellationRequested) throw new Error('Export cancelled.');
+                            checkCancelled(token);
                             nextPayload = index;
                             const svg = await new Promise<string>((resolve, reject) => {
-                                const timer = setTimeout(() => reject(new Error('Diagram export timed out.')), 30000);
+                                const timeout = internalSafetyLimits.exportTimeoutMs;
+                                const timer = timeout > 0 ? setTimeout(() => reject(new Error('Diagram export timed out.')), timeout) : undefined;
                                 pending = {
                                     requestId: index + 1,
                                     resolve: value => { clearTimeout(timer); resolve(value); },
@@ -130,7 +143,7 @@ export function registerMarkdownExport(
                                 } else void exportPanel.webview.postMessage(payloads[index]);
                             });
                             pending = undefined;
-                            if (token.isCancellationRequested) throw new Error('Export cancelled.');
+                            checkCancelled(token);
                             const name = `diagram-${index + 1}.svg`;
                             const imageUri = vscode.Uri.joinPath(folder, name);
                             await assertSafeOutputPath(imageUri);
@@ -139,14 +152,22 @@ export function registerMarkdownExport(
                             progress.report({ increment: 100 / payloads.length });
                         }
                     } finally { cancelled.dispose(); }
-                });
+                }, cancellation);
             } finally { listener.dispose(); closed.dispose(); }
+            checkCancelled(cancellation);
             await assertSafeOutputPath(target);
+            checkCancelled(cancellation);
             await vscode.workspace.fs.writeFile(target,
                 new globalThis.TextEncoder().encode(replaceExportFences(source, fences, imagePaths)));
             await vscode.window.showTextDocument(target);
+            });
+            telemetry?.operation('markdown', 'export', 'success', Date.now() - started);
         } catch (error) {
-            void vscode.window.showErrorMessage(`SysML Markdown export: ${error instanceof Error ? error.message : String(error)}`);
+            telemetry?.operation('markdown', 'export', error instanceof vscode.CancellationError
+                ? 'cancelled' : 'failure', Date.now() - started);
+            if (!(error instanceof vscode.CancellationError)) {
+                void vscode.window.showErrorMessage(`SysML Markdown export: ${error instanceof Error ? error.message : String(error)}`);
+            }
         } finally { panel?.dispose(); }
     }));
 }

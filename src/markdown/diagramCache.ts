@@ -21,13 +21,14 @@ export class DiagramCache<T> {
     constructor(
         private readonly load: (uri: string, signal: AbortSignal) => Promise<T>,
         private readonly refresh: () => void,
-        private readonly maxEntries = 64,
+        private readonly maxEntries: number | (() => number) = 64,
         private readonly currentVersion?: (uri: string) => number,
     ) {}
 
     lookup(uri: string, version: number, markdown: string): CacheEntry<T> {
-        if (!this.entries.has(uri) && this.entries.size >= this.maxEntries) {
-            return { version, state: 'error', error: `The preview model limit is ${this.maxEntries}. Close other Markdown documents.` };
+        const maximum = typeof this.maxEntries === 'function' ? this.maxEntries() : this.maxEntries;
+        if (!this.entries.has(uri) && maximum > 0 && this.entries.size >= maximum) {
+            return { version, state: 'error', error: `The preview model limit is ${maximum}. Close other Markdown documents or open the model in the Visualizer.` };
         }
         if (!this.dependents.has(uri)) this.dependents.set(uri, new Set());
         this.dependents.get(uri)?.add(markdown);

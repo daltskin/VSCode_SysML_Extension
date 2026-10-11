@@ -789,7 +789,8 @@ export function diagramShell(webview: DiagramResourceHost, extensionUri: vscode.
             <button id="layout-mode-btn" class="action-btn active" title="Toggle Grid vs. connection-driven layout" style="background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-background);">▦ Grid</button>
             <button id="minimap-toolbar-btn" class="action-btn" title="Toggle minimap">⊡ Map</button>
             <button id="dashboard-btn" class="action-btn" title="Open Model Dashboard">📊 Dashboard</button>
-            <button id="workbench-btn" class="action-btn" title="Open Model Workbench">Edit Model</button>
+            <button id="workbench-btn" class="action-btn" title="Edit Model">Edit Model</button>
+            <button id="architecture-btn" class="action-btn" title="Explore the selected element's architecture">Explore Architecture</button>
             <button id="legend-btn" class="action-btn" title="Show diagram legend">🔑 Legend</button>
             <button id="ee-egg" title="What's this?">🥚</button>
             <button id="about-btn" class="action-btn" title="About this extension">ℹ️ About</button>

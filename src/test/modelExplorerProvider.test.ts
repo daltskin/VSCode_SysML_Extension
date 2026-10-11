@@ -147,6 +147,20 @@ suite('ModelExplorerProvider', () => {
 
     suite('loadWorkspaceModel', () => {
 
+        test('unavailable models remain incomplete while parsed empty models can be reused', async () => {
+            const lsp = createMockLspProvider();
+            const parsedEmpty = lsp.getModel;
+            lsp.getModel = async () => ({ version: -1 });
+            const provider = new ModelExplorerProvider(lsp);
+            const uris = [vscode.Uri.parse('file:///workspace/pending.sysml')];
+            await provider.loadWorkspaceModel(uris);
+            assert.strictEqual(provider.hasWorkspaceModel(), false);
+            lsp.getModel = parsedEmpty;
+            await provider.loadWorkspaceModel(uris);
+            assert.strictEqual(provider.hasWorkspaceModel(), true);
+            assert.strictEqual(provider.getLastStats()?.totalElements, 0);
+        });
+
         test('switches to workspace mode', async () => {
             const provider = new ModelExplorerProvider(createMockLspProvider([
                 { type: 'package', name: 'Pkg', children: [] },
@@ -156,6 +170,31 @@ suite('ModelExplorerProvider', () => {
             await provider.loadWorkspaceModel(uris);
 
             assert.ok(provider.isWorkspaceMode(), 'Should be in workspace mode');
+            assert.ok(provider.hasWorkspaceModel(), 'Completed workspace tree should be reusable');
+        });
+
+        test('cancelled reloads and replaced trees cannot be reused as completed workspace models', async () => {
+            const provider = new ModelExplorerProvider(createMockLspProvider([
+                { type: 'package', name: 'Pkg', children: [] },
+            ]));
+            const uris = [vscode.Uri.parse('file:///workspace/file1.sysml')];
+            await provider.loadWorkspaceModel(uris);
+            assert.ok(provider.hasWorkspaceModel());
+            const cancellation = new vscode.CancellationTokenSource();
+            try {
+                cancellation.cancel();
+                await provider.loadWorkspaceModel(uris, cancellation.token);
+                assert.ok(!provider.hasWorkspaceModel());
+                await provider.loadWorkspaceModel(uris);
+                assert.ok(provider.hasWorkspaceModel());
+                await provider.loadDocument(createFakeDocument('file:///workspace/file1.sysml'));
+                assert.ok(!provider.hasWorkspaceModel());
+                await provider.loadWorkspaceModel(uris);
+                provider.clear();
+                assert.ok(!provider.hasWorkspaceModel());
+            } finally {
+                cancellation.dispose();
+            }
         });
 
         test('byFile view shows FileTreeItems', async () => {

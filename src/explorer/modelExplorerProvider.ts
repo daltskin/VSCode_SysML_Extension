@@ -2,6 +2,12 @@ import * as vscode from 'vscode';
 import { LspModelProvider, toVscodeRange } from '../providers/lspModelProvider';
 import { displayNameOf, displayNamesById, elementKey, isAnonymousElement, relationshipSource } from '../providers/modelNames';
 import type { SysMLElementDTO, SysMLModelResult } from '../providers/sysmlModelTypes';
+import {
+    checkCancelled, checkFileBudgets,
+    ResourceLimitError,
+    sourceLoadingBudgetBytes,
+    withModelProgress
+} from '../resourceLimits';
 import type { Relationship, SysMLElement } from '../types/sysmlTypes';
 
 type ModelStats = NonNullable<SysMLModelResult['stats']>;
@@ -51,6 +57,8 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
 
     /** Workspace mode: true when showing aggregated model from all workspace files. */
     private workspaceMode = false;
+    private workspaceModelLoaded = false;
+    private workspaceUnavailableFiles = 0;
     /** Per-file model data for workspace mode. */
     private workspaceFileData = new Map<string, { uri: vscode.Uri; elements: SysMLElement[] }>();
     /** URIs of workspace files last used to build the workspace model. */
@@ -79,6 +87,11 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
     /** Whether the explorer is currently showing the workspace-wide model. */
     isWorkspaceMode(): boolean {
         return this.workspaceMode;
+    }
+
+    /** Whether a workspace load completed and its tree is still displayed. */
+    hasWorkspaceModel(): boolean {
+        return this.workspaceMode && this.workspaceModelLoaded;
     }
 
     /** Return the file URIs currently loaded in workspace mode. */
@@ -150,10 +163,17 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
         this._onDidChangeTreeData.fire();
     }
 
+    /** Whether the most recent workspace load needs another parse-readiness check. */
+    hasUnavailableWorkspaceFiles(): boolean {
+        return this.workspaceUnavailableFiles > 0;
+    }
+
     /**
      * Clear the model explorer when no SysML files are open
      */
     clear(): void {
+        this.workspaceModelLoaded = false;
+        this.workspaceUnavailableFiles = 0;
         this.currentDocument = undefined;
         this.pendingDocument = undefined;
         this.rootElements = [];
@@ -178,10 +198,23 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
         if (this.workspaceLoad?.key === key && this.workspaceLoad.token === cancellationToken) {
             return this.workspaceLoad.promise;
         }
+        this.workspaceModelLoaded = false;
         const load = {
             key,
             token: cancellationToken,
-            promise: this.performWorkspaceLoad(fileUris, cancellationToken).finally(() => {
+            promise: withModelProgress('Loading SysML Model Explorer', async (progress, token) => {
+                if (sourceLoadingBudgetBytes()) await checkFileBudgets(fileUris, token);
+                await this.performWorkspaceLoad(fileUris, token, progress);
+            }, cancellationToken).catch(error => {
+                if (error instanceof vscode.CancellationError) return;
+                if (error instanceof ResourceLimitError) {
+                    this.workspaceFileData.clear();
+                    this._onDidChangeTreeData.fire();
+                    void vscode.window.showErrorMessage(error.message);
+                    return;
+                }
+                throw error;
+            }).finally(() => {
                 if (this.workspaceLoad === load) this.workspaceLoad = undefined;
             }),
         };
@@ -189,7 +222,10 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
         return load.promise;
     }
 
-    private async performWorkspaceLoad(fileUris: vscode.Uri[], cancellationToken?: vscode.CancellationToken): Promise<void> {
+    private async performWorkspaceLoad(fileUris: vscode.Uri[], cancellationToken?: vscode.CancellationToken,
+        progress?: vscode.Progress<{ message?: string; increment?: number }>): Promise<void> {
+        this.workspaceModelLoaded = false;
+        this.workspaceUnavailableFiles = 0;
         this.workspaceMode = true;
         this.workspaceFileUris = fileUris;
         this.currentDocument = undefined;
@@ -209,6 +245,9 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
         let totalLexTimeMs = 0;
         let totalParseOnlyTimeMs = 0;
         let totalBuildTimeMs = 0;
+        let emptyFiles = 0;
+        let unavailableFiles = 0;
+        let failedFiles = 0;
 
         try {
             // Load files in parallel with bounded concurrency (4 at a time)
@@ -217,18 +256,25 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
             const CONCURRENCY = 4;
             const processFile = async (uri: vscode.Uri) => {
                 if (cancellationToken?.isCancellationRequested) return;
+                progress?.report({ message: vscode.workspace.asRelativePath(uri) });
                 try {
                     const result = await this._lspModelProvider.getModel(
                         uri.toString(),
                         ['elements', 'relationships'],
                         cancellationToken,
                     );
+                    checkCancelled(cancellationToken);
+                    if (result.version < 0 || (!result.stats && !result.elements?.length)) {
+                        unavailableFiles++;
+                        progress?.report({ increment: 100 / fileUris.length });
+                        return;
+                    }
                     if (result.elements?.length) {
                         this.workspaceFileData.set(uri.toString(), {
                             uri,
                             elements: dtosToSysMLElements(result.elements ?? []),
                         });
-                    }
+                    } else emptyFiles++;
                     if (result.stats) {
                         totalElements += result.stats.totalElements;
                         resolvedElements += result.stats.resolvedElements;
@@ -237,8 +283,11 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
                         totalParseOnlyTimeMs += result.stats.parseOnlyTimeMs ?? 0;
                         totalBuildTimeMs += result.stats.modelBuildTimeMs;
                     }
-                } catch {
-                    // Skip files that fail to load
+                    progress?.report({ increment: 100 / fileUris.length });
+                } catch (error) {
+                    if (error instanceof ResourceLimitError) throw error;
+                    checkCancelled(cancellationToken);
+                    failedFiles++;
                 }
             };
 
@@ -250,6 +299,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
             }
 
             // Store aggregated stats
+            checkCancelled(cancellationToken);
             this._lastStats = {
                 totalElements,
                 resolvedElements,
@@ -259,10 +309,12 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
                 parseOnlyTimeMs: totalParseOnlyTimeMs,
                 modelBuildTimeMs: totalBuildTimeMs,
             };
+            this.workspaceUnavailableFiles = unavailableFiles;
+            this.workspaceModelLoaded = failedFiles === 0 && unavailableFiles === 0;
 
             try {
                 const { getOutputChannel } = require('../extension');
-                getOutputChannel()?.appendLine(`ModelExplorer: workspace model loaded — ${this.workspaceFileData.size} files, ${totalElements} elements`);
+                getOutputChannel()?.appendLine(`ModelExplorer: workspace model ${this.workspaceModelLoaded ? 'loaded' : 'incomplete'} — ${this.workspaceFileData.size} files with elements, ${emptyFiles} parsed empty, ${unavailableFiles} unavailable, ${failedFiles} failed, ${fileUris.length} attempted, ${totalElements} elements`);
             } catch { /* ignore */ }
 
             this._onDidChangeTreeData.fire();
@@ -280,6 +332,7 @@ export class ModelExplorerProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     async loadDocument(document: vscode.TextDocument, cancellationToken?: vscode.CancellationToken): Promise<void> {
+        this.workspaceModelLoaded = false;
         this.workspaceMode = false;
         this.workspaceFileData.clear();
         this.currentDocument = document;

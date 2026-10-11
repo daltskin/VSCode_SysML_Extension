@@ -88,15 +88,138 @@ function disposeDashboard() {
 
 suite('ModelDashboardPanel', () => {
     const originalGetDiagnostics = vscode.languages.getDiagnostics;
+    const originalOpenDocument = vscode.workspace.openTextDocument;
+
+    setup(() => {
+        vscode.workspace.openTextDocument = (async (uri: vscode.Uri) =>
+            createFakeSysmlDocument(uri.toString())) as unknown as typeof vscode.workspace.openTextDocument;
+    });
 
     teardown(() => {
         disposeDashboard();
         // Restore activeTextEditor to undefined
         setActiveTextEditor(undefined);
         (vscode.languages as any).getDiagnostics = originalGetDiagnostics;
+        vscode.workspace.openTextDocument = originalOpenDocument;
     });
 
     // ── Singleton lifecycle ──────────────────────────────────────
+
+    test('opens only the selected document before requesting its complexity data', async () => {
+        const originalOpen = vscode.workspace.openTextDocument;
+        const originalDocuments = vscode.workspace.textDocuments;
+        const selected = createFakeSysmlDocument('file:///selected.sysml');
+        const opened: string[] = [];
+        try {
+            Object.assign(vscode.workspace, { textDocuments: [] });
+            vscode.workspace.openTextDocument = (async (uri: vscode.Uri) => {
+                opened.push(uri.toString());
+                return selected;
+            }) as unknown as typeof vscode.workspace.openTextDocument;
+            const provider = createMockLspProvider({ stats: { complexity: {
+                complexityIndex: 12, rating: 'Low', definitions: 1, usages: 1,
+                maxDepth: 1, couplingCount: 0, unusedDefinitions: 0, documentationCoverage: 0,
+            } } });
+            const getModel = provider.getModel;
+            provider.getModel = async (...args: any[]) => {
+                assert.deepStrictEqual(opened, [selected.uri.toString()]);
+                return getModel(...args);
+            };
+            const panel = await ModelDashboardPanel.createOrShow(vscode.Uri.parse('file:///ext'), provider, selected.uri);
+            assert.deepStrictEqual(opened, [selected.uri.toString()]);
+            const html = (panel as any)._panel.webview.html as string;
+            assert.ok(html.includes('Complexity Breakdown'));
+            assert.ok(!html.includes('update the LSP server'));
+        } finally {
+            vscode.workspace.openTextDocument = originalOpen;
+            Object.assign(vscode.workspace, { textDocuments: originalDocuments });
+        }
+    });
+
+    test('unparsed responses are not cached as dashboards with missing complexity', async () => {
+        const provider = createMockLspProvider();
+        const getModel = provider.getModel;
+        provider.getModel = async () => ({ version: -1 });
+        const panel = await ModelDashboardPanel.createOrShow(vscode.Uri.parse('file:///ext'),
+            provider, vscode.Uri.parse('file:///pending.sysml'));
+        const html = (panel as any)._panel.webview.html as string;
+        assert.ok(html.includes('Model data is not available yet'));
+        assert.ok(!html.includes('update the LSP server'));
+        assert.strictEqual((panel as any)._lastDataKey, undefined);
+        provider.getModel = getModel;
+        await panel.refresh();
+        assert.strictEqual((panel as any)._lastData.stats.totalElements, 5);
+    });
+
+    for (const failure of ['unavailable', 'error', 'cancelled']) {
+        test(`preserves ${failure} state after a previously successful refresh`, async () => {
+            const document = createFakeSysmlDocument('file:///previous.sysml');
+            setActiveTextEditor({ document });
+            const provider = createMockLspProvider();
+            const getModel = provider.getModel;
+            const panel = await ModelDashboardPanel.createOrShow(vscode.Uri.parse('file:///ext'), provider);
+            assert.strictEqual((panel as any)._lastData.stats.totalElements, 5);
+            document.version++;
+            provider.getModel = async () => {
+                if (failure === 'error') throw new Error('LSP unavailable');
+                if (failure === 'cancelled') throw new vscode.CancellationError();
+                return { version: -1 };
+            };
+            await panel.refresh();
+            assert.strictEqual((panel as any)._lastData, undefined);
+            assert.strictEqual((panel as any)._lastDataKey, undefined);
+            const html = (panel as any)._panel.webview.html;
+            assert.ok(html.includes(failure === 'unavailable' ? 'Model data is not available yet'
+                : failure === 'cancelled' ? 'Dashboard loading cancelled' : 'LSP unavailable'));
+            provider.getModel = getModel;
+            await panel.refresh();
+            assert.strictEqual((panel as any)._lastData.stats.totalElements, 5);
+        });
+    }
+
+    test('package discovery reads unopened files without opening language-server documents', async () => {
+        const originalReadFile = vscode.workspace.fs.readFile;
+        const originalOpen = vscode.workspace.openTextDocument;
+        let reads = 0;
+        let opens = 0;
+        try {
+            vscode.workspace.fs.readFile = async () => {
+                reads++;
+                return new globalThis.TextEncoder().encode('package Camera {} package Shared {}');
+            };
+            vscode.workspace.openTextDocument = (async () => {
+                opens++;
+                throw new Error('Package discovery must not open documents');
+            }) as typeof vscode.workspace.openTextDocument;
+            const panel = await ModelDashboardPanel.createOrShow(
+                vscode.Uri.parse('file:///ext'), createMockLspProvider());
+            const names = await (panel as any)._extractPackageNames(vscode.Uri.parse('file:///unopened.sysml'));
+            assert.deepStrictEqual(names, ['Camera', 'Shared']);
+            assert.strictEqual(reads, 1);
+            assert.strictEqual(opens, 0);
+        } finally {
+            vscode.workspace.fs.readFile = originalReadFile;
+            vscode.workspace.openTextDocument = originalOpen;
+        }
+    });
+
+    test('package discovery uses unsaved open-document text without disk reads', async () => {
+        const originalDocuments = vscode.workspace.textDocuments;
+        const originalReadFile = vscode.workspace.fs.readFile;
+        const document = createFakeSysmlDocument('file:///unsaved.sysml');
+        document.getText = () => 'package Unsaved {}';
+        try {
+            Object.assign(vscode.workspace, { textDocuments: [document] });
+            vscode.workspace.fs.readFile = async () => { throw new Error('Must use unsaved text'); };
+            const panel = await ModelDashboardPanel.createOrShow(
+                vscode.Uri.parse('file:///ext'), createMockLspProvider());
+            const names = await (panel as any)._extractPackageNames(document.uri);
+            assert.deepStrictEqual(names, ['Unsaved']);
+        } finally {
+            Object.assign(vscode.workspace, { textDocuments: originalDocuments });
+            vscode.workspace.fs.readFile = originalReadFile;
+        }
+    });
 
     suite('Singleton lifecycle', () => {
 

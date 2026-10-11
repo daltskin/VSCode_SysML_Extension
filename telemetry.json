@@ -64,7 +64,7 @@
     "panel": {
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
-      "comment": "visualizer, workbench, dashboard, inspector or sysrunner; creation or reveal only."
+      "comment": "visualizer, workbench, dashboard, inspector, sysrunner or architecture; creation or reveal only."
     }
   },
   "sysml.visualizer.operation": {
@@ -106,6 +106,42 @@
       "purpose": "PerformanceAndHealth",
       "isMeasurement": true,
       "comment": "Elapsed host operation milliseconds, including export dialog wait."
+    }
+  },
+  "sysml.architecture.operation": {
+    "action": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "refresh, add-files, removal, requirements, connector, trace, navigate or navigate-edge. Fixed action names only; no selected element, query text, file identity or model content."
+    },
+    "outcome": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "success, failure, rejected or cancelled. Invalid/stale requests and unsuccessful refreshes are rejected."
+    },
+    "durationMs": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "isMeasurement": true,
+      "comment": "Elapsed host operation milliseconds, including file dialog wait."
+    }
+  },
+  "sysml.markdown.operation": {
+    "action": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "preview, export or open-visualizer. Preview records uncached model-load outcomes, including automatic refresh loads, not Markdown panel opens or completed browser rendering. No paths, fence text or model content."
+    },
+    "outcome": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "comment": "success, failure, rejected or cancelled."
+    },
+    "durationMs": {
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "isMeasurement": true,
+      "comment": "Elapsed model loading or host export/open operation milliseconds, including dialogs."
     }
   },
   "sysml.explorer.operation": {
@@ -154,7 +190,7 @@
     "component": {
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
-      "comment": "visualizer, workbench, explorer or language. No identity or sequence on this event."
+      "comment": "visualizer, workbench, explorer, language, architecture or markdown. No identity or sequence on this event."
     },
     "operation": {
       "classification": "SystemMetaData",

@@ -6,6 +6,10 @@ import {
     type WorkbenchOperation,
 } from '../modelEditing/workbenchModel';
 import { LspModelProvider } from '../providers/lspModelProvider';
+import {
+    checkCancelled, checkFileBudgets, checkLimit, internalSafetyLimits,
+    textBytes, withModelProgress
+} from '../resourceLimits';
 import { telemetry } from '../telemetry';
 
 /** Source-backed editing workspace shared by desktop and browser extension hosts. */
@@ -20,6 +24,7 @@ export class ModelWorkbenchPanel {
     private pending: { token: string; plans: PlannedDocument[] } | undefined;
     private applying = false;
     private disposed = false;
+    private loadCancellation?: vscode.CancellationTokenSource;
 
     private constructor(
         private readonly panel: vscode.WebviewPanel,
@@ -35,6 +40,8 @@ export class ModelWorkbenchPanel {
         vscode.workspace.onDidChangeTextDocument(event => {
             if (!this.uris.has(event.document.uri.toString())) return;
             this.pending = undefined;
+            this.generation++;
+            this.loadCancellation?.cancel();
             this.provider.invalidateCache(event.document.uri.toString());
             void this.post({ command: 'invalidated' });
             if (this.timer) clearTimeout(this.timer);
@@ -59,10 +66,9 @@ export class ModelWorkbenchPanel {
             }
             const load = async () => {
                 const targets = isFolder
-                    ? await vscode.workspace.findFiles(
-                        new vscode.RelativePattern(target, '**/*.{sysml,kerml}'),
-                        '**/{node_modules,.git}/**',
-                    ) : [target];
+                    ? await withModelProgress('Finding SysML model files', async (_progress, token) =>
+                        vscode.workspace.findFiles(new vscode.RelativePattern(target, '**/*.{sysml,kerml}'),
+                            '**/{node_modules,.git}/**', undefined, token)) : [target];
                 if (!targets.length) {
                     void vscode.window.showInformationMessage('No SysML or KerML files found in this folder.');
                     return;
@@ -81,13 +87,7 @@ export class ModelWorkbenchPanel {
                 telemetry?.panelOpened('workbench');
                 await this.currentPanel.refresh();
             };
-            if (isFolder) {
-                await vscode.window.withProgress({
-                    location: vscode.ProgressLocation.Notification, title: 'Loading SysML Workbench',
-                }, load);
-            } else {
-                await load();
-            }
+            await load();
         } catch (error) {
             void vscode.window.showErrorMessage(`Model Workbench: ${String(error)}`);
         }
@@ -97,6 +97,7 @@ export class ModelWorkbenchPanel {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.loadCancellation?.cancel();
         this.generation++;
         if (this.timer) clearTimeout(this.timer);
         for (const disposable of this.disposables.splice(0)) disposable.dispose();
@@ -110,18 +111,29 @@ export class ModelWorkbenchPanel {
 
     private async refresh(): Promise<void> {
         const generation = ++this.generation;
+        this.loadCancellation?.cancel();
+        const cancellation = new vscode.CancellationTokenSource();
+        this.loadCancellation = cancellation;
         try {
-            const documents = await Promise.all([...this.uris.values()].map(async uri => {
+            await withModelProgress('Loading SysML Workbench', async (progress, token) => {
+            await checkFileBudgets([...this.uris.values()], token);
+            const documents = [];
+            for (const uri of this.uris.values()) {
+                checkCancelled(token);
+                if (generation !== this.generation || this.disposed) return;
+                progress.report({ message: vscode.workspace.asRelativePath(uri) });
                 const document = await vscode.workspace.openTextDocument(uri);
                 this.provider.invalidateCache(uri.toString());
                 const version = document.version;
                 const text = document.getText();
-                const model = await this.provider.getModel(uri.toString(), ['elements', 'relationships']);
+                const model = await this.provider.getModel(uri.toString(), ['elements', 'relationships'], token);
+                checkCancelled(token);
                 if (document.version !== version || model.version !== version) {
                     throw new Error('The model is catching up with source edits. Refresh to retry.');
                 }
-                return { uri: uri.toString(), label: vscode.workspace.asRelativePath(uri), version, text, model };
-            }));
+                documents.push({ uri: uri.toString(), label: vscode.workspace.asRelativePath(uri), version, text, model });
+                progress.report({ increment: 100 / this.uris.size });
+            }
             if (generation !== this.generation || this.disposed) return;
             this.snapshot = buildSnapshot(documents);
             this.revision++;
@@ -130,8 +142,17 @@ export class ModelWorkbenchPanel {
                 documents: documents.map(({ uri, label, version }) => ({ uri, label, version })),
                 rows: this.snapshot.rows, links: this.snapshot.links, packageName: this.packageName });
             this.packageName = undefined;
+            }, cancellation.token, true);
         } catch (error) {
-            if (generation === this.generation) await this.post({ command: 'error', message: String(error) });
+            if (generation === this.generation) {
+                this.pending = undefined;
+                this.snapshot = { documents: [], rows: [], links: [] };
+                await this.post({ command: 'error', message: error instanceof vscode.CancellationError
+                    ? 'Model loading cancelled.' : String(error) });
+            }
+        } finally {
+            if (this.loadCancellation === cancellation) this.loadCancellation = undefined;
+            cancellation.dispose();
         }
     }
 
@@ -153,19 +174,24 @@ export class ModelWorkbenchPanel {
                     break;
                 }
                 case 'export': {
-                    if (!Array.isArray(message.records) || message.records.length > 100001
-                        || JSON.stringify(message.records).length > 10_000_000
+                    if (!Array.isArray(message.records)
                         || message.records.some(row => !Array.isArray(row)
                             || row.some(cell => typeof cell !== 'string'))) {
-                        throw new Error('Export is invalid or exceeds 10 MB. Narrow the current scope.');
+                        throw new Error('Export is invalid.');
                     }
+                    checkLimit(Math.max(0, message.records.length - 1), internalSafetyLimits.exportRows, 'exportRows');
+                    checkLimit(textBytes(JSON.stringify(message.records)), internalSafetyLimits.exportBytes, 'exportBytes');
                     trackedAction = 'export';
                     const destination = await vscode.window.showSaveDialog({
                         filters: { 'CSV table': ['csv'] }, saveLabel: 'Export CSV',
                     });
                     if (destination) {
+                        await withModelProgress('Exporting SysML table', async (_progress, token) => {
                         const csv = unparse(message.records as string[][], { escapeFormulae: true });
+                        checkLimit(textBytes(csv), internalSafetyLimits.exportBytes, 'exportBytes');
+                        checkCancelled(token);
                         await vscode.workspace.fs.writeFile(destination, new globalThis.TextEncoder().encode(csv));
+                        });
                     }
                     telemetry?.operation('workbench', 'export', destination ? 'success' : 'cancelled',
                         Date.now() - started);
@@ -187,15 +213,19 @@ export class ModelWorkbenchPanel {
                     failureOutcome = 'rejected';
                     if (!vscode.workspace.isTrusted) throw new Error('Trust this workspace before editing models.');
                     if (message.revision !== this.revision) throw new Error('The model changed. Refresh and retry.');
-                    if (!message.operation || typeof message.operation !== 'object'
-                        || JSON.stringify(message.operation).length > 1_100_000) {
+                    if (!message.operation || typeof message.operation !== 'object') {
                         throw new Error('Invalid or oversized edit request.');
                     }
+                    checkLimit(textBytes(JSON.stringify(message.operation)), internalSafetyLimits.editBytes, 'editBytes');
+                    await withModelProgress('Preparing SysML edit preview', async (_progress, cancellation) => {
+                    checkCancelled(cancellation);
                     const plans = planOperation(this.snapshot, message.operation as WorkbenchOperation);
                     await this.checkVersions(plans);
+                    checkCancelled(cancellation);
                     const token = `${this.revision}-${Date.now()}-${Math.random()}`;
                     this.pending = { token, plans };
                     await this.post({ command: 'preview', token, changes: previewChanges(this.snapshot, plans) });
+                    });
                     telemetry?.operation('workbench', 'preview', 'success', Date.now() - started);
                     trackedAction = undefined;
                     break;
@@ -210,6 +240,7 @@ export class ModelWorkbenchPanel {
                     }
                     this.applying = true;
                     try {
+                        const edit = await withModelProgress('Preparing SysML edits', async (_progress, cancellation) => {
                         const documents = await this.checkVersions(pending.plans);
                         const edit = new vscode.WorkspaceEdit();
                         for (const plan of pending.plans) {
@@ -220,6 +251,9 @@ export class ModelWorkbenchPanel {
                                 new vscode.Range(document.positionAt(change.start), document.positionAt(change.end)),
                                 change.text);
                         }
+                            checkCancelled(cancellation);
+                            return edit;
+                            });
                         this.pending = undefined;
                             failureOutcome = 'failure';
                         if (!await vscode.workspace.applyEdit(edit)) throw new Error('VS Code rejected the edit.');

@@ -622,9 +622,21 @@ export class EventEmitter {
 }
 
 export class CancellationTokenSource {
-    token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) };
-    cancel(): void { this.token.isCancellationRequested = true; }
-    dispose(): void {}
+    private readonly listeners = new Set<() => void>();
+    token = { isCancellationRequested: false, onCancellationRequested: (listener: () => void) => {
+        this.listeners.add(listener);
+        return { dispose: () => { this.listeners.delete(listener); } };
+    } };
+    cancel(): void {
+        if (this.token.isCancellationRequested) return;
+        this.token.isCancellationRequested = true;
+        for (const listener of this.listeners) listener();
+    }
+    dispose(): void { this.listeners.clear(); }
+}
+
+export class CancellationError extends Error {
+    constructor() { super('Canceled'); this.name = 'Canceled'; }
 }
 
 // ─── TreeItem (for explorer tests) ──────────────────────────────

@@ -230,6 +230,31 @@ async function main() {
             await capture('visualiser', sample);
             return;
         }
+        if (only === 'architecture_explorer') {
+            const sample = 'torch-system.sysml';
+            await open(sample);
+            await command('workbench.action.closeSidebar');
+            await command('sysml.showArchitectureExplorer');
+            await command('workbench.action.toggleMaximizeEditorGroup');
+            const architecture = await findFrame('#elements .element-row');
+            await architecture.locator('.element-row').filter({
+                has: architecture.locator('strong', { hasText: /^Torch$/ }),
+            }).first().click();
+            await architecture.locator('#status').filter({ hasText: /^Ready$/ }).waitFor();
+            await architecture.locator('.finding').first().waitFor();
+            await architecture.waitForFunction(() => document.querySelector('#stop').disabled);
+            await command('notifications.hideToasts');
+            await architecture.locator('#fit').click();
+            await architecture.waitForFunction(() => [...document.querySelectorAll('#graph canvas')]
+                .some(canvas => {
+                    const context = canvas.getContext('2d');
+                    if (!context || !canvas.width || !canvas.height) return false;
+                    return context.getImageData(0, 0, canvas.width, canvas.height).data
+                        .some((value, index) => index % 4 === 3 && value !== 0);
+                }));
+            await capture('architecture_explorer', sample, { x: 800, y: 975 });
+            return;
+        }
         if (only === 'markdown_preview') {
             const markdown = 'markdown-views.md';
             await open(markdown);

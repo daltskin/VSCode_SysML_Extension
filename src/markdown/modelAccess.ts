@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { checkLimit, textBytes } from '../resourceLimits';
 import { MAX_MODEL_BYTES } from './markdownItPlugin';
 
 /** Reject existing symbolic links anywhere in an export destination. */
@@ -34,13 +35,13 @@ export async function openPreviewModel(
         if (stat.type & vscode.FileType.SymbolicLink) {
             throw new Error('Symbolic links are not allowed in Markdown model paths.');
         }
-        if (enforceSizeLimit && current.toString() === uri.toString() && stat.size > MAX_MODEL_BYTES) {
-            throw new Error('Model exceeds the 2 MB preview limit.');
+        if (enforceSizeLimit && current.toString() === uri.toString()) {
+            checkLimit(stat.size, MAX_MODEL_BYTES, 'previewBytes');
         }
     }
     const document = await vscode.workspace.openTextDocument(uri);
-    if (enforceSizeLimit && document.getText().length > MAX_MODEL_BYTES) {
-        throw new Error('Model exceeds the 2 MB preview limit.');
+    if (enforceSizeLimit) {
+        checkLimit(textBytes(document.getText()), MAX_MODEL_BYTES, 'previewBytes');
     }
     return document;
 }

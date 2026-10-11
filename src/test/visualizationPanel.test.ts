@@ -50,6 +50,31 @@ suite('Visualization Panel Test Suite', () => {
 
     // ── Unit tests (mock-safe) ────────────────────────────────────
 
+    test('changing documents or folder context clears the Architecture selection', () => {
+        const { VisualizationPanel } = require('../visualization/visualizationPanel');
+        const original = VisualizationPanel.currentPanel;
+        const document = { uri: vscode.Uri.parse('file:///original.sysml') };
+        const next = { uri: vscode.Uri.parse('file:///next.sysml') };
+        const folderFile = vscode.Uri.parse('file:///folder/part.sysml');
+        const panel = {
+            _panel: { title: '', reveal: () => {} }, _document: document,
+            _fileUris: [], _architectureSelection: new vscode.Position(42, 0),
+            updateVisualization: () => {},
+        } as any;
+        try {
+            VisualizationPanel.currentPanel = panel;
+            VisualizationPanel.createOrShow(vscode.Uri.parse('file:///ext'), document);
+            assert.strictEqual(panel._architectureSelection.line, 42);
+            VisualizationPanel.createOrShow(vscode.Uri.parse('file:///ext'), next);
+            assert.strictEqual(panel._architectureSelection, undefined);
+            panel._architectureSelection = new vscode.Position(42, 0);
+            VisualizationPanel.createOrShow(vscode.Uri.parse('file:///ext'), next, undefined, undefined, [folderFile]);
+            assert.strictEqual(panel._architectureSelection, undefined);
+            VisualizationPanel.createOrShow(vscode.Uri.parse('file:///ext'), next);
+            assert.deepStrictEqual(panel._fileUris, []);
+        } finally { VisualizationPanel.currentPanel = original; }
+    });
+
     test('VisualizationPanel module is importable', () => {
         const mod = require('../visualization/visualizationPanel');
         assert.ok(mod.VisualizationPanel, 'VisualizationPanel class should be exported');

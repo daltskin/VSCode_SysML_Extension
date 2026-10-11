@@ -122,11 +122,12 @@ export class ParseOrchestrator {
             try {
                 // --- Model explorer ---
                 const fname = document.fileName.split('/').pop() || 'file';
-                this.cb.log?.(`parseSysMLDocument: loading ${fname} (LSP)`);
                 try {
                     if (this.cb.isWorkspaceMode?.()) {
+                        this.cb.log?.(`parseSysMLDocument: revealing ${fname} in cached workspace tree`);
                         await this.cb.revealInWorkspaceExplorer?.(document.uri);
                     } else {
+                        this.cb.log?.(`parseSysMLDocument: loading ${fname} (LSP)`);
                         await this.cb.loadModelExplorer?.(document, cancelSource.token);
                     }
                 } catch {
@@ -191,21 +192,18 @@ export class ParseOrchestrator {
 
             // Skip if a parse is already pending/in-flight
             if (this._debounceTimer || this._activeCancel) {
-                this.cb.log?.('notifyServerParseDone: skipping — parse already in progress');
                 return;
             }
 
             // Skip if explorer already has valid data
             const stats = this.cb.getLastStats?.();
             if (stats && stats.totalElements > 0) {
-                this.cb.log?.(`notifyServerParseDone: skipping re-parse — explorer already has ${stats.totalElements} elements`);
                 return;
             }
 
             // Cooldown
             const now = Date.now();
             if (now - this._lastParseDoneReparse < this.parseDoneCooldownMs) {
-                this.cb.log?.(`notifyServerParseDone: skipping — cooldown (${now - this._lastParseDoneReparse}ms since last re-parse)`);
                 return;
             }
 

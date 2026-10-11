@@ -5,6 +5,9 @@
 
 import * as vscode from 'vscode';
 import { BaseLanguageClient } from 'vscode-languageclient';
+import {
+    checkCancelled, checkFileBudgets, checkModelLimits, withModelProgress
+} from '../resourceLimits';
 import { telemetry } from '../telemetry';
 import { displayNameOf } from './modelNames';
 import {
@@ -56,12 +59,17 @@ function convertRangesInPlace(elements: SysMLElementDTO[]): void {
 export class LspModelProvider {
     /** Versioned model cache — avoids redundant LSP requests from multiple consumers. */
     private _cache = new Map<string, { version: number; result: SysMLModelResult }>();
+    private readonly generations = new Map<string, number>();
+    private readonly pending = new Map<string, {
+        source: vscode.CancellationTokenSource; users: number; promise: Promise<SysMLModelResult>;
+    }>();
 
     constructor(private readonly _client: BaseLanguageClient) {}
 
     /** Invalidate the cache for a URI (e.g. after a file change). */
     invalidateCache(uri: string): void {
         this._cache.delete(uri);
+        this.generations.set(uri, (this.generations.get(uri) ?? 0) + 1);
     }
 
     /**
@@ -84,6 +92,55 @@ export class LspModelProvider {
         scopes?: SysMLModelScope[],
         token?: vscode.CancellationToken,
     ): Promise<SysMLModelResult> {
+        const document = vscode.workspace.textDocuments?.find(source => source.uri.toString() === uri);
+        checkCancelled(token);
+        const cached = this._cache.get(uri);
+        const requested = scopes?.length ? scopes : ['elements', 'relationships', 'sequenceDiagrams',
+            'activityDiagrams', 'resolvedTypes', 'diagnostics'];
+        if (cached && (!document || cached.version === document.version)
+            && requested.every(scope => cached.result[scope as keyof SysMLModelResult] !== undefined)
+            && ((cached.result.elements?.length ?? 0) > 0 || cached.result.stats)) {
+            await checkFileBudgets([vscode.Uri.parse(uri)], token);
+            checkCancelled(token);
+            if (this._cache.get(uri) === cached
+                && (!document || cached.version === document.version)) return cached.result;
+        }
+        return withModelProgress('Loading SysML model', async (_progress, cancellation) => {
+            await checkFileBudgets([vscode.Uri.parse(uri)], cancellation);
+            checkCancelled(cancellation);
+            const generation = this.generations.get(uri) ?? 0;
+            const key = JSON.stringify([uri, generation, document?.version, [...requested].sort()]);
+            let entry = this.pending.get(key);
+            if (!entry || entry.source.token.isCancellationRequested) {
+                const source = new vscode.CancellationTokenSource();
+                const created = { source, users: 0,
+                    promise: this.requestModel(uri, scopes, source.token, generation) };
+                entry = created;
+                this.pending.set(key, created);
+                void created.promise.finally(() => {
+                    if (this.pending.get(key) === created) this.pending.delete(key);
+                    source.dispose();
+                }).catch(() => undefined);
+            }
+            entry.users++;
+            const shared = entry;
+            let released = false;
+            const release = (): void => {
+                if (released) return;
+                released = true;
+                if (--shared.users === 0) shared.source.cancel();
+            };
+            const subscription = cancellation.onCancellationRequested(release);
+            let result: SysMLModelResult;
+            try { result = await shared.promise; }
+            finally { subscription.dispose(); release(); }
+            checkCancelled(cancellation);
+            return result;
+        }, token);
+    }
+
+    private async requestModel(uri: string, scopes?: SysMLModelScope[],
+        token?: vscode.CancellationToken, generation = this.generations.get(uri) ?? 0): Promise<SysMLModelResult> {
         // Map scope names to the result field that holds their data.
         // Cache is only honoured when every requested scope is already
         // present in the cached result — otherwise an earlier call with
@@ -105,7 +162,9 @@ export class LspModelProvider {
 
         // Check cache — must have elements AND every requested scope present.
         const cached = this._cache.get(uri);
-        if (cached && (cached.result.elements?.length ?? 0) > 0) {
+        const document = vscode.workspace.textDocuments?.find(source => source.uri.toString() === uri);
+        if (cached && (!document || cached.version === document.version)
+            && ((cached.result.elements?.length ?? 0) > 0 || cached.result.stats)) {
             const cacheCoversAllScopes = requestedScopes.every(s => {
                 const field = scopeFieldMap[s];
                 return field !== undefined && cached.result[field] !== undefined;
@@ -147,29 +206,35 @@ export class LspModelProvider {
                 throw error;
             }
 
-            const hasData = (result.elements?.length ?? 0) > 0;
+            const hasData = (result.elements?.length ?? 0) > 0 || result.stats !== undefined;
             if (hasData || attempt >= retryDelays.length) {
                 break;
             }
 
             // Wait before retrying
             await new Promise<void>((resolve) => {
-                const timer = setTimeout(resolve, retryDelays[attempt]);
-                // Cancel the delay if the token fires
-                token?.onCancellationRequested(() => {
+                const finish = (): void => {
                     globalThis.clearTimeout(timer);
+                    subscription?.dispose();
                     resolve();
-                });
+                };
+                const timer = setTimeout(finish, retryDelays[attempt]);
+                // Cancel the delay if the token fires
+                const subscription = token?.onCancellationRequested(finish);
             });
         }
 
         // Stamp vscode.Range onto every element for convenient consumer use
+        checkCancelled(token);
+        checkModelLimits(result);
         if (result.elements) {
             convertRangesInPlace(result.elements);
         }
 
         // Cache the result for deduplication across consumers
-        this._cache.set(uri, { version: result.version, result });
+        if ((this.generations.get(uri) ?? 0) === generation) {
+            this._cache.set(uri, { version: result.version, result });
+        }
         telemetry?.modelOperation('success', Date.now() - started, result.stats && {
             parseTimeMs: result.stats.parseTimeMs,
             modelBuildTimeMs: result.stats.modelBuildTimeMs,

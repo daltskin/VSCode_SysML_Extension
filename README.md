@@ -19,51 +19,55 @@ Open a SysML file, click **Show Model Visualizer** in the editor toolbar, then c
 
 All language features are provided by the [sysml-v2-lsp](https://www.npmjs.com/package/sysml-v2-lsp) language server.
 
-- **Syntax Highlighting** — Full support for SysML v2.0 keywords, operators, and constructs via TextMate grammar and semantic tokens
-- **Standard Library** — Built-in OMG standard library (Kernel, Domain, Systems libraries)
-- **Completions** — Context-aware auto-complete with trigger characters (`.`, `:`, space)
-- **Hover** — Type information and documentation on hover
-- **Formatting** — Smart indentation and code formatting (document and range)
-- **Validation** — Real-time syntax and semantic checking with VS Code Problems panel integration
-- **Navigation** — Go to Definition (including standard library imports), Find References, Document Symbols, Workspace Symbols, Breadcrumbs
-- **Rename** — Rename symbols with linked editing support across references
-- **Code Actions** — Quick fixes for common issues
-- **Code Lens** — Reference counts shown above definitions
-- **Folding** — Collapsible regions for blocks and nested structures
-- **Selection Ranges** — Smart expand/shrink selection
-- **Signature Help** — Parameter hints for action/calc invocations
-- **Document Links** — Clickable import paths that navigate to the target
-- **Type Hierarchy** — View supertypes and subtypes of definitions
-- **Call Hierarchy** — Trace incoming and outgoing action/state invocations
-- **Inlay Hints** — Inline type annotations next to identifiers (opt-in, off by default)
-- **Snippets** — 29 code snippets for rapid scaffolding (`partdef`, `part`, `package`, `attrdef`, `portdef`, `actiondef`, `statedef`, `reqdef`, `enumdef`, `connect`, `flow`, `import`, and more)
+| Feature                 | Description                                                                                                                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Syntax Highlighting** | Full support for SysML v2.0 keywords, operators, and constructs via TextMate grammar and semantic tokens                                                                         |
+| **Standard Library**    | Built-in OMG standard library (Kernel, Domain, Systems libraries)                                                                                                                |
+| **Completions**         | Context-aware auto-complete with trigger characters (`.`, `:`, space)                                                                                                            |
+| **Hover**               | Type information and documentation on hover                                                                                                                                      |
+| **Formatting**          | Smart indentation and code formatting (document and range)                                                                                                                       |
+| **Validation**          | Real-time syntax and semantic checking with VS Code Problems panel integration                                                                                                   |
+| **Navigation**          | Go to Definition (including standard library imports), Find References, Document Symbols, Workspace Symbols, Breadcrumbs                                                         |
+| **Rename**              | Rename symbols with linked editing support across references                                                                                                                     |
+| **Code Actions**        | Quick fixes for common issues                                                                                                                                                    |
+| **Code Lens**           | Reference counts shown above definitions                                                                                                                                         |
+| **Folding**             | Collapsible regions for blocks and nested structures                                                                                                                             |
+| **Selection Ranges**    | Smart expand/shrink selection                                                                                                                                                    |
+| **Signature Help**      | Parameter hints for action/calc invocations                                                                                                                                      |
+| **Document Links**      | Clickable import paths that navigate to the target                                                                                                                               |
+| **Type Hierarchy**      | View supertypes and subtypes of definitions                                                                                                                                      |
+| **Call Hierarchy**      | Trace incoming and outgoing action/state invocations                                                                                                                             |
+| **Inlay Hints**         | Inline type annotations next to identifiers (opt-in, off by default)                                                                                                             |
+| **Snippets**            | 29 code snippets for rapid scaffolding (`partdef`, `part`, `package`, `attrdef`, `portdef`, `actiondef`, `statedef`, `reqdef`, `enumdef`, `connect`, `flow`, `import`, and more) |
 
 ### Tooling
 
-- **Model Explorer** — Tree view showing packages and elements across your workspace, with two modes: **By File** and **Semantic Model**
-- **Feature Explorer** — Master-detail tree view showing resolved type information, specialization chains, feature groups (parts, ports, attributes), multiplicity, direction, and modifiers for the selected definition
-- **Feature Inspector** — Interactive sidebar panel showing detailed type information, specialization breadcrumbs, feature tables with direction/multiplicity/modifier badges, clickable type drill-down, and navigation history
-- **Interactive Diagrams** — 10 diagram views: General, Interconnection, Action Flow, State Transition, Sequence, Case, Package, Graph, Tree, and Hierarchy — with search, pan, zoom, and PNG/SVG export
-- **Model Dashboard** — Webview panel displaying model-wide statistics, element counts, build timing metrics, and Model Complexity Index (MCI)
-- **Model Workbench** — Requirement and element tables, guided editing and deletion, spreadsheet paste, relationship editing, and traceability matrices with source previews
-- **Model Complexity Index** — Status bar indicator (0–100 score) with hotspot detection for complex elements, documentation coverage, and coupling analysis
-- **Animated Parse Progress** — Status bar animation showing parse stages (assembling, building, linking) with real-time progress feedback
-- **Diagnostic-Reactive Status Bar** — Live error/warning counts with colour-coded icons; click to open the Problems panel
-- **LSP Server Health** — Status bar tooltip showing uptime, memory usage, and cache statistics
-- **MCP Server** — Built-in [Model Context Protocol](https://modelcontextprotocol.io/) server for Copilot agent mode integration, enabling AI-assisted SysML modelling
+| Feature                            | Description                                                                                                                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Model Explorer**                 | Tree view showing packages and elements across your workspace, with two modes: **By File** and **Semantic Model**                                                                                      |
+| **Feature Explorer**               | Master-detail tree view showing resolved type information, specialization chains, feature groups (parts, ports, attributes), multiplicity, direction, and modifiers for the selected definition        |
+| **Feature Inspector**              | Interactive sidebar panel showing detailed type information, specialization breadcrumbs, feature tables with direction/multiplicity/modifier badges, clickable type drill-down, and navigation history |
+| **Interactive Diagrams**           | 10 diagram views: General, Interconnection, Action Flow, State Transition, Sequence, Case, Package, Graph, Tree, and Hierarchy — with search, pan, zoom, and PNG/SVG export                            |
+| **Model Dashboard**                | Webview panel displaying model-wide statistics, element counts, build timing metrics, and Model Complexity Index (MCI)                                                                                 |
+| **Model Workbench**                | Requirement and element tables, guided editing and deletion, spreadsheet paste, relationship editing, and traceability matrices with source previews                                                   |
+| **Model Complexity Index**         | Status bar indicator (0–100 score) with hotspot detection for complex elements, documentation coverage, and coupling analysis                                                                          |
+| **Animated Parse Progress**        | Status bar animation showing parse stages (assembling, building, linking) with real-time progress feedback                                                                                             |
+| **Diagnostic-Reactive Status Bar** | Live error/warning counts with colour-coded icons; click to open the Problems panel                                                                                                                    |
+| **LSP Server Health**              | Status bar tooltip showing uptime, memory usage, and cache statistics                                                                                                                                  |
+| **MCP Server**                     | Built-in [Model Context Protocol](https://modelcontextprotocol.io/) server for Copilot agent mode integration, enabling AI-assisted SysML modelling                                                    |
 
 ### Workspace Support
 
-When you open a **multi-root workspace** (`.code-workspace` file), the extension automatically scans all `.sysml` files across every folder and opens them for the LSP server to parse. This enables:
+Opening a folder or multi-root workspace automatically pre-parses `.sysml` and `.kerml` files in the background, without opening model editors. This enables:
 
 - **Cross-file navigation** — Go to Definition, Find References, and Rename work across all files in the workspace
 - **Workspace-wide Model Explorer** — The tree view aggregates packages and elements from every file, with two modes:
   - **By File** — elements grouped under their source file
   - **Semantic Model** — a unified view merging all packages into a single model tree
-- **Background pre-parsing** — configurable via `sysml.workspace.preloadOnOpen` (default: `workspaceOnly`)
-- **Exclude patterns** — skip directories from scanning via `sysml.workspace.excludePatterns` (e.g. `temp`, `archive`)
+- **Background pre-parsing** — automatic for folders and saved workspaces via `sysml.workspace.preloadOnOpen` (default: `always`)
+- **Directory exclusions** — `sysml.scan.skipDirectories` uses exact directory names. Its defaults skip dependency, build, test, and temporary directories; a custom list replaces these defaults.
 
-For single-folder workspaces, files are parsed lazily when opened.
+Set `sysml.workspace.preloadOnOpen` to `workspaceOnly` for saved workspaces only, or `never` for lazy parsing when files are opened. Restart the language server after changing preload or scan settings.
 
 ## Screenshots
 
@@ -83,6 +87,9 @@ Click an image to open it at full resolution.
 <tr>
 <td align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/model_workbench.png"><strong>Requirements Workbench</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/model_workbench.png"><img src="assets/model_workbench.png" width="400" alt="Torch requirements with editable documentation and deletion actions"></a></td>
 <td align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/workbench_elements.png"><strong>Element Editing</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/workbench_elements.png"><img src="assets/workbench_elements.png" width="400" alt="Torch element table with identifiers, types, multiplicity, and documentation"></a></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/architecture_explorer.png"><strong>Architecture Explorer</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/architecture_explorer.png"><img src="assets/architecture_explorer.png" width="800" alt="Torch removal-impact analysis with a modeled containment trace and source-linked findings in Architecture Explorer"></a></td>
 </tr>
 <tr>
 <td colspan="2" align="center"><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/traceability_matrix.png"><strong>Traceability Matrix</strong></a><br><a href="https://raw.githubusercontent.com/daltskin/VSCode_SysML_Extension/main/assets/traceability_matrix.png"><img src="assets/traceability_matrix.png" width="800" alt="Satisfaction matrix showing uncovered requirements"></a></td>
@@ -142,8 +149,7 @@ package MySystem {
 
 ### Diagrams in Markdown
 
-Use `sysmlv2-view` fences in VS Code's built-in Markdown preview. Model paths are relative
-to the saved Markdown document and must stay inside a workspace folder.
+Use `sysmlv2-view` fences in VS Code's built-in Markdown preview. Model paths are relative to the saved Markdown document and must stay inside a workspace folder.
 
 ````markdown
 ```sysmlv2-view
@@ -152,29 +158,11 @@ view: SequenceView
 ```
 ````
 
-`model` is required. `view` is optional and is either the name of a view usage in the model,
-including its expose targets and filters (qualify ambiguous names with `Package::View`), or a
-standard view definition from the SysML v2 specification: `GeneralView`, `InterconnectionView`,
-`ActionFlowView`, `StateTransitionView`, `SequenceView`, `BrowserView`, and `GridView`. A model
-view takes precedence over a type name. The Visualizer's extra diagrams are also available:
-`CaseView`, `PackageView`, `graph`, `hierarchy`, and `textual`, along with renderer aliases such
-as `usecase`, `tree`, and `table`. `GeometryView` is not currently supported by the renderer.
-Without `view`, the General View is used.
+`model` is required. `view` is optional and is either the name of a view usage in the model, including its expose targets and filters (qualify ambiguous names with `Package::View`), or a standard view definition from the SysML v2 specification: `GeneralView`, `InterconnectionView`, `ActionFlowView`, `StateTransitionView`, `SequenceView`, `BrowserView`, and `GridView`. A model view takes precedence over a type name. The Visualizer's extra diagrams are also available: `CaseView`, `PackageView`, `graph`, `hierarchy`, and `textual`, along with renderer aliases such as `usecase`, `tree`, and `table`. `GeometryView` is not currently supported by the renderer. Without `view`, the General View is used.
 
-Diagrams share the Visualizer's renderers, update when referenced models change, and allow
-pan/zoom without model editing. Unknown/duplicate fields and missing models/views appear as
-inline errors.
+For GitHub or PDF workflows, run **SysML: Export Markdown Diagrams to SVG** from the Markdown editor to save markdown content with SVG images instead.
 
-Preview limits are 2 MB per model/payload, 1,000 elements, and 64 nesting levels. Larger
-models show a link to open the Model Visualizer.
-
-For GitHub or PDF workflows, run **SysML: Export Markdown Diagrams to SVG** from the Markdown
-editor. Choose an output Markdown file; the command saves adjacent SVGs and replaces fences
-with image references in the copy, leaving the original document and models unchanged.
-List and blockquote containers are preserved.
-
-Try [the sample document](samples/markdown-views.md). Developers can run
-`npm run preview:markdown` for a local browser harness backed by the real language server.
+Try [the sample document](samples/markdown-views.md).
 
 ### Commands (Ctrl+Shift+P)
 
@@ -192,8 +180,11 @@ Try [the sample document](samples/markdown-views.md). Developers can run
 | `SysML: Show Type Hierarchy`                   | View supertypes and subtypes of the current definition              |
 | `SysML: Show Call Hierarchy`                   | Trace incoming and outgoing action/state invocations                |
 | `SysML: Show Feature Inspector`                | Inspect attributes, types, and relationships of an element          |
-| `SysML: Show Model Dashboard`                  | View model statistics, build timing, and complexity index           |
-| `SysML: Open Model Workbench`                  | Edit requirements, relationships, tables, and traceability matrices |
+| `SysML: Inspect Model Metrics`                 | View model statistics, build timing, and complexity index           |
+| `SysML: Edit Model`                            | Edit requirements, relationships, tables, and traceability matrices |
+| `SysML: Analyze Model Relationships`           | Analyze impact, requirements, connectors, and implementation traces |
+| `SysML: Visualize Model`                       | Visualize the selected model files or folder                        |
+| `SysML: Visualize Model (Choose View)`         | Visualize the selected model with a chosen diagram view             |
 | `SysML: Clear Parse Cache`                     | Flush server caches and re-parse the active file                    |
 | `SysML: Refresh Model Tree`                    | Refresh the Model Explorer tree view                                |
 | `SysML: Toggle View: By File / Semantic Model` | Switch Model Explorer between file and semantic views               |
@@ -201,19 +192,44 @@ Try [the sample document](samples/markdown-views.md). Developers can run
 
 ### Context Menu
 
-Right-click any folder in the Explorer → **Visualise with SysML** to aggregate and visualize all `.sysml` files in that folder. Choose **Visualise with SysML (Choose View)** to pick a specific diagram type.
+Right-click files or folders in the Explorer:
 
-Right-click in a SysML file editor → **Show Feature Inspector** to inspect the element at the cursor.
+- **Visualize Model** to aggregate and visualize all `.sysml` files in that folder.
+- **Visualize Model (Choose View)** to pick a specific view/diagram type.
 
-Right-click a `.sysml` file or folder → **Show Model Dashboard** for statistics and complexity analysis.
+- **Show Feature Inspector** to inspect the element at the cursor.
 
-Right-click a package node in the **SysML Model Explorer** → **Visualize Package** to open an isolated diagram for that package.
+- **Inspect Model Metrics** for statistics and complexity analysis.
+
+- **Analyze Model Relationships** to load its models in Architecture Explorer.
+
+- **Edit Model** to edit a model's requirements, relationships, and traceability.
+
+Right-click a package node in the **SysML Model Explorer**:
+
+- **Visualize Package** to open an isolated diagram for that package.
+
+## Architecture Explorer
+
+Select an element in a SysML editor and run **SysML: Analyze Model Relationships**,
+or use its editor or Model Explorer context menu. In the visualizer, select an element and choose **Explore Architecture**. This feature runs fully locally, without AI credentials or cloud calls.
+
+| Question                                        | Evidence returned                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| What breaks if I remove this?                   | Contained declarations and potentially affected elements, with modeled relationship paths. |
+| Show every requirement impacted by this element | Reachable requirements and their trace paths.                                              |
+| Why does this connector exist?                  | Authored documentation and declared endpoints; missing rationale is reported explicitly.   |
+| Show the shortest trace to implementation       | Fewest-link path from the selected need or requirement to a chosen implementation.         |
+
+Select a finding to animate its trace. Expand its evidence to open the source. Use **Load model files** for cross-file queries; source edits refresh models and clear old answers. Search and findings are paginated without truncation, and the canvas shows one trace at a time.
+
+Results use explicit relationships in loaded files, not every workspace reference, inherited behavior, or physical failure predictions. Traces can follow links in either direction, but not package containment. Unresolved links and missing rationale are reported, not guessed.
+
+Try [samples/architecture-explorer.sysml](samples/architecture-explorer.sysml).
 
 ## Model Workbench
 
-Open a SysML file and run **SysML: Open Model Workbench**. It is also available from the editor context menu, a package's Model Explorer context menu, or **Edit Model** in the visualizer.
-
-In the Files Explorer, right-click a `.sysml` or `.kerml` file or any folder and select **SysML: Open Model Workbench**. Folder selection recursively adds its SysML and KerML files to the workbench, excluding `node_modules` and `.git` directories.
+Open a SysML file and run **SysML: Edit Model**. It is also available from the editor context menu, a package's Model Explorer context menu, or **Edit Model** in the visualizer.
 
 | View          | Supported workflow                                                                                                                             |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -222,7 +238,7 @@ In the Files Explorer, right-click a `.sysml` or `.kerml` file or any folder and
 | Relationships | Create, retarget, or delete explicit `satisfy`, `verify`, and `dependency` links.                                                              |
 | Traceability  | Inspect requirement coverage or dependency links; toggle cells through an edit preview; filter uncovered targets; export CSV.                  |
 
-Use **Load model files** for cross-file relationships and requirement types. File, package, and search filters narrow the tables; matrix filters narrow target rows while source columns include all loaded files. Coverage reflects resolved links in those loaded files, not the entire workspace or inherited semantics. Tables show 75 rows per page and matrices show 25 source columns per page.
+Use **Load model files** for cross-file relationships and requirement types. File, package, and search filters narrow the tables; matrix filters narrow target rows while source columns include all loaded files. Coverage reflects resolved links in those loaded files, not the entire workspace or inherited semantics.
 
 Edits are staged until **Review changes** and **Apply changes**. A batch is applied as one VS Code workspace edit, leaving documents unsaved. Use the source editor's normal Undo/Redo and Save commands. Changes elsewhere invalidate stale previews; pending table changes must be reviewed or discarded before other editing operations. Editing requires a trusted workspace and writable destination files.
 
@@ -253,23 +269,41 @@ Use a row's trash action to remove a requirement, element, or explicit relations
 
 Satisfaction links originate from part usages and target requirement usages. Verification links originate from verification cases and are written inside a simple `objective`; advanced objective forms remain source-only. Named, multi-target, quoted-endpoint, or otherwise complex existing relationships may be shown as source-only and cannot be changed through matrix cells. Normal LSP diagnostics continue after applying edits; preview validation is not a full semantic proof of the model.
 
-For UI development, run `npm run preview:workbench` and open `http://127.0.0.1:45188/` (override the port with `PORT`). This uses an in-memory demo model and the real parser. It does not exercise VS Code file dialogs, file writes, or native undo.
-
 ## Settings
 
-| Setting                            | Default           | Description                                                                                                                                                  |
-| ---------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `sysml.validation.enabled`         | `true`            | Enable SysML model validation                                                                                                                                |
-| `sysml.validation.disabledCodes`   | `[]`              | Suppress individual diagnostic codes, e.g. `["missing-doc"]`; applies immediately to open documents                                                          |
-| `sysml.format.indentSize`          | `4`               | Number of spaces for indentation                                                                                                                             |
-| `sysml.visualization.defaultView`  | `"sysml"`         | Default view when opening the visualizer (`sysml`, `tree`, `elk`, `bdd`, `package`, `ibd`, `graph`, `hierarchy`, `sequence`, `activity`, `state`, `usecase`) |
-| `sysml.export.defaultScale`        | `2`               | Default scale factor for PNG exports (1x–4x)                                                                                                                 |
-| `sysml.library.path`               | `""`              | Path to SysML v2 standard library directory                                                                                                                  |
-| `sysml.maxNumberOfProblems`        | `100`             | Maximum number of problems reported per file                                                                                                                 |
-| `sysml.inlayHints.enabled`         | `false`           | Enable inlay hints (inline type annotations). May interfere with renaming — disable if you experience editing issues                                         |
-| `sysml.workspace.preloadOnOpen`    | `"workspaceOnly"` | Control workspace pre-parsing: `always`, `workspaceOnly`, `never`. Restart the language server after changing this setting.                                  |
-| `sysml.workspace.excludePatterns`  | `[]`              | Glob patterns to exclude from workspace pre-parsing                                                                                                          |
-| `sysmlLanguageServer.trace.server` | `"off"`           | Traces communication between VS Code and the language server (`off`, `messages`, `verbose`)                                                                  |
+### Resource Controls
+
+Set a timeout or source-loading budget for model operations. Loading has no default size or file-count cap.
+
+| Setting                           | Default | Applies To                                                                  |
+| --------------------------------- | ------- | --------------------------------------------------------------------------- |
+| `sysml.operations.timeoutSeconds` | `120`   | Operation timeout in seconds; `0` disables it                               |
+| `sysml.modelLoading.budgetMiB`    | `0`     | Optional aggregate source-loading budget per operation; `0` means unlimited |
+
+These settings apply to model tools and Markdown loading, starting with the next operation. The budget measures UTF-8 source bytes, not language-server memory. Limit errors name the setting to adjust; results are never silently truncated.
+
+- **Progress:** operations lasting over 500 ms share a cancellable notification.
+  **SysML: Cancel Active Operations** also cancels background loads.
+- **Reuse:** switching views or closing files reuses the workspace model. Edits, file or
+  workspace changes, relevant settings, and **Refresh Model Tree** invalidate it.
+- **Safety:** previews, spreadsheet batches, exports, and nesting retain internal guards.
+  Path validation remains enforced.
+
+Cancellation and timeouts do not stop the language server or interrupt synchronous work or committed writes. Cancelled Markdown exports may leave SVGs already written, but no final Markdown copy.
+
+| Setting                            | Default         | Description                                                                                                                                                  |
+| ---------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `sysml.validation.enabled`         | `true`          | Enable SysML model validation                                                                                                                                |
+| `sysml.validation.disabledCodes`   | `[]`            | Suppress individual diagnostic codes, e.g. `["missing-doc"]`; applies immediately to open documents                                                          |
+| `sysml.format.indentSize`          | `4`             | Number of spaces for indentation                                                                                                                             |
+| `sysml.visualization.defaultView`  | `"sysml"`       | Default view when opening the visualizer (`sysml`, `tree`, `elk`, `bdd`, `package`, `ibd`, `graph`, `hierarchy`, `sequence`, `activity`, `state`, `usecase`) |
+| `sysml.export.defaultScale`        | `2`             | Default scale factor for PNG exports (1x–4x)                                                                                                                 |
+| `sysml.library.path`               | `""`            | Path to SysML v2 standard library directory                                                                                                                  |
+| `sysml.maxNumberOfProblems`        | `100`           | Maximum number of problems reported per file                                                                                                                 |
+| `sysml.inlayHints.enabled`         | `false`         | Enable inlay hints (inline type annotations). May interfere with renaming — disable if you experience editing issues                                         |
+| `sysml.workspace.preloadOnOpen`    | `"always"`      | Control workspace pre-parsing: `always`, `workspaceOnly`, `never`. Restart the language server after changing this setting.                                  |
+| `sysml.scan.skipDirectories`       | Server defaults | Exact directory names to exclude from automatic discovery and pre-parsing. Custom lists replace the defaults; `[]` disables exclusions.                      |
+| `sysmlLanguageServer.trace.server` | `"off"`         | Traces communication between VS Code and the language server (`off`, `messages`, `verbose`)                                                                  |
 
 ### Diagnostic Suppression
 
@@ -302,9 +336,7 @@ All currently supported codes are listed below and offered in VS Code Settings:
 | `unverified-requirement`            | A requirement with no verification relationship           |
 | `view-no-scope`                     | A view with no scope                                      |
 
-Codes are case-sensitive. Changes apply to open documents immediately; `[]` restores
-all diagnostics. Syntax errors and keyword-typo errors currently have no diagnostic
-code and cannot be suppressed with this setting.
+Codes are case-sensitive. Changes apply to open documents immediately; `[]` restores all diagnostics. Syntax errors and keyword-typo errors currently have no diagnostic code and cannot be suppressed with this setting.
 
 ## Development
 
@@ -340,18 +372,10 @@ desktop-only and is automatically skipped in the web host.
 
 ### Privacy and Telemetry
 
-Configured release packages can send optional telemetry following VS Code's telemetry
-permissions and the independent `sysml.telemetry.enabled` User setting (default
-`true`). Usage events include random installation/session IDs for feature-frequency
-and journey analytics, not model content, accounts or machine IDs. Disabling usage
-deletes the local installation ID. See [Privacy](PRIVACY.md) and the complete
-[event catalog](telemetry.json). `SysML: Report Issue` previews an editable report
-before any content is sent to GitHub.
+Configured release packages can send optional telemetry following VS Code's telemetry permissions and the independent `sysml.telemetry.enabled` User setting (default `true`). Usage events include random installation/session IDs for feature-frequency and journey analytics, not model content, accounts or machine IDs. Disabling usage deletes the local installation ID. See [Privacy](PRIVACY.md) and the complete [event catalog](telemetry.json). `SysML: Report Issue` previews an editable report before any content is sent to GitHub.
 
 Release packaging injects the public ingestion destination from the GitHub Actions
-repository variable `SYSML_TELEMETRY_CONNECTION_STRING`; an absent or invalid value
-fails release packaging. Local builds without it remain disconnected. See the
-[telemetry infrastructure runbook](infra/README.md).
+repository variable `SYSML_TELEMETRY_CONNECTION_STRING`; an absent or invalid value fails release packaging. Local builds without it remain disconnected. See the [telemetry infrastructure runbook](infra/README.md).
 
 ## License
 

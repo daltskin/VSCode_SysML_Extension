@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { setImmediate } from 'node:timers';
 import type { TelemetryLogger, TelemetrySender } from 'vscode';
-import { TelemetryService } from '../telemetry/telemetryService';
+import { operations, TelemetryService } from '../telemetry/telemetryService';
 import { UsageIdentityStore } from '../telemetry/usageIdentity';
 
 const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000000;'
@@ -59,6 +59,61 @@ function harness(
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
 
 suite('Telemetry privacy and consent', () => {
+  test('new feature actions are allowlisted, documented and consent-controlled', async () => {
+    const catalog = require('../../telemetry.json') as Record<string, unknown>;
+    for (const component of ['architecture', 'markdown'] as const) {
+      assert.ok(catalog[`sysml.${component}.operation`]);
+      for (const action of operations[component]) {
+        for (const outcome of ['success', 'cancelled', 'rejected', 'failure'] as const) {
+          for (const level of ['all', 'error', 'off'] as const) {
+            const state = harness(level);
+            state.service.operation(component, action, outcome, 12.6);
+            await tick();
+            assert.equal(state.requests.length, level === 'all' ? 1 : 0);
+            if (state.requests.length) {
+              const event = JSON.parse(state.requests[0].body as string).data.baseData;
+              assert.equal(event.name, `sysml.${component}.operation`);
+              assert.equal(event.properties.action, action);
+              assert.equal(event.properties.outcome, outcome);
+              assert.equal(event.measurements.durationMs, 13);
+            }
+            state.service.dispose();
+          }
+        }
+      }
+    }
+    const state = harness();
+    state.service.panelOpened('architecture');
+    await tick();
+    assert.equal(JSON.parse(state.requests[0].body as string).data.baseData.properties.panel,
+      'architecture');
+    state.service.dispose();
+  });
+
+  test('new feature events reject model content and non-allowlisted actions', async () => {
+    const state = harness();
+    for (const component of ['architecture', 'markdown']) {
+      for (const extra of ['path', 'selectedId', 'targetId', 'question', 'model', 'message']) {
+        state.sender().sendEventData(`JamieD.sysml-v2-support/sysml.${component}.operation`, {
+          action: component === 'architecture' ? 'trace' : 'preview', outcome: 'success',
+          [extra]: '/private/model.sysml SecretRequirement',
+        });
+      }
+      state.sender().sendEventData(`JamieD.sysml-v2-support/sysml.${component}.operation`, {
+        action: 'SecretRequirement', outcome: 'success',
+      });
+    }
+    await tick();
+    assert.equal(state.requests.length, 0);
+    state.permissions.enabled = false;
+    state.service.panelOpened('architecture');
+    state.service.operation('markdown', 'preview', 'success');
+    state.service.operation('architecture', 'trace', 'success');
+    await tick();
+    assert.equal(state.requests.length, 0);
+    state.service.dispose();
+  });
+
   for (const level of ['all', 'error', 'crash', 'off'] as const) {
     for (const enabled of [true, false]) {
       test(`${level}, extension enabled=${enabled}`, async () => {

@@ -4,11 +4,14 @@ import { ModelExplorerProvider, ModelTreeItem } from './explorer/modelExplorerPr
 import { SysRunnerPanel } from './game/sysRunnerPanel';
 import { getLanguageClient, startLanguageClient, stopLanguageClient } from './lsp/client';
 import { registerMarkdownPreview } from './markdown/markdownPreview';
+import { ArchitectureExplorerPanel } from './panels/architectureExplorerPanel';
 import { FeatureInspectorPanel } from './panels/featureInspectorPanel';
 import { ModelDashboardPanel } from './panels/modelDashboardPanel';
 import { ModelWorkbenchPanel } from './panels/modelWorkbenchPanel';
 import { ParseOrchestrator } from './parseOrchestrator';
 import { LspModelProvider } from './providers/lspModelProvider';
+import { findWorkspaceModelFiles } from './providers/workspaceFiles';
+import { cancelModelOperations, checkCancelled, checkFileBudgets, withModelProgress } from './resourceLimits';
 import {
     clearMetricsKey,
     deleteCachedMetrics,
@@ -72,6 +75,7 @@ function parseSysMLDocument(document: vscode.TextDocument, options?: { skipProgr
  * start when the DFA warm-up delays initial parsing.
  */
 export function notifyServerParseDone(uri?: string): void {
+    if (uri) lspModelProvider?.invalidateCache(uri);
     parseOrchestrator.notifyServerParseDone(uri);
 }
 
@@ -159,6 +163,15 @@ export function activate(context: vscode.ExtensionContext) {
         }),
     );
     if (vscode.workspace.textDocuments.some(isSysML)) initialize();
+    else if (vscode.workspace.workspaceFolders?.length) {
+        let disposed = false;
+        context.subscriptions.push(new vscode.Disposable(() => { disposed = true; }));
+        void findWorkspaceModelFiles().then(files => {
+            if (!disposed && files.length > 0) initialize();
+        }, error => {
+            void vscode.window.showWarningMessage(`SysML startup file discovery failed: ${String(error)}`);
+        });
+    }
     return markdownPreview;
 }
 
@@ -314,7 +327,8 @@ function initializeSysML(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.refreshModelTree', () => {
-            modelExplorerProvider.refresh();
+            if (vscode.workspace.workspaceFolders?.length) void loadWorkspaceSysMLFiles(true);
+            else modelExplorerProvider.refresh();
         })
     );
 
@@ -493,6 +507,7 @@ function initializeSysML(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('sysml.visualizeFolder', async (uri: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             try {
+                await withModelProgress('Loading SysML folder visualization', async (progress, token) => {
                 // Handle multi-selection: when multiple items are selected in explorer,
                 // VS Code passes the right-clicked item as first arg and all selected items as second arg
                 let targetUris: vscode.Uri[] = [];
@@ -530,7 +545,7 @@ function initializeSysML(context: vscode.ExtensionContext): void {
 
                         const sysmlFiles = await vscode.workspace.findFiles(
                             new vscode.RelativePattern(targetUri, '**/*.sysml'),
-                            '**/node_modules/**'
+                            '**/node_modules/**', undefined, token
                         );
                         allSysmlFiles.push(...sysmlFiles);
                     } else if (targetUri.fsPath.endsWith('.sysml')) {
@@ -541,6 +556,7 @@ function initializeSysML(context: vscode.ExtensionContext): void {
 
                 // Remove duplicates (in case same file is in multiple selected folders)
                 const uniqueFiles = [...new Map(allSysmlFiles.map(f => [f.fsPath, f])).values()];
+                await checkFileBudgets(uniqueFiles, token);
 
                 if (uniqueFiles.length === 0) {
                     vscode.window.showInformationMessage('No SysML files found in the selected folders/files');
@@ -554,6 +570,8 @@ function initializeSysML(context: vscode.ExtensionContext): void {
                 const fileNames: string[] = [];
 
                 for (const fileUri of uniqueFiles) {
+                    checkCancelled(token);
+                    progress.report({ message: vscode.workspace.asRelativePath(fileUri), increment: 100 / uniqueFiles.length });
                     try {
                         const doc = await vscode.workspace.openTextDocument(fileUri);
                         openDocs.push(doc);
@@ -608,16 +626,18 @@ function initializeSysML(context: vscode.ExtensionContext): void {
                 }
 
                 // Show ONLY the visualization panel, not the text document
+                checkCancelled(token);
                 VisualizationPanel.createOrShow(context.extensionUri, combinedDocumentProxy, title, lspModelProvider, uniqueFiles);
 
                 // Update the Model Explorer with the combined document
-                await modelExplorerProvider.loadDocument(combinedDocumentProxy);
+                await modelExplorerProvider.loadWorkspaceModel(uniqueFiles, token);
 
                 vscode.window.showInformationMessage(
                     `Visualizing ${fileNames.length} SysML files: ${fileNames.join(', ')}`
                 );
-
+                });
             } catch (error) {
+                if (error instanceof vscode.CancellationError) return;
                 vscode.window.showErrorMessage(`Failed to visualize SysML: ${error}`);
                 outputChannel?.appendLine(`[error] Error in sysml.visualizeFolder: ${error}`);
             }
@@ -757,6 +777,16 @@ function initializeSysML(context: vscode.ExtensionContext): void {
 
     // ─── Model Dashboard ────────────────────────────────────────────
     context.subscriptions.push(
+        vscode.commands.registerCommand('sysml.showArchitectureExplorer',
+            async (target?: vscode.Uri | ModelTreeItem, position?: vscode.Position,
+                files?: readonly vscode.Uri[]) => {
+                const uri = target instanceof vscode.Uri ? target : target?.elementUri;
+                await ArchitectureExplorerPanel.createOrShow(context.extensionUri, lspModelProvider,
+                    uri, position ?? (target && !(target instanceof vscode.Uri) ? target.element?.range.start : undefined), files);
+            }),
+        new vscode.Disposable(() => ArchitectureExplorerPanel.currentPanel?.dispose()),
+        vscode.commands.registerCommand('sysml.cancelOperations', cancelModelOperations),
+        new vscode.Disposable(cancelModelOperations),
         vscode.commands.registerCommand('sysml.showModelWorkbench',
             async (target?: vscode.Uri | ModelTreeItem) => {
                 const uri = target instanceof vscode.Uri ? target : target?.elementUri;
@@ -902,9 +932,37 @@ function initializeSysML(context: vscode.ExtensionContext): void {
      * so we don't need to open each file here (which would trigger O(n²)
      * didOpen/validateDocument calls on the server).
      */
-    async function loadWorkspaceSysMLFiles(): Promise<void> {
-        const files = await vscode.workspace.findFiles('**/*.sysml', '**/node_modules/**');
-        if (files.length === 0) return;
+    let workspaceLoading: Promise<void> | undefined;
+    let workspaceRevision = 0;
+    let loadedWorkspaceRevision = -1;
+    function invalidateWorkspaceModel(): void {
+        workspaceRevision++;
+    }
+    function loadWorkspaceSysMLFiles(force = false): Promise<void> {
+        const preload = vscode.workspace.getConfiguration('sysml.workspace')
+            .get<string>('preloadOnOpen', 'always');
+        if (!force && (preload === 'never'
+            || (preload === 'workspaceOnly' && !vscode.workspace.workspaceFile))) {
+            return Promise.resolve();
+        }
+        if (force) {
+            invalidateWorkspaceModel();
+        }
+        if (workspaceLoading) return workspaceLoading;
+        if (loadedWorkspaceRevision === workspaceRevision && modelExplorerProvider.hasWorkspaceModel()) {
+            return Promise.resolve();
+        }
+        const revision = workspaceRevision;
+        workspaceLoading = withModelProgress('Loading SysML workspace', async (progress, token) => {
+        const files = await findWorkspaceModelFiles(token);
+        if (force) files.forEach(uri => lspModelProvider.invalidateCache(uri.toString()));
+        if (files.length === 0) {
+            modelExplorerProvider.clear();
+            hideModelMetrics();
+            void vscode.commands.executeCommand('setContext', 'sysml.modelLoaded', false);
+            return;
+        }
+        await checkFileBudgets(files, token);
 
         outputChannel.appendLine(`[workspace] Found ${files.length} SysML files`);
         vscode.commands.executeCommand('setContext', 'sysml.modelLoaded', true);
@@ -914,7 +972,23 @@ function initializeSysML(context: vscode.ExtensionContext): void {
 
         // Load the workspace-wide model so every file is visible
         outputChannel.appendLine('[workspace] Loading workspace model');
-        await modelExplorerProvider.loadWorkspaceModel(files);
+        progress.report({ message: `${files.length} model files` });
+        await modelExplorerProvider.loadWorkspaceModel(files, token);
+        while (modelExplorerProvider.hasUnavailableWorkspaceFiles()) {
+            checkCancelled(token);
+            await new Promise<void>(resolve => {
+                const timer = setTimeout(() => { subscription.dispose(); resolve(); }, 500);
+                const subscription = token.onCancellationRequested(() => {
+                    clearTimeout(timer);
+                    subscription.dispose();
+                    resolve();
+                });
+            });
+            checkCancelled(token);
+            await modelExplorerProvider.loadWorkspaceModel(files, token);
+        }
+        checkCancelled(token);
+        if (modelExplorerProvider.hasWorkspaceModel()) loadedWorkspaceRevision = revision;
 
         // Update the status bar with workspace-wide metrics.
         // Use the active SysML editor URI when available, otherwise
@@ -931,6 +1005,12 @@ function initializeSysML(context: vscode.ExtensionContext): void {
         if (editor && editor.document.languageId === 'sysml') {
             await modelExplorerProvider.revealActiveDocument(editor.document.uri);
         }
+        }).catch(error => {
+            if (!(error instanceof vscode.CancellationError)) {
+                void vscode.window.showErrorMessage(`SysML workspace: ${String(error)}`);
+            }
+        }).finally(() => { workspaceLoading = undefined; });
+        return workspaceLoading;
     }
 
     const activeEditor = vscode.window.activeTextEditor;
@@ -954,16 +1034,15 @@ function initializeSysML(context: vscode.ExtensionContext): void {
 
     telemetry?.activated(Date.now() - activationStarted);
 
-    // Auto-scan all workspace .sysml files once the LSP server is ready,
-    // but only when a .code-workspace is open.  Plain folders may contain
-    // thousands of files and scanning them eagerly would be too slow.
-    if (vscode.workspace.workspaceFile) {
-        setTimeout(() => loadWorkspaceSysMLFiles(), 3000);
+    if (vscode.workspace.workspaceFolders?.length) {
+        const startupTimer = setTimeout(() => {
+            if (!modelExplorerProvider.hasWorkspaceModel()) void loadWorkspaceSysMLFiles();
+        }, 3000);
+        context.subscriptions.push(new vscode.Disposable(() => clearTimeout(startupTimer)));
     }
 
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(editor => {
-            outputChannel.appendLine(`onDidChangeActiveTextEditor: ${editor ? editor.document.fileName : 'none'} (lang: ${editor?.document.languageId ?? 'N/A'})`);
             if (editor && editor.document.languageId === 'sysml') {
                 vscode.commands.executeCommand('setContext', 'sysml.modelLoaded', true);
 
@@ -981,9 +1060,7 @@ function initializeSysML(context: vscode.ExtensionContext): void {
                 // Switched away from SysML — hide metrics immediately
                 hideModelMetrics();
 
-                if (vscode.workspace.workspaceFile && !modelExplorerProvider.isWorkspaceMode()) {
-                    // No SysML file active and workspace model not yet loaded —
-                    // show the workspace-wide model (only when a .code-workspace is open)
+                if (vscode.workspace.workspaceFolders?.length) {
                     loadWorkspaceSysMLFiles();
                 }
             }
@@ -1016,7 +1093,7 @@ function initializeSysML(context: vscode.ExtensionContext): void {
 
                     // Show the workspace-wide model if a .code-workspace is
                     // open, otherwise clear both explorers.
-                    if (vscode.workspace.workspaceFile) {
+                    if (vscode.workspace.workspaceFolders?.length) {
                         outputChannel.appendLine('onDidCloseTextDocument: no SysML files open, showing workspace model');
                         loadWorkspaceSysMLFiles();
                     } else {
@@ -1038,20 +1115,38 @@ function initializeSysML(context: vscode.ExtensionContext): void {
     // + fileSystemWatcher.onDidChange — up to 3 redundant panel refreshes.
     // This debounced helper coalesces them into one notification per URI.
     const pendingFileNotifications = new Map<string, ReturnType<typeof setTimeout>>();
-    function scheduleFileNotification(uri: vscode.Uri): void {
+    const pendingFileLogs = new Map<string, string>();
+    context.subscriptions.push(new vscode.Disposable(() => {
+        for (const timer of pendingFileNotifications.values()) clearTimeout(timer);
+        pendingFileNotifications.clear();
+        pendingFileLogs.clear();
+    }));
+    function scheduleFileNotification(uri: vscode.Uri, change?: string): void {
         const key = uri.toString();
+        if (change) pendingFileLogs.set(key, change);
         const existing = pendingFileNotifications.get(key);
         if (existing) clearTimeout(existing);
         pendingFileNotifications.set(key, setTimeout(() => {
             pendingFileNotifications.delete(key);
+            const change = pendingFileLogs.get(key);
+            pendingFileLogs.delete(key);
+            if (change) outputChannel.appendLine(`SysML file ${change}: ${uri.fsPath}`);
             VisualizationPanel.currentPanel?.notifyFileChanged(uri);
             ModelDashboardPanel.currentPanel?.notifyFileChanged(uri);
         }, 300));
     }
 
     context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => invalidateWorkspaceModel()),
+        vscode.workspace.onDidChangeConfiguration(event => {
+            if (event.affectsConfiguration('sysml.workspace')
+                || event.affectsConfiguration('sysml.scan')
+                || event.affectsConfiguration('sysml.modelLoading')
+                || event.affectsConfiguration('sysml.library')) invalidateWorkspaceModel();
+        }),
         vscode.workspace.onDidChangeTextDocument(event => {
-            if (event.document.languageId === 'sysml') {
+            if (event.document.languageId === 'sysml' && event.contentChanges.length > 0) {
+                invalidateWorkspaceModel();
                 // Re-parse for model explorer / visualization only.
                 // Language features are handled by the LSP server.
                 parseSysMLDocument(event.document);
@@ -1089,28 +1184,31 @@ function initializeSysML(context: vscode.ExtensionContext): void {
 
     // Watch for file system changes to SysML files — all events
     // feed into the same debounced notification helper.
-    const fileSystemWatcher = vscode.workspace.createFileSystemWatcher('**/*.sysml');
+    const fileSystemWatcher = vscode.workspace.createFileSystemWatcher('**/*.{sysml,kerml}');
 
     context.subscriptions.push(fileSystemWatcher);
 
     context.subscriptions.push(
         fileSystemWatcher.onDidChange(uri => {
-            outputChannel.appendLine(`SysML file changed: ${uri.fsPath}`);
-            scheduleFileNotification(uri);
+            lspModelProvider.invalidateCache(uri.toString());
+            invalidateWorkspaceModel();
+            scheduleFileNotification(uri, 'changed');
         })
     );
 
     context.subscriptions.push(
         fileSystemWatcher.onDidCreate(uri => {
-            outputChannel.appendLine(`SysML file created: ${uri.fsPath}`);
-            scheduleFileNotification(uri);
+            lspModelProvider.invalidateCache(uri.toString());
+            invalidateWorkspaceModel();
+            scheduleFileNotification(uri, 'created');
         })
     );
 
     context.subscriptions.push(
         fileSystemWatcher.onDidDelete(uri => {
-            outputChannel.appendLine(`SysML file deleted: ${uri.fsPath}`);
-            scheduleFileNotification(uri);
+            lspModelProvider.invalidateCache(uri.toString());
+            invalidateWorkspaceModel();
+            scheduleFileNotification(uri, 'deleted');
         })
     );
 }

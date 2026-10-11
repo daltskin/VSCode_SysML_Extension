@@ -1,11 +1,12 @@
-import { diagramShell } from "./core/diagramShell";
 import * as vscode from 'vscode';
-import { convertModelElements, mergeModelElements } from './core/modelSnapshot';
 import { LspModelProvider, toVscodeRange } from '../providers/lspModelProvider';
 import { displayNamesById } from '../providers/modelNames';
 import type { SysMLElementDTO } from '../providers/sysmlModelTypes';
+import { checkCancelled, checkFileBudgets, withModelProgress } from '../resourceLimits';
 import { telemetry } from '../telemetry';
 import type { SysMLElement } from '../types/sysmlTypes';
+import { diagramShell } from "./core/diagramShell";
+import { convertModelElements, mergeModelElements } from './core/modelSnapshot';
 
 export class VisualizationPanel {
     public static currentPanel: VisualizationPanel | undefined;
@@ -22,6 +23,8 @@ export class VisualizationPanel {
     private _fileUris: vscode.Uri[] = []; // All source file URIs (for folder-level visualization)
     private _extensionVersion: string = '';
     private _pendingPackageName: string | undefined; // Package to select when data arrives
+    private _architectureSelection: vscode.Position | undefined;
+    private _loadCancellation?: vscode.CancellationTokenSource;
 
     private constructor(
         panel: vscode.WebviewPanel,
@@ -88,6 +91,7 @@ export class VisualizationPanel {
                             const allowedCommands = [
                                 'sysml.showModelDashboard',
                                 'sysml.showModelWorkbench',
+                                'sysml.showArchitectureExplorer',
                                 'sysml.showSysRunner',
                             ];
                             if (!allowedCommands.includes(cmd)) {
@@ -95,7 +99,10 @@ export class VisualizationPanel {
                                 console.warn(`[SysML Visualizer] Blocked disallowed command: ${cmd}`);
                                 break;
                             }
-                            if (cmd === 'sysml.showModelDashboard' || cmd === 'sysml.showModelWorkbench') {
+                            if (cmd === 'sysml.showArchitectureExplorer') {
+                                void vscode.commands.executeCommand(cmd, this._document.uri,
+                                    this._architectureSelection, this._fileUris.length ? this._fileUris : undefined);
+                            } else if (cmd === 'sysml.showModelDashboard' || cmd === 'sysml.showModelWorkbench') {
                                 // Pass a file URI so the dashboard can load data
                                 // even when no text editor is active (webview is focused).
                                 const dashboardUri = this._fileUris.length > 0
@@ -165,16 +172,14 @@ export class VisualizationPanel {
                 VisualizationPanel.currentPanel._lspModelProvider = lspModelProvider;
             }
             // Track whether file URIs changed (folder→folder or file→folder)
-            let fileUrisChanged = false;
-            if (fileUris) {
-                const oldSet = new Set(VisualizationPanel.currentPanel._fileUris.map(u => u.toString()));
-                const newSet = new Set(fileUris.map(u => u.toString()));
-                fileUrisChanged = oldSet.size !== newSet.size
-                    || [...newSet].some(u => !oldSet.has(u));
-                VisualizationPanel.currentPanel._fileUris = fileUris;
-            }
+            const oldSet = new Set(VisualizationPanel.currentPanel._fileUris.map(u => u.toString()));
+            const newSet = new Set((fileUris ?? []).map(u => u.toString()));
+            const fileUrisChanged = oldSet.size !== newSet.size
+                || [...newSet].some(u => !oldSet.has(u));
+            VisualizationPanel.currentPanel._fileUris = fileUris ?? [];
             // Update if the document changed OR the set of file URIs changed
             if (VisualizationPanel.currentPanel._document !== document || fileUrisChanged) {
+                VisualizationPanel.currentPanel._architectureSelection = undefined;
                 VisualizationPanel.currentPanel._document = document;
                 VisualizationPanel.currentPanel._lastContentHash = ''; // force re-parse
                 VisualizationPanel.currentPanel.updateVisualization(true);
@@ -279,7 +284,11 @@ export class VisualizationPanel {
     }
 
     private async _doUpdateVisualization() {
+        this._loadCancellation?.cancel();
+        const cancellation = new vscode.CancellationTokenSource();
+        this._loadCancellation = cancellation;
         try {
+            await withModelProgress('Loading SysML visualization', async (progress, token) => {
             // Determine which URIs to query: if we have multiple source
             // file URIs (folder-level visualization) query each of them;
             // otherwise fall back to the single document URI.
@@ -291,9 +300,19 @@ export class VisualizationPanel {
                 ['elements', 'relationships', 'sequenceDiagrams', 'activityDiagrams'];
 
             // Fetch models for all URIs in parallel
-            const results = await Promise.all(
-                urisToQuery.map(uri => this._lspModelProvider.getModel(uri, scopes)),
-            );
+            await checkFileBudgets(urisToQuery.map(uri => vscode.Uri.parse(uri)), token);
+            const results = [];
+            for (let index = 0; index < urisToQuery.length; index += 4) {
+                checkCancelled(token);
+                const chunk = urisToQuery.slice(index, index + 4);
+                results.push(...await Promise.all(chunk.map(async uri => {
+                    progress.report({ message: vscode.workspace.asRelativePath(vscode.Uri.parse(uri)) });
+                    const result = await this._lspModelProvider.getModel(uri, scopes, token);
+                    progress.report({ increment: 100 / urisToQuery.length });
+                    return result;
+                })));
+            }
+            checkCancelled(token);
 
             // Merge results from all files
             const allElements: SysMLElementDTO[] = [];
@@ -365,11 +384,19 @@ export class VisualizationPanel {
                 msg.pendingPackageName = this._pendingPackageName;
                 this._pendingPackageName = undefined;
             }
+            checkCancelled(token);
             this.postMessageSafe(msg);
-        } catch {
+            }, cancellation.token, true);
+        } catch (error) {
             // LSP model request failed — hide the loading overlay so the
             // webview doesn't stay stuck on "Parsing SysML model...".
             this.postMessageSafe({ command: 'hideLoading' });
+            if (!(error instanceof vscode.CancellationError)) {
+                void vscode.window.showErrorMessage(`SysML visualization: ${String(error)}`);
+            }
+        } finally {
+            if (this._loadCancellation === cancellation) this._loadCancellation = undefined;
+            cancellation.dispose();
         }
     }
 
@@ -635,6 +662,7 @@ export class VisualizationPanel {
             parentContext,
         );
         if (dto) {
+            this._architectureSelection = new vscode.Position(dto.range.start.line, dto.range.start.character);
             // Wrap DTO in a minimal SysMLElement-compatible shape for
             // the navigation code below (only range is needed).
             element = {
@@ -928,6 +956,7 @@ export class VisualizationPanel {
         }
 
         this._isDisposed = true;
+        this._loadCancellation?.cancel();
         VisualizationPanel.currentPanel = undefined;
 
         if (this._fileChangeDebounceTimer) {

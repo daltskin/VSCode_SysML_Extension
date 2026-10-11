@@ -1,4 +1,5 @@
 import { parse } from 'papaparse';
+import { checkLimit, internalSafetyLimits, textBytes } from '../resourceLimits';
 
 interface SyntaxPattern { name?: string; match?: string; patterns?: SyntaxPattern[] }
 const syntax = require('../../syntaxes/sysml.tmLanguage.json') as {
@@ -203,7 +204,7 @@ export function insertVerification(source: string, members: readonly string[], e
 
 /** Parse a bounded CSV/TSV clipboard payload with mandatory, unique headers. */
 export function parsePaste(text: string, allowed: readonly string[]): Record<string, string>[] {
-    if (text.length > 1_000_000) throw new Error('Paste is limited to 1 MB.');
+    checkLimit(textBytes(text), internalSafetyLimits.editBytes, 'editBytes');
     const result = parse<string[]>(text, { skipEmptyLines: 'greedy', delimitersToGuess: ['\t', ','] });
     if (result.errors.some(error => error.code !== 'UndetectableDelimiter')) {
         throw new Error(`Invalid spreadsheet data: ${result.errors[0].message}`);
@@ -214,7 +215,8 @@ export function parsePaste(text: string, allowed: readonly string[]): Record<str
         || new Set(headers).size !== headers.length) {
         throw new Error(`Use unique column headers from: ${allowed.join(', ')}.`);
     }
-    if (!records.length || records.length > 500) throw new Error('Paste must contain 1 to 500 rows.');
+    if (!records.length) throw new Error('Paste must contain at least one row.');
+    checkLimit(records.length, internalSafetyLimits.editRows, 'editRows');
     return records.map((record, index) => {
         if (record.length !== headers.length) throw new Error(`Row ${index + 2} has the wrong column count.`);
         return Object.fromEntries(headers.map((header, column) => [header, record[column]]));

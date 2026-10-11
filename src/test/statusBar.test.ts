@@ -13,7 +13,12 @@
  */
 
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as ts from 'typescript';
+import * as vm from 'vm';
 import * as vscode from 'vscode';
+import { URI } from 'vscode-uri';
 import {
     _resetForTesting,
     clearMetricsKey,
@@ -84,6 +89,31 @@ function lastItem(): any {
 // ── Test Suite ───────────────────────────────────────────────────
 
 suite('StatusBar', () => {
+    test('server progress displays decoded URI filenames and preserves plain labels', () => {
+        const source = fs.readFileSync(path.join(__dirname, '../../src/lsp/client.ts'), 'utf8');
+        const start = source.indexOf("client.onNotification('sysml/status'");
+        const end = source.indexOf('\n    });', start);
+        assert.ok(start >= 0 && end > start);
+        let receive!: (params: object) => void;
+        let label = '';
+        vm.runInNewContext(ts.transpile(source.slice(start, end + 8), {
+            target: ts.ScriptTarget.ES2022,
+        }), {
+            vscode: { ...vscode, Uri: URI },
+            client: { onNotification: (_name: string, handler: typeof receive) => { receive = handler; } },
+            require: () => ({ showParseProgress: (value: string) => { label = value; } }),
+        });
+        for (const name of ['activity test.sysml', 'Camera #1.sysml', 'literal%20.sysml', 'caf\u00e9.sysml']) {
+            receive({ state: 'begin', uri: `file:///models/${encodeURIComponent(name)}`,
+                fileName: encodeURIComponent(name) });
+            assert.strictEqual(label, name);
+        }
+        receive({ state: 'progress', fileName: 'literal%20.sysml' });
+        assert.strictEqual(label, 'literal%20.sysml');
+        receive({ state: 'progress', message: 'Indexing 50% complete' });
+        assert.strictEqual(label, 'Indexing 50% complete');
+    });
+
     setup(() => {
         _resetForTesting();
         installSpy();

@@ -144,7 +144,10 @@ export function startLanguageClient(
     client.onNotification('sysml/status', (params: SysMLStatusParams) => {
         const ext = require('../extension');
         if (params.state === 'begin' || params.state === 'progress') {
-            ext.showParseProgress(params.fileName ?? params.message ?? 'Working');
+            const fileName = params.fileName && params.uri
+                ? vscode.Uri.parse(params.uri).path.split('/').pop() || params.fileName
+                : params.fileName;
+            ext.showParseProgress(fileName ?? params.message ?? 'Working');
         } else if (params.state === 'end') {
             ext.hideParseProgress();
             // Re-trigger model fetch now that the server

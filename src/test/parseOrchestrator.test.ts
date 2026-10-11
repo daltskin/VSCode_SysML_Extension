@@ -408,7 +408,8 @@ suite('ParseOrchestrator — notifyServerParseDone', () => {
         orch.notifyServerParseDone(doc.uri.toString());
         await flush(30);
 
-        assert.ok(cb.logs.some(l => l.includes('skipping — parse already in progress')));
+        assert.strictEqual(cb.logs.length, 0);
+        assert.strictEqual(cb.explorerLoads.length, 0);
     });
 
     test('F5: skip when parse in-flight', async () => {
@@ -430,7 +431,8 @@ suite('ParseOrchestrator — notifyServerParseDone', () => {
         gate.open();
         await flush(30);
 
-        assert.ok(cb.logs.some(l => l.includes('skipping — parse already in progress')));
+        assert.ok(!cb.logs.some(message => message.startsWith('notifyServerParseDone:')));
+        assert.strictEqual(cb.explorerLoads.length, 1);
     });
 
     test('F6: skip when explorer already has elements', async () => {
@@ -444,7 +446,7 @@ suite('ParseOrchestrator — notifyServerParseDone', () => {
         orch.notifyServerParseDone(doc.uri.toString());
         await flush(30);
 
-        assert.ok(cb.logs.some(l => l.includes('skipping re-parse — explorer already has 10 elements')));
+        assert.strictEqual(cb.logs.length, 0);
         assert.strictEqual(cb.explorerLoads.length, 0);
     });
 
@@ -466,9 +468,12 @@ suite('ParseOrchestrator — notifyServerParseDone', () => {
         await flush(50);
 
         // Second notification within cooldown — should be suppressed
+        const logCount = cb.logs.length;
+        const loadCount = cb.explorerLoads.length;
         orch.notifyServerParseDone(doc.uri.toString());
         await flush(30);
-        assert.ok(cb.logs.some(l => l.includes('cooldown')));
+        assert.strictEqual(cb.logs.length, logCount);
+        assert.strictEqual(cb.explorerLoads.length, loadCount);
     });
 
     test('F8: after cooldown expires, re-parse fires again', async () => {
@@ -640,7 +645,7 @@ suite('ParseOrchestrator — Integration flows', () => {
 
         assert.strictEqual(cb.explorerLoads.length, loadsBefore,
             'Should not re-parse when explorer already has data');
-        assert.ok(cb.logs.some(l => l.includes('skipping re-parse')));
+        assert.ok(!cb.logs.some(message => message.startsWith('notifyServerParseDone:')));
     });
 
     test('H3: edit during parse → new parse replaces old', async () => {
@@ -704,11 +709,13 @@ suite('ParseOrchestrator — Integration flows', () => {
         orch.notifyServerParseDone(doc.uri.toString());
         await flush(30);
 
-        assert.ok(cb.logs.some(l => l.includes('skipping — parse already in progress')),
-            'Should skip re-parse when existing parse is in-flight');
+        assert.ok(orch.isParsing, 'Existing parse should remain in-flight');
+        assert.ok(!cb.logs.some(message => message.startsWith('notifyServerParseDone:')));
 
         gate.open();
         await flush(30);
+        assert.strictEqual(cb.explorerLoads.length, 1,
+            'Only the existing parse should complete');
     });
 
     test('H6: multiple serverDone within cooldown — only first triggers re-parse', async () => {
@@ -739,8 +746,8 @@ suite('ParseOrchestrator — Integration flows', () => {
         assert.strictEqual(reparses.length, 1,
             'Only first serverDone should trigger re-parse within cooldown');
 
-        const cooldowns = cb.logs.filter(l => l.includes('cooldown'));
-        assert.ok(cooldowns.length >= 1, 'Subsequent should be suppressed by cooldown');
+        assert.strictEqual(cb.explorerLoads.length, 1);
+        assert.ok(!cb.logs.some(message => message.includes('skipping')));
     });
 
     test('H7: cancelAll during serverDone debounce prevents re-parse', async () => {

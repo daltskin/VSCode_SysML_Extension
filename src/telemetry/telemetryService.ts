@@ -1,11 +1,14 @@
 import type {
-  Disposable, TelemetryLogger, TelemetryLoggerOptions, TelemetrySender,
+    Disposable, TelemetryLogger, TelemetryLoggerOptions, TelemetrySender,
 } from 'vscode';
 import type { UsageIdentityStore } from './usageIdentity';
 
 export const operations = {
   visualizer: ['change-view', 'export'],
   workbench: ['preview', 'apply', 'export'],
+  architecture: ['refresh', 'add-files', 'removal', 'requirements', 'connector', 'trace',
+    'navigate', 'navigate-edge'],
+  markdown: ['preview', 'export', 'open-visualizer'],
   explorer: ['change-mode'],
   language: ['start', 'restart', 'model'],
 } as const;
@@ -14,7 +17,8 @@ export type Component = keyof typeof operations;
 export type Outcome = 'success' | 'cancelled' | 'rejected' | 'failure';
 export type FailureCode = 'start-failed' | 'request-failed' | 'render-failed'
   | 'export-failed' | 'edit-failed';
-export type Panel = 'visualizer' | 'workbench' | 'dashboard' | 'inspector' | 'sysrunner';
+export type Panel = 'visualizer' | 'workbench' | 'dashboard' | 'inspector' | 'sysrunner'
+  | 'architecture';
 
 export interface ModelTiming {
   readonly parseTimeMs: number;
@@ -27,7 +31,8 @@ const outcomes: readonly string[] = ['success', 'cancelled', 'rejected', 'failur
 const failureCodes: readonly string[] = [
   'start-failed', 'request-failed', 'render-failed', 'export-failed', 'edit-failed',
 ];
-const panels: readonly string[] = ['visualizer', 'workbench', 'dashboard', 'inspector', 'sysrunner'];
+const panels: readonly string[] = ['visualizer', 'workbench', 'dashboard', 'inspector', 'sysrunner',
+  'architecture'];
 const modelSampleIntervalMs = 60_000;
 
 export interface TelemetryMetadata {

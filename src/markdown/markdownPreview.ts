@@ -2,12 +2,14 @@ import type MarkdownIt from 'markdown-it';
 import * as vscode from 'vscode';
 import { LspModelProvider } from '../providers/lspModelProvider';
 import { SysMLModelResult } from '../providers/sysmlModelTypes';
-import { DiagramCache } from './diagramCache';
-import { installMarkdownPlugin } from './markdownItPlugin';
-import { findExportFences, registerMarkdownExport } from './exportDiagrams';
-import { openPreviewModel } from './modelAccess';
-import { parseFence, resolveModelUri } from './fenceParser';
+import { internalSafetyLimits, withModelProgress } from '../resourceLimits';
+import { telemetry } from '../telemetry';
 import { VisualizationPanel } from '../visualization/visualizationPanel';
+import { DiagramCache } from './diagramCache';
+import { findExportFences, registerMarkdownExport } from './exportDiagrams';
+import { parseFence, resolveModelUri } from './fenceParser';
+import { installMarkdownPlugin } from './markdownItPlugin';
+import { openPreviewModel } from './modelAccess';
 
 export interface MarkdownPreviewApi {
     extendMarkdownIt(markdown: InstanceType<typeof MarkdownIt>): InstanceType<typeof MarkdownIt>;
@@ -22,6 +24,7 @@ export function registerMarkdownPreview(
     registerMarkdownExport(context, getProvider, ready);
     context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('sysml-diagram', {
         provideTextDocumentContent: async link => {
+            const started = Date.now();
             try {
                 const uri = vscode.Uri.parse(decodeURIComponent(link.query));
                 const name = uri.path.split('/').pop() ?? '';
@@ -31,8 +34,10 @@ export function registerMarkdownPreview(
                 const document = await openPreviewModel(verified, false);
                 await ready();
                 VisualizationPanel.createOrShow(context.extensionUri, document, undefined, getProvider());
+                telemetry?.operation('markdown', 'open-visualizer', 'success', Date.now() - started);
                 return document.getText();
             } catch (error) {
+                telemetry?.operation('markdown', 'open-visualizer', 'rejected', Date.now() - started);
                 const message = error instanceof Error ? error.message : 'Unable to open the model.';
                 void vscode.window.showErrorMessage(message);
                 return message;
@@ -42,22 +47,31 @@ export function registerMarkdownPreview(
     const versionOf = (uri: string): number => vscode.workspace.textDocuments.find(document =>
         document.uri.toString() === uri)?.version ?? -1;
     const cache = new DiagramCache<SysMLModelResult>(async (value, signal) => {
+        const started = Date.now();
         const uri = vscode.Uri.parse(value);
         const cancellation = new vscode.CancellationTokenSource();
         const cancel = (): void => cancellation.cancel();
         signal.addEventListener('abort', cancel, { once: true });
         try {
+            const model = await withModelProgress('Loading SysML Markdown diagram', async (_progress, token) => {
             await openPreviewModel(uri);
             await ready();
             if (signal.aborted) throw new Error('Model load cancelled.');
-            return await getProvider().getModel(value, undefined, cancellation.token);
+            return await getProvider().getModel(value, undefined, token);
+            }, cancellation.token, true);
+            telemetry?.operation('markdown', 'preview', 'success', Date.now() - started);
+            return model;
+        } catch (error) {
+            telemetry?.operation('markdown', 'preview', signal.aborted
+                || error instanceof vscode.CancellationError ? 'cancelled' : 'failure', Date.now() - started);
+            throw error;
         } finally {
             signal.removeEventListener('abort', cancel);
             cancellation.dispose();
         }
     }, () => {
         void vscode.commands.executeCommand('markdown.preview.refresh').then(undefined, () => undefined);
-    }, 64, versionOf);
+    }, internalSafetyLimits.previewModels, versionOf);
     const invalidate = (uri: vscode.Uri): void => {
         if (!/\.(sysml|kerml)$/i.test(uri.path)) return;
         if (cache.invalidate(uri.toString(), versionOf(uri.toString()))) {

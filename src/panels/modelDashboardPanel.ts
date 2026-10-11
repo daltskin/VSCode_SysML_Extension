@@ -14,6 +14,7 @@
 import * as vscode from 'vscode';
 import { LspModelProvider } from '../providers/lspModelProvider';
 import type { ResolvedTypeDTO } from '../providers/sysmlModelTypes';
+import { checkCancelled, checkFileBudgets, withModelProgress } from '../resourceLimits';
 
 interface ComplexityData {
     complexityIndex: number;
@@ -218,9 +219,12 @@ export class ModelDashboardPanel {
 
         this._setUpdating(true);
 
-        this._refreshInFlight = this._refreshCore();
+        this._refreshInFlight = withModelProgress('Loading SysML dashboard', async (_progress, token) => this._refreshCore(token));
         try {
             await this._refreshInFlight;
+        } catch (error) {
+            this._showEmpty(error instanceof vscode.CancellationError
+                ? 'Dashboard loading cancelled.' : `Failed to fetch model data from LSP server: ${String(error)}`);
         } finally {
             this._refreshInFlight = undefined;
             this._setUpdating(false);
@@ -237,10 +241,10 @@ export class ModelDashboardPanel {
         }
     }
 
-    private async _refreshCore(): Promise<void> {
+    private async _refreshCore(token?: vscode.CancellationToken): Promise<void> {
         if (!this._lspModelProvider) {
             this._lastDataKey = undefined;
-            this._panel.webview.html = this._emptyHtml(
+            this._showEmpty(
                 'Model Dashboard requires an LSP model provider',
             );
             return;
@@ -268,11 +272,12 @@ export class ModelDashboardPanel {
             documentVersion = openDoc?.version ?? -1;
         } else {
             this._lastDataKey = undefined;
-            this._panel.webview.html = this._emptyHtml('Open a SysML file to see the dashboard');
+            this._showEmpty('Open a SysML file to see the dashboard');
             return;
         }
 
-        await this._refreshTargetOptions(uri);
+        await this._refreshTargetOptions(uri, token);
+        checkCancelled(token);
 
         if (this._targetMode === 'semantic' && this._selectedPackageName) {
             const sourceUris = this._packageSources.get(this._selectedPackageName);
@@ -285,6 +290,12 @@ export class ModelDashboardPanel {
                 documentVersion = openDoc?.version ?? -1;
                 this._documentUri = diagnosticUri;
             }
+        }
+
+        if (documentVersion < 0) {
+            const document = await vscode.workspace.openTextDocument(diagnosticUri);
+            checkCancelled(token);
+            documentVersion = document.version;
         }
 
         const dataKey = documentVersion >= 0 ? `${uri}|${documentVersion}` : undefined;
@@ -303,14 +314,15 @@ export class ModelDashboardPanel {
         }
 
         try {
-            const result = await this._lspModelProvider.getModel(uri, ['resolvedTypes']);
-            const rawStats = result.stats ?? {
-                totalElements: 0,
-                resolvedElements: 0,
-                unresolvedElements: 0,
-                parseTimeMs: 0,
-                modelBuildTimeMs: 0,
-            };
+            const result = await this._lspModelProvider.getModel(uri, ['resolvedTypes'], token);
+            checkCancelled(token);
+            if (result.version < 0 || !result.stats) {
+                this._lastDataKey = undefined;
+                this._showEmpty(
+                    'Model data is not available yet. Refresh the dashboard after parsing completes.');
+                return;
+            }
+            const rawStats = result.stats;
             const stats = {
                 ...rawStats,
                 complexity: rawStats.complexity as ComplexityData | undefined,
@@ -330,12 +342,19 @@ export class ModelDashboardPanel {
             this._lastData = data;
             this._lastDataKey = dataKey;
             this._panel.webview.html = this._buildHtml(data);
-        } catch {
-            this._panel.webview.html = this._emptyHtml('Failed to fetch model data from LSP server');
+        } catch (error) {
+            this._showEmpty(error instanceof vscode.CancellationError
+                ? 'Dashboard loading cancelled.' : `Failed to fetch model data from LSP server: ${String(error)}`);
         }
     }
 
-    private async _refreshTargetOptions(currentUri: string): Promise<void> {
+    private _showEmpty(message: string): void {
+        this._lastData = undefined;
+        this._lastDataKey = undefined;
+        this._panel.webview.html = this._emptyHtml(message);
+    }
+
+    private async _refreshTargetOptions(currentUri: string, token?: vscode.CancellationToken): Promise<void> {
         if (!vscode.workspace.workspaceFile) {
             this._targetOptions = [];
             this._fileOptions = [];
@@ -349,11 +368,13 @@ export class ModelDashboardPanel {
             return;
         }
 
-        const files = await vscode.workspace.findFiles('**/*.sysml', '**/node_modules/**');
+        const files = await vscode.workspace.findFiles('**/*.sysml', '**/node_modules/**', undefined, token);
+        await checkFileBudgets(files, token);
         const fileOptions: DashboardTargetOption[] = [];
         const packageSources = new Map<string, string[]>();
 
         for (const file of files) {
+            checkCancelled(token);
             const fileUri = file.toString();
             const rel = vscode.workspace.asRelativePath(file, false);
             fileOptions.push({
@@ -372,6 +393,7 @@ export class ModelDashboardPanel {
         }
 
         const currentFileValue = `file:${encodeURIComponent(currentUri)}`;
+        checkCancelled(token);
         if (!fileOptions.some(o => o.value === currentFileValue)) {
             fileOptions.unshift({
                 value: currentFileValue,
@@ -413,8 +435,8 @@ export class ModelDashboardPanel {
     private async _extractPackageNames(uri: vscode.Uri): Promise<string[]> {
         try {
             const existingDoc = vscode.workspace.textDocuments?.find(d => d.uri.toString() === uri.toString());
-            const doc = existingDoc ?? await vscode.workspace.openTextDocument(uri);
-            const text = doc.getText();
+            const text = existingDoc ? existingDoc.getText()
+                : new globalThis.TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
             const re = /\bpackage\s+([A-Za-z_][A-Za-z0-9_:]*)/g;
             const names = new Set<string>();
             let m: RegExpExecArray | null;

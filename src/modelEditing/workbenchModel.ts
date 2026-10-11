@@ -1,4 +1,5 @@
 import type { SysMLElementDTO, SysMLModelResult } from '../providers/sysmlModelTypes';
+import { checkLimit, internalSafetyLimits } from '../resourceLimits';
 import {
     applySourceEdits, editableFields, editDeclaration, insertMembers, insertVerification,
     maskComments,
@@ -246,7 +247,8 @@ export function planOperation(snapshot: ModelSnapshot, operation: WorkbenchOpera
             .map(row => row.name));
         const identifiers = new Set(snapshot.rows.filter(row => row.uri === uri)
             .map(row => row.fields?.identifier).filter(Boolean));
-        if (!items.length || items.length > 500) throw new Error('Create between 1 and 500 requirements.');
+        if (!items.length) throw new Error('Create at least one requirement.');
+        checkLimit(items.length, internalSafetyLimits.editRows, 'editRows');
         for (const item of items) {
             if (names.has(item.name)) throw new Error(`Name already exists in this scope: ${item.name}`);
             const qualifiedName = parent ? `${parent.qualifiedName}::${item.name}` : item.name;

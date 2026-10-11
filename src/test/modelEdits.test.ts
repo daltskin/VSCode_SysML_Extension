@@ -1,7 +1,10 @@
 import * as assert from 'assert';
 import { ChildProcess, fork } from 'child_process';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import * as vscode from 'vscode';
 import { createMessageConnection, IPCMessageReader, IPCMessageWriter, MessageConnection } from 'vscode-jsonrpc/node';
+import { answerArchitectureQuestion, buildArchitectureGraph } from '../architecture/architectureGraph';
 import {
     applySourceEdits,
     editableFields,
@@ -260,6 +263,29 @@ suite('Workbench with published LSP', function () {
         return buildSnapshot([{ uri, label: 'model.sysml', version: 1, text, model }]);
     }
 
+    test('Architecture Explorer answers the sample from published LSP evidence', async () => {
+        const text = readFileSync(join(__dirname, '../../samples/architecture-explorer.sysml'), 'utf8');
+        const source = (await snapshotFor(text)).documents[0];
+        const graph = buildArchitectureGraph([{ uri: source.uri, label: source.label,
+            version: source.version, text, elements: source.model.elements ?? [],
+            relationships: source.model.relationships ?? [] }]);
+        const find = (name: string) => {
+            const node = graph.nodes.find(candidate => candidate.name === name);
+            assert.ok(node, `Missing parsed element: ${name}`);
+            return node.id;
+        };
+        const requirements = answerArchitectureQuestion(graph, 'requirements', find('temperatureSensor'));
+        assert.deepStrictEqual(requirements.findings.map(finding =>
+            graph.nodes.find(node => node.id === finding.nodeId)?.name).sort(),
+        ['safeTemperature', 'sensorAvailability']);
+        assert.match(answerArchitectureQuestion(graph, 'connector', find('sensorLink')).summary,
+            /Carries the measured temperature/);
+        assert.equal(answerArchitectureQuestion(graph, 'trace', find('safeTemperature'),
+            find('safetyController')).findings[0].edgeIds.length, 1);
+        assert.equal(answerArchitectureQuestion(graph, 'trace', find('safeTemperature'),
+            find('unrelatedIndicator')).findings.length, 0);
+    });
+
     test('deletes requirement and container declarations without changing adjacent source', async () => {
         const text = 'package Mobility {\r\n    private requirement def Range;\r\n'
             + '    part car { part wheel; }\r\n    part keep;\r\n}\r\n';
@@ -332,11 +358,16 @@ suite('Workbench with published LSP', function () {
         try {
             vscode.workspace.openTextDocument = (async () => ({ version: 2, getText: () => text })) as
                 unknown as typeof originalOpen;
+            const restoreFileSystem = stubWorkspaceFileSystem({ stat: async () => ({
+                type: vscode.FileType.File, ctime: 0, mtime: 0, size: Buffer.byteLength(text),
+            }) });
+            try {
             await panel.refresh();
-            assert.deepStrictEqual(messages.map(message => message.command), ['snapshot']);
+            assert.deepStrictEqual(messages.map(message => message.command), ['snapshot'], JSON.stringify(messages));
             assert.ok(messages[0].rows?.some(row => row.name === 'AddedRequirement'));
             assert.strictEqual(panel.pending, undefined);
             assert.strictEqual(panel.snapshot.documents[0].version, 2);
+            } finally { restoreFileSystem(); }
         } finally {
             vscode.workspace.openTextDocument = originalOpen;
         }

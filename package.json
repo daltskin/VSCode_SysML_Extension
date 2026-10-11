@@ -127,13 +127,13 @@
       },
       {
         "command": "sysml.visualizeFolder",
-        "title": "Visualise with SysML",
+        "title": "Visualize Model",
         "category": "SysML",
         "icon": "$(type-hierarchy)"
       },
       {
         "command": "sysml.visualizeFolderWithView",
-        "title": "Visualise with SysML (Choose View)",
+        "title": "Visualize Model (Choose View)",
         "category": "SysML",
         "icon": "$(type-hierarchy)"
       },
@@ -210,13 +210,25 @@
       },
       {
         "command": "sysml.showModelWorkbench",
-        "title": "Open Model Workbench",
+        "title": "Edit Model",
         "category": "SysML",
         "icon": "$(table)"
       },
       {
+        "command": "sysml.showArchitectureExplorer",
+        "title": "Analyze Model Relationships",
+        "category": "SysML",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "sysml.cancelOperations",
+        "title": "Cancel Active Operations",
+        "category": "SysML",
+        "icon": "$(debug-stop)"
+      },
+      {
         "command": "sysml.showModelDashboard",
-        "title": "Show Model Dashboard",
+        "title": "Inspect Model Metrics",
         "category": "SysML",
         "icon": "$(dashboard)"
       },
@@ -236,6 +248,11 @@
     "menus": {
       "editor/context": [
         {
+          "command": "sysml.showArchitectureExplorer",
+          "when": "resourceLangId == sysml",
+          "group": "sysml@4"
+        },
+        {
           "command": "sysml.showModelWorkbench",
           "when": "resourceLangId == sysml",
           "group": "sysml@2"
@@ -247,6 +264,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "sysml.showArchitectureExplorer",
+          "when": "view == sysmlModelExplorer",
+          "group": "sysml@4"
+        },
         {
           "command": "sysml.showModelWorkbench",
           "when": "view == sysmlModelExplorer && viewItem == sysmlPackage",
@@ -345,6 +367,11 @@
       ],
       "explorer/context": [
         {
+          "command": "sysml.showArchitectureExplorer",
+          "when": "explorerResourceIsFolder || resourceExtname == .sysml || resourceExtname == .kerml",
+          "group": "sysml@5"
+        },
+        {
           "command": "sysml.showModelWorkbench",
           "when": "explorerResourceIsFolder || resourceExtname == .sysml || resourceExtname == .kerml",
           "group": "sysml@4"
@@ -399,6 +426,20 @@
     "configuration": {
       "title": "SysML v2.0",
       "properties": {
+        "sysml.operations.timeoutSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483,
+          "default": 120,
+          "description": "Timeout for a SysML model operation in seconds. 0 disables the timeout. Cancellation is cooperative; synchronous work and committed edits or writes cannot be interrupted."
+        },
+        "sysml.modelLoading.budgetMiB": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8589934591,
+          "default": 0,
+          "description": "Optional aggregate source-loading budget per operation, in MiB (1 MiB = 1,048,576 UTF-8 bytes). 0 means unlimited. Does not restrict file count or set a language-server memory limit."
+        },
         "sysml.telemetry.enabled": {
           "type": "boolean",
           "scope": "application",
@@ -512,8 +553,29 @@
             "workspaceOnly",
             "never"
           ],
-          "default": "workspaceOnly",
-          "markdownDescription": "Control when the LSP server pre-parses all `.sysml` / `.kerml` files in the workspace for cross-file navigation (go-to-definition, find references).\n- **always**: Pre-parse on every folder or workspace open\n- **workspaceOnly** *(default)*: Pre-parse only when a `.code-workspace` file is opened\n- **never**: Never pre-parse — files are parsed lazily when opened\n\nRestart the language server after changing this setting."
+          "default": "always",
+          "markdownDescription": "Control when the LSP server pre-parses all `.sysml` / `.kerml` files in the workspace for cross-file navigation (go-to-definition, find references).\n- **always** *(default)*: Pre-parse on every folder or workspace open\n- **workspaceOnly**: Pre-parse only when a `.code-workspace` file is opened\n- **never**: Never pre-parse — files are parsed lazily when opened\n\nRestart the language server after changing this setting."
+        },
+        "sysml.scan.skipDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "node_modules",
+            ".git",
+            ".settings",
+            "temp",
+            "test",
+            "tests",
+            "out",
+            "dist",
+            "build",
+            "coverage",
+            ".venv",
+            "__pycache__"
+          ],
+          "markdownDescription": "Directory names to skip during automatic workspace discovery and server pre-parsing. Names are matched exactly, not as glob patterns. This list replaces the server defaults; an empty list scans every directory. Restart the language server after changing this setting."
         },
         "sysml.workspace.excludePatterns": {
           "type": "array",
@@ -521,7 +583,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Glob patterns for directories to exclude from workspace pre-parsing. These are matched against directory **names** (not full paths).\n\nExamples: `temp`, `archive`, `*.bak`\n\nThe following directories are always excluded: `node_modules`, `.git`, `dist`, `out`, `.vscode`."
+          "deprecationMessage": "This setting was not used by the language server. Use sysml.scan.skipDirectories with exact directory names instead."
         }
       }
     },
@@ -536,6 +598,8 @@
     "vscode:prepublish": "npm run compile && npm run build:web -- --production && npm run build:webview-assets",
     "compile": "tsc -p ./ && node scripts/telemetry-config.cjs && node scripts/build-diagram-shell.cjs",
     "preview:workbench": "npm run compile && node scripts/workbench-preview.cjs",
+    "preview:architecture": "npm run compile && node scripts/workbench-preview.cjs --architecture",
+    "test:architecture": "npm run compile && node scripts/architecture-explorer.test.cjs",
     "preview:markdown": "npm run compile && node scripts/markdown-preview.cjs",
     "test:visual-parity": "npm run compile && node scripts/compare-diagrams.cjs",
     "watch": "tsc -watch -p ./",

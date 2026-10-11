@@ -6,17 +6,20 @@ const { fork } = require('node:child_process');
 const rpc = require('vscode-jsonrpc/node');
 const vscode = require('vscode');
 const { ModelWorkbenchPanel } = require('../out/panels/modelWorkbenchPanel');
+const { ArchitectureExplorerPanel } = require('../out/panels/architectureExplorerPanel');
+const { buildArchitectureGraph, answerArchitectureQuestion } = require('../out/architecture/architectureGraph');
 const { buildSnapshot, planOperation, previewChanges } = require('../out/modelEditing/workbenchModel');
 const { applySourceEdits } = require('../out/modelEditing/modelEdits');
 
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.PORT || 45188);
+const architecture = process.argv.includes('--architecture');
 const child = fork(require('sysml-v2-lsp').serverPath, ['--node-ipc'], { silent: true });
 const connection = rpc.createMessageConnection(new rpc.IPCMessageReader(child), new rpc.IPCMessageWriter(child));
 connection.onRequest('workspace/configuration', ({ items }) => items.map(() => ({})));
 connection.onRequest('client/registerCapability', () => null);
 connection.listen();
-let text = `package Mobility {
+let text = architecture ? fs.readFileSync(path.join(root, 'samples/architecture-explorer.sysml'), 'utf8') : `package Mobility {
     requirement def RangeSpecification;
     requirement <'REQ-001'> minimumRange : RangeSpecification {
         doc /* Vehicle shall travel at least 100 km on a full charge. */
@@ -49,6 +52,12 @@ async function refresh() {
     const model = await connection.sendRequest('sysml/model', {
         textDocument: { uri }, scope: ['elements', 'relationships'],
     });
+    if (architecture) {
+        snapshot = buildArchitectureGraph([{ uri, label: 'architecture-explorer.sysml', version: revision, text,
+            elements: model.elements || [], relationships: model.relationships || [] }]);
+        return { command: 'snapshot', revision, graph: snapshot,
+            selectedId: snapshot.nodes.find(node => node.name === 'temperatureSensor')?.id };
+    }
     snapshot = buildSnapshot([{ uri, label: 'vehicle.sysml', version: revision, text, model }]);
     return { command: 'snapshot', revision, rows: snapshot.rows, links: snapshot.links,
         documents: snapshot.documents.map(({ uri, label, version }) => ({ uri, label, version })) };
@@ -57,6 +66,11 @@ async function refresh() {
 async function handle(message) {
     lastMessage = message;
     if (message.command === 'ready' || message.command === 'refresh') return [await refresh()];
+    if (architecture && message.command === 'query') {
+        if (message.revision !== revision) throw new Error('Stale snapshot');
+        return [{ command: 'answer', revision, requestId: message.requestId,
+            answer: answerArchitectureQuestion(snapshot, message.question, message.selectedId, message.targetId) }];
+    }
     if (message.command === 'preview') {
         if (message.revision !== revision) throw new Error('Stale snapshot');
         const plans = planOperation(snapshot, message.operation);
@@ -95,7 +109,7 @@ async function start() {
                 response.setHeader('Content-Type', 'application/json');
                 response.end(JSON.stringify({ text, lastMessage, revision }));
             } else if (pathname === '/') {
-                let html = ModelWorkbenchPanel.html({ cspSource: `http://127.0.0.1:${port}`,
+                let html = (architecture ? ArchitectureExplorerPanel : ModelWorkbenchPanel).html({ cspSource: `http://127.0.0.1:${port}`,
                     asWebviewUri: resource => `http://127.0.0.1:${port}${resource.path.slice(root.length)}`,
                 }, vscode.Uri.file(root));
                 const nonce = /nonce="([^"]+)"/.exec(html)[1];
@@ -120,7 +134,7 @@ async function start() {
     });
     const close = () => { connection.dispose(); child.kill(); server.close(); };
     server.on('error', error => { console.error(error); close(); process.exitCode = 1; });
-    server.listen(port, '127.0.0.1', () => console.log(`Workbench preview (in-memory model): http://127.0.0.1:${port}`));
+    server.listen(port, '127.0.0.1', () => console.log(`${architecture ? 'Architecture Explorer' : 'Workbench'} preview: http://127.0.0.1:${port}`));
     process.on('SIGINT', close);
     process.on('SIGTERM', close);
 }

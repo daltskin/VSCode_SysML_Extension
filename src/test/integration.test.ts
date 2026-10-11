@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as net from 'net';
 import * as vscode from 'vscode';
+import { getLastMetricsArgs } from '../statusBar';
 
 const _isUnitTest = (vscode as any)._isMock === true;
 
@@ -52,6 +53,29 @@ suite('Extension Integration Test Suite', () => {
 
     test('Extension should be present', () => {
         assert.ok(vscode.extensions.getExtension('jamied.sysml-v2-support'));
+    });
+
+    test('Folder startup activates and loads models without opening a SysML document', async function() {
+        if (_isUnitTest) return this.skip();
+        this.timeout(90000);
+        assert.ok(vscode.workspace.workspaceFolders?.length);
+        assert.ok(!vscode.workspace.textDocuments.some(document => document.languageId === 'sysml'));
+        const extension = vscode.extensions.getExtension('jamied.sysml-v2-support');
+        assert.ok(extension);
+        await new Promise<void>((resolve, reject) => {
+            const timer = globalThis.setInterval(() => {
+                if (extension.isActive && (getLastMetricsArgs()?.stats.totalElements ?? 0) > 0) {
+                    globalThis.clearInterval(timer);
+                    globalThis.clearTimeout(deadline);
+                    resolve();
+                }
+            }, 100);
+            const deadline = globalThis.setTimeout(() => {
+                globalThis.clearInterval(timer);
+                reject(new Error('Folder startup did not activate and load the workspace model'));
+            }, 80000);
+        });
+        assert.ok(!vscode.workspace.textDocuments.some(document => document.languageId === 'sysml'));
     });
 
     test('Extension should activate', async function() {

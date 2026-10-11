@@ -14364,6 +14364,12 @@ globalThis.SysMLDiagramRuntime = { mount(window, document, d3, acquireVsCodeApi,
 
         // Dashboard toolbar button
         const workbenchToolbarBtn = document.getElementById('workbench-btn');
+        const architectureToolbarBtn = document.getElementById('architecture-btn');
+        if (architectureToolbarBtn) {
+            architectureToolbarBtn.addEventListener('click', () => {
+                vscode.postMessage({ command: 'executeCommand', args: ['sysml.showArchitectureExplorer'] });
+            });
+        }
         if (workbenchToolbarBtn) {
             workbenchToolbarBtn.addEventListener('click', () => {
                 vscode.postMessage({ command: 'executeCommand', args: ['sysml.showModelWorkbench'] });

@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add a local Architecture Explorer for removal impact, affected requirements,
+  documented connector rationale, and shortest modeled implementation traces.
+- Support source navigation, animated complete traces, paginated findings,
+  multi-file models, stale-answer invalidation, and Visualizer/context-menu entry points.
+- Add an architecture sample, real-LSP preview, and desktop/mobile browser tests.
+- Add an Architecture Explorer screenshot to the README modeling tools gallery.
+- Add shared cancellable progress, **Cancel Active Operations**, an operation timeout,
+  and an optional aggregate UTF-8 source budget without file-count caps.
+
+### Changed
+
+- Standardize model actions as Visualize Model, Inspect Model Metrics, Edit Model,
+  and Analyze Model Relationships without changing command IDs.
+- Default preloading to `always` and initialize folder/workspace models without an
+  open editor; preserve explicit preload overrides and retain trees on editor close.
+- Match server scan exclusions through `sysml.scan.skipDirectories`; deprecate the
+  unused `sysml.workspace.excludePatterns` setting.
+- Coalesce workspace loads and duplicate file notifications, reuse completed trees,
+  retry unavailable models, distinguish parsed-empty responses, and invalidate caches
+  on disk edits, parse completion, and explicit refresh.
+- Cache parsed empty models and deduplicate identical requests; bound folder-diagram
+  concurrency to four and avoid opening unrelated documents for Dashboard discovery.
+- Preserve Dashboard failure/cancellation states after successful loads, request
+  complexity only after parsing, and clear Architecture selections when models change.
+- Decode status-bar filenames, reduce routine parse and editor-focus logging, and delay shared progress
+  notifications by 500 ms; keep internal preview, edit, export, and nesting safeguards.
+- Remove disabled resource-limit checks and duplicate model validation; retain the
+  optional source byte budget, cancellation, timeouts, and active safety guards.
+
 ## [0.55.0]
 
 ### Added
