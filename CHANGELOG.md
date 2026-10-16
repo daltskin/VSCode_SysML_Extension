@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.58.0]
+
 ### Changed
 
 - Update `sysml-v2-lsp` from 0.37.0 to 0.39.0. The upstream experimental
