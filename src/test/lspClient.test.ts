@@ -125,4 +125,69 @@ suite('LSP Client Integration Tests', () => {
 
         assert.ok(completions, 'Completion provider should return a result');
     });
+
+    test('LSP resolves a Unicode standard-library short name', async function () {
+        if (_isUnitTest) { return this.skip(); }
+        this.timeout(20000);
+
+        const content = "package Lsp039Library { attribute unit = SI::'\u03a9'; }";
+        const document = await vscode.workspace.openTextDocument({ language: 'sysml', content });
+        await vscode.window.showTextDocument(document);
+        const position = document.positionAt(content.indexOf("'\u03a9'") + 1);
+        let locations: vscode.Location[] | undefined;
+        for (let attempt = 0; attempt < 30; attempt++) {
+            locations = await vscode.commands.executeCommand<vscode.Location[]>(
+                'vscode.executeDefinitionProvider', document.uri, position
+            );
+            if (locations?.length) { break; }
+            await sleep(500);
+        }
+
+        assert.ok(locations?.length, 'The library short name must resolve');
+        assert.match(locations[0].uri.path, /\/SI\.sysml$/);
+        const declaration = await vscode.workspace.openTextDocument(locations[0].uri);
+        assert.ok(declaration.lineAt(locations[0].range.start.line).text
+            .includes("attribute <'\u03a9'> ohm"), 'The short name must resolve to ohm');
+    });
+
+    test('LSP blocks editor lookup for ambiguous Unicode short names', async function () {
+        if (_isUnitTest) { return this.skip(); }
+        this.timeout(30000);
+
+        const content = `package Lsp039Ambiguity {
+    attribute def <'Shared\u{1f680}'> Beta;
+    attribute def <'Shared\u{1f680}'> Gamma;
+    attribute local : 'Shared\u{1f680}';
+    attribute qualified : Lsp039Ambiguity::'Shared\u{1f680}';
+}`;
+        const document = await vscode.workspace.openTextDocument({ language: 'sysml', content });
+        await vscode.window.showTextDocument(document);
+        let diagnostics: readonly vscode.Diagnostic[] = [];
+        for (let attempt = 0; attempt < 30; attempt++) {
+            diagnostics = vscode.languages.getDiagnostics(document.uri);
+            if (diagnostics.filter(d => d.code === 'ambiguous-namespace-name').length === 2) {
+                break;
+            }
+            await sleep(500);
+        }
+        assert.strictEqual(diagnostics.filter(d => d.code === 'ambiguous-namespace-name').length, 2);
+        assert.strictEqual(diagnostics.filter(d => d.code === 'unresolved-type').length, 2);
+
+        for (const line of [3, 4]) {
+            const column = document.lineAt(line).text.indexOf("'Shared") + 1;
+            const position = new vscode.Position(line, column);
+            const definitions = await vscode.commands.executeCommand<vscode.Location[]>(
+                'vscode.executeDefinitionProvider', document.uri, position
+            );
+            const references = await vscode.commands.executeCommand<vscode.Location[]>(
+                'vscode.executeReferenceProvider', document.uri, position
+            );
+            const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+                'vscode.executeHoverProvider', document.uri, position
+            );
+            assert.deepStrictEqual(definitions, []);
+            assert.deepStrictEqual(references, []);
+            assert.deepStrictEqual(hovers, []);
+        }
+    });
 });

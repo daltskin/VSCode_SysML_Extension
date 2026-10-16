@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update `sysml-v2-lsp` from 0.37.0 to 0.39.0. The upstream experimental
+  text-validation request remains disabled by default.
+
+### Fixed
+
+- Report short names that conflict with another declaration's name or short name.
+  Keep ambiguous references unresolved in navigation, hover, references, rename,
+  linked editing and hierarchy preparation, including qualified and feature paths.
+- Preserve all conflicting declarations when an element's name and short name
+  conflict with different declarations.
+
 ## [0.57.0]
 
 ### Fixed
