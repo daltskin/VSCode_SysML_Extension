@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Use `sysml-v2-lsp` 0.37.0 for end-to-end Unicode quoted identifiers,
+  including navigation, hover, references, safe cross-file rename and quoted
+  completions. Keep editor ranges aligned after emoji and other astral characters,
+  and select complete quoted names, including escaped quotes and backslashes (#120).
+- Fix false undefined-type warnings for quoted unit values such as
+  `attribute :>> referenceUnit = 'Ω';` and recognize Unicode standard-library
+  short names through the updated language server (#120).
+
 ## [0.56.0]
 
 ### Added
