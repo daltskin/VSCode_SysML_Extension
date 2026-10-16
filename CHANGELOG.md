@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.57.0]
+
 ### Fixed
 
 - Use `sysml-v2-lsp` 0.37.0 for end-to-end Unicode quoted identifiers,
