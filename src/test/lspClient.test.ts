@@ -152,7 +152,7 @@ suite('LSP Client Integration Tests', () => {
 
     test('LSP blocks editor lookup for ambiguous Unicode short names', async function () {
         if (_isUnitTest) { return this.skip(); }
-        this.timeout(30000);
+        this.timeout(45000);
 
         const content = `package Lsp039Ambiguity {
     attribute def <'Shared\u{1f680}'> Beta;
@@ -163,15 +163,19 @@ suite('LSP Client Integration Tests', () => {
         const document = await vscode.workspace.openTextDocument({ language: 'sysml', content });
         await vscode.window.showTextDocument(document);
         let diagnostics: readonly vscode.Diagnostic[] = [];
-        for (let attempt = 0; attempt < 30; attempt++) {
+        for (let attempt = 0; attempt < 60; attempt++) {
             diagnostics = vscode.languages.getDiagnostics(document.uri);
-            if (diagnostics.filter(d => d.code === 'ambiguous-namespace-name').length === 2) {
+            if (diagnostics.filter(d => d.code === 'ambiguous-namespace-name').length === 2
+                && diagnostics.filter(d => d.code === 'unresolved-type').length === 2) {
                 break;
             }
             await sleep(500);
         }
-        assert.strictEqual(diagnostics.filter(d => d.code === 'ambiguous-namespace-name').length, 2);
-        assert.strictEqual(diagnostics.filter(d => d.code === 'unresolved-type').length, 2);
+        const reported = JSON.stringify(diagnostics.map(d => ({ code: d.code, message: d.message })));
+        assert.strictEqual(diagnostics.filter(d => d.code === 'ambiguous-namespace-name').length, 2,
+            `Expected both conflicting declarations to be reported; received ${reported}`);
+        assert.strictEqual(diagnostics.filter(d => d.code === 'unresolved-type').length, 2,
+            `Expected both ambiguous type references to remain unresolved; received ${reported}`);
 
         for (const line of [3, 4]) {
             const column = document.lineAt(line).text.indexOf("'Shared") + 1;

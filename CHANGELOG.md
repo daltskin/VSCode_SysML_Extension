@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update `sysml-v2-lsp` to 0.40.0 and `vscode-languageclient` to 11.0.0.
+- Consolidate Dependabot development dependency updates for Node.js types,
+  TypeScript ESLint, Cytoscape, ESLint, and Playwright.
+
+### Security
+
+- Update `qs` to 6.17.1 and `serialize-javascript` to 7.1.4 to address
+  GHSA-6pq8-jhm2-2vcw and GHSA-m5mm-p8h7-m29v.
+- Require MSAL Node 7.x (at least 7.1.0) under the packaging toolchain's Azure Identity
+  dependency to address GHSA-xcx6-jx8p-x3h5. Azure Identity still requests the
+  vulnerable 6.x range, so a scoped override is required.
+
 ## [0.58.0]
 
 ### Changed
