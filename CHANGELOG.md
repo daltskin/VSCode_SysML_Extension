@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.59.0]
+
 ### Changed
 
 - Update `sysml-v2-lsp` to 0.40.0 and `vscode-languageclient` to 11.0.0.
