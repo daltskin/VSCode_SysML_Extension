@@ -654,7 +654,7 @@
     "markdown-it": "^15.0.3",
     "papaparse": "^5.7.0",
     "sysml-v2-lsp": "0.39.0",
-    "vscode-languageclient": "^10.1.2",
+    "vscode-languageclient": "^11.0.0",
     "yaml": "^2.9.1"
   },
   "overrides": {
