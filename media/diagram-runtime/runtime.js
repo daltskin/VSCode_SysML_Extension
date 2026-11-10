@@ -918,28 +918,30 @@ globalThis.SysMLDiagramRuntime = { mount(window, document, d3, acquireVsCodeApi,
                         return {
                             ...data,
                             diagrams: data.activityDiagrams.map(diagram => {
-                                // Merge decisions into actions as decision nodes
-                                const decisionsAsActions = (diagram.decisions || []).map(d => ({
-                                    ...d,
-                                    id: d.id || d.name,
-                                    type: 'decision',
-                                    kind: 'decision'
+                                const allActions = (diagram.actions || []).map(a => ({
+                                    ...a,
+                                    id: a.id || a.name,
+                                    // Direct children of the diagram root are
+                                    // top-level — clear parent so the renderer
+                                    // does not filter them out.
+                                    parent: (a.parent === diagram.name) ? undefined : a.parent
                                 }));
-
-                                const allActions = [
-                                    ...(diagram.actions || []).map(a => ({
-                                        ...a,
-                                        id: a.id || a.name,
-                                        // Direct children of the diagram root are
-                                        // top-level — clear parent so the renderer
-                                        // does not filter them out.
-                                        parent: (a.parent === diagram.name) ? undefined : a.parent
-                                    })),
-                                    ...decisionsAsActions
-                                ];
 
                                 // Build a set of known action IDs
                                 const actionIds = new Set(allActions.map(a => a.id || a.name));
+                                (diagram.decisions || []).forEach(decision => {
+                                    const id = decision.id || decision.name;
+                                    if (actionIds.has(id)) return;
+                                    allActions.push({
+                                        ...decision,
+                                        id,
+                                        type: 'decision',
+                                        kind: 'decision',
+                                        parent: (decision.parent === diagram.name)
+                                            ? undefined : decision.parent
+                                    });
+                                    actionIds.add(id);
+                                });
 
                                 // Synthesize missing control nodes from flows
                                 // This handles the case where LSP returns flows referencing
@@ -11446,8 +11448,8 @@ globalThis.SysMLDiagramRuntime = { mount(window, document, d3, acquireVsCodeApi,
             const isHorizontal = activityLayoutDirection === 'horizontal';
             const actionWidth = 220;
             const actionHeight = 60;
-            const verticalSpacing = 100;  // Increased from 80 to prevent overlaps
-            const horizontalSpacing = 60; // Reduced from 140 for tighter horizontal packing
+            const verticalSpacing = 140;
+            const horizontalSpacing = 100;
             const startX = 80;
             const startY = 80;
             const swimLaneWidth = 280;    // Increased from 250 for more room

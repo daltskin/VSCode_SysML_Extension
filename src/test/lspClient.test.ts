@@ -145,8 +145,10 @@ suite('LSP Client Integration Tests', () => {
 
         assert.ok(locations?.length, 'The library short name must resolve');
         assert.match(locations[0].uri.path, /\/SI\.sysml$/);
-        const declaration = await vscode.workspace.openTextDocument(locations[0].uri);
-        assert.ok(declaration.lineAt(locations[0].range.start.line).text
+        const declaration = await vscode.workspace.fs.readFile(locations[0].uri);
+        const declarationLine = Buffer.from(declaration).toString('utf8')
+            .split(/\r?\n/)[locations[0].range.start.line];
+        assert.ok(declarationLine
             .includes("attribute <'\u03a9'> ohm"), 'The short name must resolve to ohm');
     });
 
