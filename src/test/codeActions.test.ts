@@ -3,6 +3,24 @@ import * as vscode from 'vscode';
 
 const _isUnitTest = (vscode as any)._isMock === true;
 
+async function waitForCodeActions(
+    document: vscode.TextDocument,
+    range: vscode.Range,
+    matches: (title: string) => boolean
+): Promise<string[]> {
+    const deadline = Date.now() + 7000;
+    let titles: string[];
+    do {
+        const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+            'vscode.executeCodeActionProvider', document.uri, range
+        );
+        titles = actions?.map(action => action.title) ?? [];
+        if (titles.some(matches)) { return titles; }
+        await new Promise(resolve => setTimeout(resolve, 100));
+    } while (Date.now() < deadline);
+    return titles;
+}
+
 suite('SysML Code Actions', () => {
     test('Offers Quick Fix to replace invalid keyword with package', async function() {
         if (_isUnitTest) { return this.skip(); } // needs real code-action provider
@@ -22,14 +40,10 @@ suite('SysML Code Actions', () => {
 
         const firstLineRange = new vscode.Range(0, 0, 0, 'packageasdf'.length);
 
-        const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
-            'vscode.executeCodeActionProvider',
-            document.uri,
-            firstLineRange
+        const titles = await waitForCodeActions(
+            document, firstLineRange,
+            title => title.toLowerCase().includes('package') || title === 'Fix'
         );
-
-        assert.ok(actions);
-        const titles = actions?.map(a => a.title) ?? [];
 
         // The LSP may offer "Replace with package", "Fix typo: ...", or generic "Fix"
         assert.ok(
@@ -53,14 +67,10 @@ suite('SysML Code Actions', () => {
 
         const firstWordRange = new vscode.Range(0, 0, 0, 'attributex'.length);
 
-        const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
-            'vscode.executeCodeActionProvider',
-            document.uri,
-            firstWordRange
+        const titles = await waitForCodeActions(
+            document, firstWordRange,
+            title => title.toLowerCase().includes('attribute') || title === 'Fix'
         );
-
-        assert.ok(actions);
-        const titles = actions?.map(a => a.title) ?? [];
 
         assert.ok(
             titles.some(t => t.toLowerCase().includes('attribute') || t === 'Fix'),
@@ -83,14 +93,11 @@ suite('SysML Code Actions', () => {
 
         const firstWordRange = new vscode.Range(0, 0, 0, 'partdef'.length);
 
-        const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
-            'vscode.executeCodeActionProvider',
-            document.uri,
-            firstWordRange
+        const titles = await waitForCodeActions(
+            document, firstWordRange,
+            title => title.toLowerCase().includes('part def')
+                || title.toLowerCase().includes('partdef') || title === 'Fix'
         );
-
-        assert.ok(actions);
-        const titles = actions?.map(a => a.title) ?? [];
 
         assert.ok(
             titles.some(t => t.toLowerCase().includes('part def') || t.toLowerCase().includes('partdef') || t === 'Fix'),

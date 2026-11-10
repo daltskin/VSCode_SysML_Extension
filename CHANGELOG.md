@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update `sysml-v2-lsp` from 0.40.0 to the published npm package 0.43.0.
+- Update development tooling, D3 and ELK, including c8 12 and glob 14.
+- Keep TypeScript 6.0.3 until TypeScript ESLint supports TypeScript 7, and retain
+  VS Code types 1.125.0 to match the minimum supported extension host.
+
+### Security
+
+- Require glob 14.0.4 and minimatch 11.0.5 across the dependency tree to address
+  CVE-2026-118773 and CVE-2026-118764, including the language client's matcher.
+
+### Fixed
+
+- Keep named decisions centered in Action Flow View by merging duplicate decision
+  IDs once, and increase default row and branch spacing (#134).
+- Wait for language-server quick fixes in desktop integration tests instead of
+  assuming they are ready immediately after opening a document.
+- Read standard-library declarations without opening extra language-server
+  documents in Unicode navigation tests, preventing delayed ambiguity diagnostics
+  during coverage runs.
+
 ## [0.59.0]
 
 ### Changed

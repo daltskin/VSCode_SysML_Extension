@@ -19,6 +19,8 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as ts from 'typescript';
+import * as vm from 'vm';
 
 type NodeShape = 'bar' | 'diamond' | 'circle' | 'box';
 
@@ -117,4 +119,157 @@ suite('Action Flow View Contract — declared successions (issue #85)', () => {
             'The renderer must not connect consecutive action declarations.',
         );
     });
+});
+
+suite('Action Flow View Contract - decision identity (issue #134)', () => {
+    interface Action {
+        id?: string;
+        name: string;
+        type?: string;
+        kind?: string;
+        parent?: string;
+        condition?: string;
+    }
+    interface Diagram {
+        name: string;
+        actions: Action[];
+        decisions?: Action[];
+        flows: { from: string; to: string; guard?: string }[];
+    }
+    interface Position {
+        x: number;
+        y: number;
+    }
+    let convert: (data: { activityDiagrams: Diagram[] }, view: string) => {
+        diagrams: Diagram[];
+    };
+    let layout: (diagram: Diagram, direction: string) => Map<string, Position>;
+
+    suiteSetup(() => {
+        const source = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'media', 'diagram-runtime', 'runtime.js'),
+            'utf8',
+        );
+        const parsed = ts.createSourceFile('runtime.js', source, ts.ScriptTarget.Latest,
+            true, ts.ScriptKind.JS);
+        const functions = new Map<string, ts.FunctionDeclaration>();
+        const visit = (node: ts.Node): void => {
+            if (ts.isFunctionDeclaration(node) && node.name) {
+                functions.set(node.name.text, node);
+            }
+            ts.forEachChild(node, visit);
+        };
+        visit(parsed);
+        const prepare = functions.get('prepareDataForView');
+        assert.ok(prepare, 'The activity conversion function must exist');
+        convert = vm.runInNewContext(`(${prepare.getText(parsed)})`, {});
+
+        const render = functions.get('renderActivityView');
+        assert.ok(render?.body, 'The activity renderer must exist');
+        const drawFlows = render.body.statements.find(statement =>
+            ts.isVariableStatement(statement) && statement.declarationList.declarations.some(
+                declaration => declaration.name.getText(parsed) === 'flowGroup',
+            ));
+        assert.ok(drawFlows, 'The renderer must compute positions before drawing flows');
+        const positioning = source.slice(render.getStart(parsed), drawFlows.getStart(parsed));
+        layout = (diagram, direction) => {
+            const compute = vm.runInNewContext(`(${positioning} return actionPositions; })`, {
+                selectedDiagramIndex: 0, activityLayoutDirection: direction,
+            }) as (width: number, height: number, data: { diagrams: Diagram[] }) =>
+                Map<string, Position>;
+            return compute(1000, 800, { diagrams: [diagram] });
+        };
+    });
+
+    test('keeps the authoritative action when a decision has the same ID', () => {
+        const result = convert({ activityDiagrams: [{
+            name: 'MonitorBattery',
+            actions: [{ id: 'checkLevel', name: 'checkLevel', type: 'decision',
+                kind: 'decision', parent: 'MonitorBattery', condition: 'batteryLevel < 20.0' }],
+            decisions: [{ id: 'checkLevel', name: 'Legacy label' }],
+            flows: [],
+        }] }, 'activity');
+        const decisions = result.diagrams[0].actions.filter(action => action.id === 'checkLevel');
+        assert.strictEqual(decisions.length, 1, 'A decision must occupy only one layout position');
+        assert.strictEqual(decisions[0].type, 'decision');
+        assert.strictEqual(decisions[0].condition, 'batteryLevel < 20.0');
+        assert.strictEqual(decisions[0].parent, undefined);
+    });
+
+    test('deduplicates name-only decisions without dropping decision-only nodes', () => {
+        const result = convert({ activityDiagrams: [{
+            name: 'MonitorBattery',
+            actions: [{ name: 'checkLevel', type: 'decision' }],
+            decisions: [
+                { name: 'checkLevel' },
+                { name: 'legacyDecision', parent: 'MonitorBattery' },
+                { name: 'legacyDecision', parent: 'MonitorBattery' },
+                { name: 'nestedDecision', parent: 'container' },
+            ],
+            flows: [],
+        }] }, 'activity');
+        const actions = result.diagrams[0].actions;
+        assert.strictEqual(actions.map(action => action.id).join(','),
+            'checkLevel,legacyDecision,nestedDecision');
+        assert.strictEqual(actions[1].type, 'decision');
+        assert.strictEqual(actions[1].parent, undefined);
+        assert.strictEqual(actions[2].parent, 'container');
+    });
+
+    test('preserves distinct IDs even when their labels match', () => {
+        const result = convert({ activityDiagrams: [{
+            name: 'MonitorBattery',
+            actions: [{ id: 'first', name: 'checkLevel', type: 'decision' }],
+            decisions: [{ id: 'second', name: 'checkLevel' }],
+            flows: [],
+        }] }, 'activity');
+        assert.strictEqual(result.diagrams[0].actions.map(action => action.id).join(','),
+            'first,second');
+    });
+
+    for (const direction of ['vertical', 'horizontal']) {
+        test(`centers control nodes and spaces symmetric branches in ${direction} layout`, () => {
+            const diagram = convert({ activityDiagrams: [{
+                name: 'MonitorBattery',
+                actions: [
+                    { name: 'checkLevel', type: 'decision', parent: 'MonitorBattery' },
+                    { name: 'TriggerLowPowerMode', type: 'action', parent: 'MonitorBattery' },
+                    { name: 'MaintainNormalOperation', type: 'action', parent: 'MonitorBattery' },
+                    { name: 'continueOperation', type: 'merge', parent: 'MonitorBattery' },
+                ],
+                decisions: [{ name: 'checkLevel' }],
+                flows: [
+                    { from: 'start', to: 'checkLevel' },
+                    { from: 'checkLevel', to: 'TriggerLowPowerMode', guard: 'batteryLevel < 20.0' },
+                    { from: 'checkLevel', to: 'MaintainNormalOperation', guard: 'batteryLevel >= 20.0' },
+                    { from: 'TriggerLowPowerMode', to: 'continueOperation' },
+                    { from: 'MaintainNormalOperation', to: 'continueOperation' },
+                    { from: 'continueOperation', to: 'done' },
+                ],
+            }] }, 'activity').diagrams[0];
+            const positions = layout(diagram, direction);
+            assert.strictEqual(positions.size, 6);
+            const position = (id: string): Position => {
+                const value = positions.get(id);
+                assert.ok(value, `Missing position for ${id}`);
+                return value;
+            };
+            const crossAxis = direction === 'vertical' ? 'x' : 'y';
+            const flowAxis = direction === 'vertical' ? 'y' : 'x';
+            const controlNodes = ['start', 'checkLevel', 'continueOperation', 'done'];
+            for (const id of controlNodes) {
+                assert.strictEqual(position(id)[crossAxis], position('start')[crossAxis]);
+            }
+            const left = position('TriggerLowPowerMode');
+            const right = position('MaintainNormalOperation');
+            assert.strictEqual((left[crossAxis] + right[crossAxis]) / 2,
+                position('start')[crossAxis]);
+            assert.strictEqual(left[flowAxis], right[flowAxis]);
+            const nodeSize = direction === 'vertical' ? 220 : 60;
+            assert.ok(right[crossAxis] - left[crossAxis] - nodeSize >= 100,
+                'Branches need at least 100 pixels of separation');
+            assert.ok(position('checkLevel')[flowAxis] - position('start')[flowAxis] >= 140,
+                'Successive levels need room for guard labels');
+        });
+    }
 });
