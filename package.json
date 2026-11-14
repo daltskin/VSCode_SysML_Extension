@@ -653,7 +653,7 @@
   "dependencies": {
     "markdown-it": "^15.0.3",
     "papaparse": "^5.7.0",
-    "sysml-v2-lsp": "0.43.0",
+    "sysml-v2-lsp": "0.44.0",
     "vscode-languageclient": "^11.0.0",
     "yaml": "^2.9.1"
   },

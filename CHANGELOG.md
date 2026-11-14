@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update `sysml-v2-lsp` from 0.43.0 to the published npm package 0.44.0.
+
+### Fixed
+
+- Keep calculation body parameters scoped to their owning calculation usage, avoiding
+  false `ambiguous-namespace-name` diagnostics across separate calculation bodies.
+  Duplicate parameters within one body still report errors.
+
+### Security
+
+- Include upstream Hono dependency fixes for CVE-2026-126210, CVE-2026-126343,
+  CVE-2026-126355, CVE-2026-126356, CVE-2026-126357, CVE-2026-126358, and
+  CVE-2026-126359 through the bundled language server.
+
 ## [0.60.0]
 
 ### Changed
