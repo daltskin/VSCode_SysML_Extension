@@ -1,9 +1,56 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { pollForResult } from './helpers/integrationHelper';
 
 const _isUnitTest = (vscode as any)._isMock === true;
 
 suite('SysML Keyword Diagnostics', () => {
+    test('Scopes calculation parameters to each usage while rejecting duplicates in one body',
+        async function() {
+            if (_isUnitTest) { return this.skip(); }
+            this.timeout(30000);
+
+            const content = `package CalculationScopes {
+    part def Engine;
+    part x : Engine;
+    calc def A { in engine : Engine; }
+    calc def B { in engine : Engine; }
+    part def Car {
+        calc a : A { in engine = x; in engine = x; }
+    }
+}`;
+            const document = await vscode.workspace.openTextDocument({
+                language: 'sysml',
+                content
+            });
+            const editor = await vscode.window.showTextDocument(document);
+            const ambiguities = () => vscode.languages.getDiagnostics(document.uri)
+                .filter(diagnostic => diagnostic.code === 'ambiguous-namespace-name');
+
+            const duplicates = await pollForResult(
+                async () => ambiguities(),
+                diagnostics => diagnostics?.length === 2
+            );
+            assert.strictEqual(duplicates?.length, 2,
+                'Duplicate calculation parameters in one body should report two diagnostics');
+
+            const edited = await editor.edit(edit => edit.replace(
+                new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)),
+                content.replace(
+                    'calc a : A { in engine = x; in engine = x; }',
+                    'calc a : A { in engine = x; }\n        calc b : B { in engine = x; }'
+                )
+            ));
+            assert.ok(edited, 'Expected the calculation body edit to succeed');
+
+            const separateBodies = await pollForResult(
+                async () => ambiguities(),
+                diagnostics => diagnostics?.length === 0
+            );
+            assert.strictEqual(separateBodies?.length, 0,
+                'Same-named parameters in separate calculation bodies should not be ambiguous');
+        });
+
     test('Reports diagnostics for syntax errors caused by keyword typos', async function() {
         if (_isUnitTest) { return this.skip(); } // needs real LSP diagnostics
         this.timeout(10000);
