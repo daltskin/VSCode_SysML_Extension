@@ -101,6 +101,8 @@ export interface SysMLElementDTO {
     type: string;
     /** Empty for an anonymous element (sysml-v2-lsp 0.33+); show `displayName` instead. */
     name: string;
+    /** Declared short name, without angle brackets (KerML 7.2.2.2). */
+    shortName?: string;
     /** Text to show: the name, or for an anonymous element e.g. `: Engine[2]` or `a.p→b.p` (sysml-v2-lsp 0.33+). */
     displayName?: string;
     /** Unique, reload-stable identifier (sysml-v2-lsp 0.33+); changes on rename. */

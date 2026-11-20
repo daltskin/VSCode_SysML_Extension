@@ -4474,40 +4474,19 @@ globalThis.SysMLDiagramRuntime = { mount(window, document, d3, acquireVsCodeApi,
             // Combine all filter expressions with AND (multiple filter directives are conjunctive)
             const combinedExpr = filterExprs.join(' and ');
 
-            // First try simple metaclass-only path (fast path for single metaclass filter)
-            const allSimple = filterExprs.length === 1 && /^@[\w:]+$/.test(filterExprs[0].trim());
-            if (allSimple) {
-                const allowedTypes = new Set();
-                const types = resolveMetaclassFilter(filterExprs[0]);
-                if (types) types.forEach(t => allowedTypes.add(t));
-                if (allowedTypes.size > 0) {
-                    const matched = [];
-                    function collectSimple(list) {
-                        (list || []).forEach(el => {
-                            const typeLower = (el.type || '').toLowerCase();
-                            if (allowedTypes.has(typeLower)) matched.push(el);
-                            if (el.children && el.children.length > 0) collectSimple(el.children);
-                        });
-                    }
-                    collectSimple(elements);
-                    return matched;
-                }
-            }
-
-            // Complex path: evaluate boolean expression per element
-            const matched = [];
             function collect(list) {
+                const matched = [];
                 (list || []).forEach(el => {
+                    const children = collect(el.children);
                     if (evaluateFilterExpression(el, combinedExpr)) {
-                        matched.push(el);
-                    }
-                    if (el.children && el.children.length > 0) {
-                        collect(el.children);
+                        matched.push({ ...el, children });
+                    } else {
+                        matched.push(...children);
                     }
                 });
+                return matched;
             }
-            collect(elements);
-            return matched;
+            return collect(elements);
         }
 
         // Find all view/view def elements that have expose targets, filters, or rendering
@@ -4564,13 +4543,6 @@ globalThis.SysMLDiagramRuntime = { mount(window, document, d3, acquireVsCodeApi,
         // Filter elements by expose target names.
         // Supports: simple name ("Vehicle"), qualified ("Pkg::Part"),
         // namespace wildcard ("Pkg::*"), recursive wildcard ("Pkg::**")
-        //
-        // Container promotion: when a definition/package is exposed by
-        // simple name (no wildcard), its children are promoted to top-level
-        // so the renderer shows the internal structure (IBD) rather than
-        // a single opaque node. This matches the SysML v2 spec intent:
-        // "expose MySystem" in an InterconnectionView shows the parts
-        // and connections INSIDE MySystem.
         function filterElementsByExposeTargets(elements, exposeTargets) {
             if (!exposeTargets || exposeTargets.length === 0) return elements;
 
@@ -4580,80 +4552,57 @@ globalThis.SysMLDiagramRuntime = { mount(window, document, d3, acquireVsCodeApi,
                 return target.endsWith('::*') || target.endsWith('::**');
             }
 
-            function isContainer(typeLower) {
-                return typeLower.endsWith(' def') || typeLower.endsWith('def') ||
-                       typeLower === 'package';
+            function matchesPath(path, target) {
+                const segments = target.split('::');
+                return segments.length === path.length &&
+                    segments.every((segment, i) => path[i].includes(segment));
             }
 
-            function matchesTarget(elementName, parentPath, target) {
-                const qualifiedName = parentPath ? parentPath + '::' + elementName : elementName;
+            function matchesTarget(names, path, target) {
+                if (names.includes(target) || matchesPath(path, target)) return true;
 
-                // Exact name match (simple name or qualified)
-                if (target === elementName || target === qualifiedName) return true;
-
-                // Recursive wildcard: "Pkg::**" matches everything under Pkg
                 if (target.endsWith('::**')) {
                     const prefix = target.slice(0, -4);
-                    if (qualifiedName.startsWith(prefix + '::') || qualifiedName === prefix) return true;
+                    return matchesPath(path.slice(0, prefix.split('::').length), prefix);
                 }
 
-                // Namespace wildcard: "Pkg::*" matches direct children of Pkg
-                if (target.endsWith('::*') && !target.endsWith('::**')) {
-                    const prefix = target.slice(0, -3);
-                    if (parentPath === prefix) return true;
+                if (target.endsWith('::*')) {
+                    return matchesPath(path.slice(0, -1), target.slice(0, -3));
                 }
 
                 return false;
             }
 
-            // Check if this element is a wildcard parent
-            // e.g. target "MySystem::*" and element is "MySystem"
-            function isWildcardParent(elementName, parentPath, target) {
+            function isWildcardParent(names, path, target) {
                 if (!isWildcard(target)) return false;
                 const prefix = target.replace(/::\*{1,2}$/, '');
-                const qualifiedName = parentPath ? parentPath + '::' + elementName : elementName;
-                return elementName === prefix || qualifiedName === prefix;
+                return names.includes(prefix) || matchesPath(path, prefix);
             }
 
             function collectMatching(elementList, parentPath) {
                 (elementList || []).forEach(el => {
-                    const elName = el.name || '';
-                    const typeLower = (el.type || '').toLowerCase();
+                    const names = [el.declaredName ?? el.name, el.shortName].filter(Boolean);
+                    const path = [...parentPath, names];
                     const hasChildren = el.children && el.children.length > 0;
 
-                    // Check if any target matches this element directly
-                    const directMatch = exposeTargets.some(t => matchesTarget(elName, parentPath, t));
-
-                    // Check if this element is the parent of a wildcard target
-                    const wildcardParent = exposeTargets.some(t => isWildcardParent(elName, parentPath, t));
+                    const directMatch = exposeTargets.some(t => matchesTarget(names, path, t));
+                    const wildcardParent = exposeTargets.some(t => isWildcardParent(names, path, t));
 
                     if (wildcardParent && hasChildren) {
                         // Element is the parent referenced by a wildcard — promote children
                         el.children.forEach(child => matchedElements.push(child));
                     } else if (directMatch) {
-                        // Check if matched by a simple name (not wildcard) and is a container
-                        const matchedBySimpleName = exposeTargets.some(t =>
-                            !isWildcard(t) && (t === elName || t === (parentPath ? parentPath + '::' + elName : elName))
-                        );
-
-                        if (isContainer(typeLower) && hasChildren && matchedBySimpleName) {
-                            // Container exposed by simple name → keep as-is
-                            // The renderers will draw this as a framed IBD showing internals
-                            matchedElements.push(el);
-                        } else {
-                            matchedElements.push(el);
-                        }
+                        matchedElements.push(el);
                     }
 
                     // Always recurse to find nested matches
                     if (hasChildren) {
-                        const childPath = parentPath ? parentPath + '::' + elName : elName;
-                        collectMatching(el.children, childPath);
+                        collectMatching(el.children, path);
                     }
                 });
             }
 
-            collectMatching(elements, '');
+            collectMatching(elements, []);
 
             // Deduplicate (a child might be added both via promotion and direct match)
             const seen = new Set();

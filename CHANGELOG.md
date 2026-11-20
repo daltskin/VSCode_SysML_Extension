@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Resolve view expose targets using declared names and short names, including
+  qualified names and namespace wildcards, without matching display labels (#139).
+- Preserve one pruned hierarchy when filtering view elements by metaclass or
+  metadata, instead of duplicating nested subtrees (#140).
+
+### Changed
+
+- Update `sysml-v2-lsp` from 0.44.0 to the published npm package 0.45.0.
+
 ## [0.61.0]
 
 ### Changed

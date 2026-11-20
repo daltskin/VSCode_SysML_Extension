@@ -5,11 +5,37 @@
  * and the visualization panel's view filtering, boolean expression
  * evaluation, subview tracking, and textual notation support.
  *
- * The functions tested here replicate the logic embedded in
- * visualizationPanel.ts's webview template. If the webview logic
- * changes, these tests must be updated to match.
+ * Filtering executes the shipped diagram runtime; expression and subview
+ * helpers below retain their standalone contract checks.
  */
 import * as assert from 'assert';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { runInNewContext } from 'vm';
+import type { SysMLElementDTO } from '../providers/sysmlModelTypes';
+import { convertModelElements } from '../visualization/core/modelSnapshot';
+
+interface ViewElement {
+    name: string;
+    type: string;
+    declaredName?: string;
+    shortName?: string;
+    children?: ViewElement[];
+}
+
+const runtimeSource = readFileSync(
+    join(__dirname, '../../media/diagram-runtime/runtime.js'), 'utf8',
+);
+const runtimeStart = runtimeSource.indexOf('const METACLASS_TO_TYPES =');
+const runtimeEnd = runtimeSource.indexOf('function applyViewScope(', runtimeStart);
+assert.ok(runtimeStart >= 0 && runtimeEnd > runtimeStart);
+const { filterElementsByMetaclass, filterElementsByExposeTargets } = runInNewContext(
+    `(() => { ${runtimeSource.slice(runtimeStart, runtimeEnd)}
+        return { filterElementsByMetaclass, filterElementsByExposeTargets }; })()`,
+) as {
+    filterElementsByMetaclass: (elements: ViewElement[], filters: string[]) => ViewElement[];
+    filterElementsByExposeTargets: (elements: ViewElement[], targets: string[]) => ViewElement[];
+};
 
 // ─── METACLASS_TO_TYPES lookup (subset matching webview) ──────────
 
@@ -105,45 +131,6 @@ function evaluateFilterExpression(el: any, expr: string): boolean {
     }
 
     return elementMatchesSingleFilter(el, trimmed);
-}
-
-function filterElementsByMetaclass(elements: any[], filterExprs: string[]): any[] {
-    if (!filterExprs || filterExprs.length === 0) return elements;
-
-    const combinedExpr = filterExprs.join(' and ');
-
-    const allSimple = filterExprs.length === 1 && /^@[\w:]+$/.test(filterExprs[0].trim());
-    if (allSimple) {
-        const allowedTypes = new Set<string>();
-        const types = resolveMetaclassFilter(filterExprs[0]);
-        if (types) types.forEach(t => allowedTypes.add(t));
-        if (allowedTypes.size > 0) {
-            const matched: any[] = [];
-            function collectSimple(list: any[]) {
-                (list || []).forEach(el => {
-                    const typeLower = (el.type || '').toLowerCase();
-                    if (allowedTypes.has(typeLower)) matched.push(el);
-                    if (el.children && el.children.length > 0) collectSimple(el.children);
-                });
-            }
-            collectSimple(elements);
-            return matched;
-        }
-    }
-
-    const matched: any[] = [];
-    function collect(list: any[]) {
-        (list || []).forEach(el => {
-            if (evaluateFilterExpression(el, combinedExpr)) {
-                matched.push(el);
-            }
-            if (el.children && el.children.length > 0) {
-                collect(el.children);
-            }
-        });
-    }
-    collect(elements);
-    return matched;
 }
 
 function findViewsWithExpose(elements: any[]): any[] {
@@ -376,6 +363,29 @@ suite('View Filter Contract Test Suite', () => {
     // ── filterElementsByMetaclass ─────────────────────────────
 
     suite('filterElementsByMetaclass', () => {
+        test('keeps nested matches once, prunes nonmatches and leaves input unchanged (#140)', () => {
+            const input = [makePart('system', { children: [
+                makePart('subsystem', { children: [
+                    makePart('unitA'), makePart('unitB'), makePart('hidden', { type: 'port' }),
+                ] }),
+                makePart('container', { type: 'package', children: [makePart('promoted')] }),
+            ] })];
+            const original = JSON.stringify(input);
+            const expected = [makePart('system', { children: [
+                makePart('subsystem', { children: [makePart('unitA'), makePart('unitB')] }),
+                makePart('promoted'),
+            ] })];
+            for (const filters of [
+                ['@SysML::PartUsage'],
+                ['@PartUsage or @ActionUsage'],
+                ['@PartUsage', 'not @PortUsage'],
+            ]) {
+                const result = filterElementsByMetaclass(input, filters);
+                assert.strictEqual(JSON.stringify(result), JSON.stringify(expected));
+            }
+            assert.strictEqual(JSON.stringify(input), original);
+        });
+
         const elements = [
             makePart('sensor', { type: 'part' }),
             makePart('dataPort', { type: 'port' }),
@@ -392,7 +402,7 @@ suite('View Filter Contract Test Suite', () => {
             assert.strictEqual(result.length, elements.length);
         });
 
-        test('filters by single metaclass (fast path)', () => {
+        test('filters by single metaclass', () => {
             const result = filterElementsByMetaclass(elements, ['@PartUsage']);
             assert.strictEqual(result.length, 2); // sensor + innerPart (nested)
             assert.ok(result.every((el: any) => el.type === 'part'));
@@ -422,6 +432,35 @@ suite('View Filter Contract Test Suite', () => {
             const result = filterElementsByMetaclass(elsWithMeta, ['@PartUsage', '@Safety']);
             assert.strictEqual(result.length, 1);
             assert.strictEqual(result[0].name, 'safePart');
+        });
+    });
+
+    suite('filterElementsByExposeTargets', () => {
+        test('resolves declared names and short names independently of labels (#139)', () => {
+            const element = (name: string, shortName?: string,
+                children: SysMLElementDTO[] = []): SysMLElementDTO => ({
+                name, shortName, displayName: shortName ? `<${shortName}> ${name}`.trim() : name,
+                type: 'part', children, attributes: {}, relationships: [],
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+            });
+            const dto = element('Demo', 'D', [
+                element('system', 'sys', [element('unitA'), element('unitB')]),
+                element('', 'onlyShort'),
+            ]);
+            const elements = convertModelElements([dto]) as ViewElement[];
+            for (const target of ['system', 'sys', 'Demo::system', 'Demo::sys', 'D::sys']) {
+                const result = filterElementsByExposeTargets(elements, [target]);
+                assert.strictEqual(result.length, 1, target);
+                assert.strictEqual(result[0].name, '<sys> system');
+                assert.strictEqual(result[0].children?.length, 2);
+            }
+            assert.strictEqual(filterElementsByExposeTargets(elements, ['D::onlyShort']).length, 1);
+            for (const target of ['Demo::sys::*', 'D::system::**']) {
+                const result = filterElementsByExposeTargets(elements, [target]);
+                assert.strictEqual(result.map(member => member.name).join(','), 'unitA,unitB');
+            }
+            assert.strictEqual(filterElementsByExposeTargets(elements, ['Other::sys']).length, 0);
+            assert.strictEqual(filterElementsByExposeTargets(elements, ['Demo::<sys> system']).length, 0);
         });
     });
 
