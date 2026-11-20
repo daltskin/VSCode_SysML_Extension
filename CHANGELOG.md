@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.62.0]
+
 ### Fixed
 
 - Resolve view expose targets using declared names and short names, including
