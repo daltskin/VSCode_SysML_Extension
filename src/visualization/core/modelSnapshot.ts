@@ -22,6 +22,8 @@ export function convertModelElements(
             : relationships.filter(value => value.type === 'typing').map(value => value.target);
         return {
             name,
+            declaredName: element.name,
+            shortName: element.shortName,
             type: element.type,
             id: element.symbolId && isAnonymousElement(element) ? element.symbolId : name,
             symbolId: element.symbolId,
