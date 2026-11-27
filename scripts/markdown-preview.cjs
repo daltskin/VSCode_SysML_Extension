@@ -48,26 +48,29 @@ let baseline;
 
 function getBaseline() {
     if (baseline) return baseline;
-    const ref = process.env.VISUAL_BASELINE || '7e5cb546ee41859761471e9c0a0d96168d9870dc';
-    const source = execFileSync('git', ['show', `${ref}:src/visualization/visualizationPanel.ts`],
-        { cwd: root, encoding: 'utf8' });
-    const file = ts.createSourceFile('baseline.ts', source, ts.ScriptTarget.Latest, true);
-    const declaration = file.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === 'VisualizationPanel');
-    const names = ['_getHtmlForWebview', 'convertDTOElementsToJSON', 'mergeElementDTOs'];
-    const methods = names.map(name => {
-        const method = declaration?.members.find(node => node.name?.getText(file) === name);
-        if (!method) throw new Error(`Baseline ${ref} is missing ${name}.`);
-        return method.getText(file);
-    }).join('\n');
-    const nonce = file.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === '_getNonce');
-    if (!nonce) throw new Error(`Baseline ${ref} is missing its nonce helper.`);
-    const input = `const vscode = require('vscode');
-        const { displayNameOf, displayNamesById, elementKey, isAnonymousElement, relationshipSource } = require('../out/providers/modelNames');
-        class Baseline { constructor() { this._extensionVersion = ''; } ${methods} }
-        ${nonce.getText(file)}\nreturn Baseline;`;
-    const compiled = ts.transpileModule(input, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-    const Baseline = new Function('require', compiled)(require);
-    baseline = { instance: new Baseline(), Baseline };
+    const ref = process.env.VISUAL_BASELINE || 'fda040046ad9616a3e32ccf366baaa787b17c2a8';
+    const modules = new Map();
+    const read = resource => execFileSync('git', ['show', `${ref}:${resource}`],
+        { cwd: root, maxBuffer: 16 * 1024 * 1024 });
+    const load = resource => {
+        if (modules.has(resource)) return modules.get(resource).exports;
+        const source = read(resource).toString('utf8');
+        const compiled = ts.transpileModule(source, { compilerOptions: {
+            target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS,
+        } }).outputText;
+        const module = { exports: {} };
+        modules.set(resource, module);
+        const resolve = name => name.startsWith('.')
+            ? load(path.posix.join(path.posix.dirname(resource), name) + '.ts')
+            : require(name);
+        new Function('require', 'module', 'exports', compiled)(resolve, module, module.exports);
+        return module.exports;
+    };
+    baseline = {
+        ...load('src/visualization/core/diagramShell.ts'),
+        ...load('src/visualization/core/modelSnapshot.ts'),
+        read,
+    };
     return baseline;
 }
 
@@ -81,9 +84,12 @@ function visualizerHtml(mode, entry, sample, url) {
     let html;
     let payload = modelSnapshot(entry.value);
     if (mode === 'baseline') {
-        const { instance, Baseline } = getBaseline();
-        html = instance._getHtmlForWebview(resourceHost, URI.file(root));
-        payload = { ...payload, elements: instance.convertDTOElementsToJSON(Baseline.mergeElementDTOs(entry.value.elements ?? [])) };
+        const previous = getBaseline();
+        html = previous.diagramShell({
+            ...resourceHost,
+            asWebviewUri: uri => URI.parse(origin + '/baseline' + uri.path.slice(root.length)),
+        }, URI.file(root));
+        payload = previous.modelSnapshot(entry.value);
     } else if (mode === 'current') {
         html = diagramShell(resourceHost, URI.file(root));
     } else throw new Error('Renderer must be baseline or current.');
@@ -145,13 +151,17 @@ async function start() {
                     + '</head><body>' + markdown.render(fence, environment)
                     + `<script nonce="${nonce}" src="/media/markdown-preview/bootstrap.js"></script></body></html>`);
             } else {
-                const resource = path.resolve(root, '.' + decodeURIComponent(url.pathname));
+                const isBaseline = url.pathname.startsWith('/baseline/');
+                const pathname = isBaseline ? url.pathname.slice('/baseline'.length) : url.pathname;
+                const resource = path.resolve(root, '.' + decodeURIComponent(pathname));
                 if (!resource.startsWith(path.join(root, 'media') + path.sep)) {
                     response.writeHead(404).end();
                     return;
                 }
                 response.setHeader('Content-Type', path.extname(resource) === '.js' ? 'text/javascript' : 'text/css');
-                response.end(fs.readFileSync(resource));
+                response.end(isBaseline
+                    ? getBaseline().read(path.relative(root, resource).split(path.sep).join('/'))
+                    : fs.readFileSync(resource));
             }
         } catch (error) {
             response.writeHead(500, { 'Content-Type': 'text/plain' });

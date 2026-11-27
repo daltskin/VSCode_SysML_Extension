@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update `sysml-v2-lsp` from 0.45.0 to the published npm package 0.48.0.
+
+### Fixed
+
+- Include the upstream fix for duplicate sequence-diagram messages and messages
+  leaking from nested occurrences (daltskin/sysml-v2-lsp#191).
+- Refresh visual-parity checks to load the pinned modular renderer and its assets,
+  including declared-name metadata and existing activity-layout fixes.
+
 ## [0.62.0]
 
 ### Fixed
