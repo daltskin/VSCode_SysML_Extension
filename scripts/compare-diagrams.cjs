@@ -85,6 +85,7 @@ async function capture(page, renderer, example, configuration) {
         }, null, { polling: 50, timeout: 20000 });
     }
     await page.locator('#status-text').filter({ hasText: 'Ready' }).waitFor({ state: 'visible' });
+    await page.mouse.move(0, 0);
     return {
         image: await page.screenshot({ animations: 'disabled' }),
         payload: await page.evaluate(() => window.parityOriginalPayload),
@@ -158,7 +159,7 @@ async function main() {
             }
         }
         fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify({
-            baseline: process.env.VISUAL_BASELINE || '7e5cb546ee41859761471e9c0a0d96168d9870dc',
+            baseline: process.env.VISUAL_BASELINE || 'fda040046ad9616a3e32ccf366baaa787b17c2a8',
             comparisons, failures, cases: report,
         }, null, 2) + '\n');
         console.log(`${comparisons - failures}/${comparisons} visual comparisons passed. Images: ${output}`);

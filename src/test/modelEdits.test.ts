@@ -263,6 +263,64 @@ suite('Workbench with published LSP', function () {
         return buildSnapshot([{ uri, label: 'model.sysml', version: 1, text, model }]);
     }
 
+    for (const includeInstance of [false, true]) {
+        test(`published LSP emits each sequence message once (instance: ${includeInstance})`,
+            async () => {
+                const snapshot = await snapshotFor(`package MessageSequence {
+    part def Client;
+    part def Service;
+    occurrence def Interaction {
+        part client : Client;
+        part service : Service;
+        message request from client to service;
+        message validate from service to service;
+        message process from service to service;
+        message response from service to client;
+    }
+    ${includeInstance ? 'occurrence interaction : Interaction;' : ''}
+}`);
+                const model = await connection.sendRequest<SysMLModelResult>('sysml/model', {
+                    textDocument: { uri: snapshot.documents[0].uri }, scope: ['sequenceDiagrams'],
+                });
+                assert.strictEqual(model.sequenceDiagrams?.length, 1);
+                const diagram = model.sequenceDiagrams[0];
+                assert.strictEqual(diagram.name, 'Interaction');
+                assert.deepStrictEqual(diagram.participants.map(participant => participant.name),
+                    ['client', 'service']);
+                assert.deepStrictEqual(diagram.messages.map(message =>
+                    [message.name, message.from, message.to, message.occurrence]), [
+                    ['request', 'client', 'service', 1],
+                    ['validate', 'service', 'service', 2],
+                    ['process', 'service', 'service', 3],
+                    ['response', 'service', 'client', 4],
+                ]);
+            });
+    }
+
+    test('published LSP keeps nested sequence messages in their owning diagrams', async () => {
+        const snapshot = await snapshotFor(`package NestedSequences {
+    occurrence def Outer {
+        part source;
+        part target;
+        message firstMessage from source to target;
+        occurrence def Inner {
+            part source;
+            part target;
+            message innerMessage from source to target;
+        }
+        message lastMessage from target to source;
+    }
+}`);
+        const model = await connection.sendRequest<SysMLModelResult>('sysml/model', {
+            textDocument: { uri: snapshot.documents[0].uri }, scope: ['sequenceDiagrams'],
+        });
+        assert.deepStrictEqual(model.sequenceDiagrams?.map(diagram =>
+            [diagram.name, diagram.messages.map(message => message.name)]), [
+            ['Outer', ['firstMessage', 'lastMessage']],
+            ['Inner', ['innerMessage']],
+        ]);
+    });
+
     test('Architecture Explorer answers the sample from published LSP evidence', async () => {
         const text = readFileSync(join(__dirname, '../../samples/architecture-explorer.sysml'), 'utf8');
         const source = (await snapshotFor(text)).documents[0];
