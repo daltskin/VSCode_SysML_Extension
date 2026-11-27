@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.63.0]
+
 ### Changed
 
 - Update `sysml-v2-lsp` from 0.45.0 to the published npm package 0.48.0.
